@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.wcaokaze.probosqis.cache.compose
+package com.wcaokaze.probosqis.panoptiqon.compose
 
 import androidx.compose.runtime.Stable
-import com.wcaokaze.probosqis.cache.core.Cache
-import com.wcaokaze.probosqis.cache.core.WritableCache
+import com.wcaokaze.probosqis.panoptiqon.Cache
+import com.wcaokaze.probosqis.panoptiqon.WritableCache
 import kotlin.reflect.KProperty
 
 fun <T> Cache<T>.asState() = CacheState(this)

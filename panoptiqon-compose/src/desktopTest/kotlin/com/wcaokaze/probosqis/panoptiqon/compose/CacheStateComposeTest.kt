@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.wcaokaze.probosqis.cache.compose
+package com.wcaokaze.probosqis.panoptiqon.compose
 
 import androidx.compose.material.Text
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.test.junit4.createComposeRule
-import com.wcaokaze.probosqis.cache.core.WritableCache
+import com.wcaokaze.probosqis.panoptiqon.WritableCache
 import org.junit.Rule
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.wcaokaze.probosqis.cache.core
+package com.wcaokaze.probosqis.panoptiqon
 
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State

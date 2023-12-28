@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.wcaokaze.probosqis.cache.compose
+package com.wcaokaze.probosqis.panoptiqon.compose
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
-import com.wcaokaze.probosqis.cache.core.WritableCache
+import com.wcaokaze.probosqis.panoptiqon.WritableCache
 import kotlinx.serialization.json.JsonObject
 
 @Composable

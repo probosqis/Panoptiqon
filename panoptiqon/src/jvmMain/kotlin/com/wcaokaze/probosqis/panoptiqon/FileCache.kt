@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.wcaokaze.probosqis.cache.core
+package com.wcaokaze.probosqis.panoptiqon
 
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.serialization.ExperimentalSerializationApi

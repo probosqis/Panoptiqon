@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.wcaokaze.probosqis.cache.core
+package com.wcaokaze.probosqis.panoptiqon
 
 import kotlinx.serialization.json.Json
 import org.junit.After
