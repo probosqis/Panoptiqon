@@ -1,0 +1,132 @@
+/*
+ * Copyright 2023 wcaokaze
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+   alias libs.plugins.kotlin.multiplatform
+   alias libs.plugins.kotlinx.serialization
+   alias libs.plugins.android.library
+   alias libs.plugins.compose.jb
+}
+
+kotlin {
+   androidTarget()
+   jvm('desktop')
+
+   compilerOptions {
+      freeCompilerArgs = ['-Xexpect-actual-classes']
+   }
+
+   jvmToolchain(17)
+
+   applyDefaultHierarchyTemplate()
+
+   sourceSets {
+      commonMain.dependencies {
+         implementation libs.kotlinx.serialization
+         implementation compose.foundation
+         implementation project(':panoptiqon')
+      }
+
+      commonTest.dependencies {
+         implementation compose.uiTestJUnit4
+         implementation libs.kotlin.test.junit
+      }
+
+      jvmAndroidMain {
+         dependsOn(commonMain)
+
+         dependencies {
+         }
+      }
+
+      jvmAndroidTest {
+         dependsOn(commonTest)
+
+         dependencies {
+         }
+      }
+
+      androidMain {
+         dependsOn(jvmAndroidMain)
+
+         dependencies {
+         }
+      }
+
+      androidUnitTest {
+         dependsOn(jvmAndroidTest)
+
+         dependencies {
+            implementation libs.androidx.test.ext
+            implementation libs.compose.ui.test.manifest
+         }
+      }
+
+      desktopMain {
+         dependsOn(jvmAndroidMain)
+
+         dependencies {
+         }
+      }
+
+      desktopTest {
+         dependsOn(jvmAndroidTest)
+
+         dependencies {
+            implementation compose.desktop.currentOs
+         }
+      }
+   }
+}
+
+android {
+   namespace 'com.wcaokaze.probosqis.panoptiqon.compose'
+
+   compileSdk 34
+
+   defaultConfig {
+      minSdk 21
+      targetSdk 34
+   }
+
+   buildFeatures {
+      compose true
+   }
+
+   compileOptions {
+      coreLibraryDesugaringEnabled true
+      sourceCompatibility = '1.17'
+      targetCompatibility = '1.17'
+   }
+
+   composeOptions {
+      kotlinCompilerExtensionVersion = libs.versions.compose.compiler.get()
+   }
+
+   testOptions {
+      unitTests {
+         includeAndroidResources = true
+      }
+   }
+}
+
+dependencies {
+   coreLibraryDesugaring libs.android.desugaring.jdk
+}
+
+compose {
+   kotlinCompilerPlugin.set("androidx.compose.compiler:compiler:${libs.versions.compose.compiler.get()}")
+}
