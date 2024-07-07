@@ -37,7 +37,7 @@ kotlin {
       commonMain.dependencies {
          implementation libs.kotlinx.serialization
          implementation compose.foundation
-         implementation project(':panoptiqon')
+         implementation project(':panoptiqon-kotlin')
       }
 
       commonTest.dependencies {
