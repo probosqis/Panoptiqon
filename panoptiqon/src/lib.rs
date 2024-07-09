@@ -13,3 +13,47 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+use std::ops::{Deref, DerefMut};
+
+pub struct Cache<T> {
+   value: T
+}
+
+impl<T> Cache<T> {
+   fn new(value: T) -> Self {
+      Cache {
+         value
+      }
+   }
+}
+
+impl<T> Deref for Cache<T> {
+   type Target = T;
+
+   fn deref(&self) -> &T {
+      &self.value
+   }
+}
+
+impl<T> DerefMut for Cache<T> {
+   fn deref_mut(&mut self) -> &mut T {
+      &mut self.value
+   }
+}
+
+#[cfg(test)]
+mod tests {
+   use super::Cache;
+
+   #[test]
+   fn deref() {
+      let mut cache = Cache::new(42);
+      assert_eq!(42, cache.value);
+
+      assert_eq!(42, *cache);
+
+      *cache = 43;
+      assert_eq!(43, cache.value);
+   }
+}
