@@ -1,9 +1,0 @@
-# Gradle
-/.gradle
-/local.properties
-/build
-
-# Cargo
-/debug
-/target
-/Cargo.lock

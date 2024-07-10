@@ -54,4 +54,4 @@ dependencyResolutionManagement {
 rootProject.name = "panoptiqon-compose"
 
 include 'panoptiqon'
-project(':panoptiqon-kotlin').projectDir = file('../panoptiqon')
+project(':panoptiqon').projectDir = file('../panoptiqon')

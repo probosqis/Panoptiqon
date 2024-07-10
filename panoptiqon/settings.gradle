@@ -41,4 +41,4 @@ dependencyResolutionManagement {
    }
 }
 
-rootProject.name = "panoptiqon-kotlin"
+rootProject.name = "panoptiqon"

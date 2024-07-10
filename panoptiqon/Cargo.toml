@@ -16,4 +16,8 @@
 name = "panoptiqon"
 edition = "2021"
 
+[lib]
+path = "src/rust/lib.rs"
+
 [dependencies]
+jni = "0.21.1"
