@@ -21,3 +21,5 @@ path = "src/rust/lib.rs"
 
 [dependencies]
 jni = "0.21.1"
+
+fnv = "1.0.7"
