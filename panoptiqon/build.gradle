@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 wcaokaze
+ * Copyright 2023-2024 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,15 @@ plugins {
    alias libs.plugins.kotlinx.serialization
 }
 
+def generatedSrcDir = new File(buildDir, 'generated/src'.replace('/', File.separator))
+
 kotlin {
    jvm()
    jvmToolchain(17)
 
    sourceSets {
+      commonMain.kotlin.srcDir generatedSrcDir
+
       commonMain.dependencies {
          implementation libs.kotlinx.serialization
 
@@ -40,5 +44,44 @@ kotlin {
 
       jvmTest.dependencies {
       }
+   }
+}
+
+tasks.register('generateLibPathProp') {
+   doFirst {
+      def packageName = 'com.wcaokaze.probosqis.panoptiqon'
+      def packageDir = new File(
+          generatedSrcDir, packageName.replace('.', File.separator)
+      )
+
+      def file = new File(packageDir, 'BuildEnv.kt')
+
+      if (!packageDir.exists() && !packageDir.mkdirs()) {
+         throw new GradleException("can not generate source: $file")
+      }
+
+      def properties = new Properties()
+      properties.load(rootProject.file('local.properties').newDataInputStream())
+      def value = properties.getProperty('rust.targetFile')
+      if (value == null) {
+         throw new GradleException(
+             'No path for native lib is specified. Add rust.targetFile in local.properties '
+                 + '(e.g. `/home/wcaokaze/panoptiqon/target/debug/libapp.so` on Linux)'
+         )
+      }
+
+      file.write(
+          """
+             package $packageName
+             internal val nativeLibFile = \"$value\"
+          """,
+          "UTF-8", /* writeBom = */ false
+      )
+   }
+}
+
+tasks.configureEach { task ->
+   if (task.name.contains('compileKotlin')) {
+      task.dependsOn 'generateLibPathProp'
    }
 }
