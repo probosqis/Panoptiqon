@@ -19,6 +19,9 @@ edition = "2021"
 [lib]
 path = "src/rust/lib.rs"
 
+[features]
+jni-test = []
+
 [dependencies]
 jni = "0.21.1"
 
