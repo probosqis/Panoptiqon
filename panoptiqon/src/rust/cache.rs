@@ -15,14 +15,28 @@
  */
 use std::ops::{Deref, DerefMut};
 
+#[cfg(feature="jvm")]
+use jni::objects::GlobalRef;
+
 pub struct Cache<T> {
+   #[cfg(feature="jvm")]
+   jvm_state: GlobalRef,
    value: T
 }
 
 impl<T> Cache<T> {
-   pub(crate) fn new(value: T) -> Self {
+   #[cfg(feature="jvm")]
+   pub(crate) fn new(jvm_state: GlobalRef, initial_value: T) -> Self {
       Cache {
-         value
+         jvm_state,
+         value: initial_value
+      }
+   }
+
+   #[cfg(not(feature="jvm"))]
+   pub(crate) fn new(initial_state: T) -> Self {
+      Cache {
+         value: initial_state
       }
    }
 }
@@ -41,13 +55,21 @@ impl<T> DerefMut for Cache<T> {
    }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature="jni-test")]
+mod jni_tests {
+   use jni::JNIEnv;
+   use jni::objects::JObject;
+
    use super::Cache;
 
-   #[test]
-   fn deref() {
-      let mut cache = Cache::new(42);
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_deref(
+      mut env: JNIEnv,
+      _obj: JObject
+   ) {
+      let jvm_state = env.new_object("java/lang/Object", "()V", &[]).unwrap();
+      let jvm_state = env.new_global_ref(jvm_state).unwrap();
+      let mut cache = Cache::new(jvm_state, 42);
       assert_eq!(42, cache.value);
 
       assert_eq!(42, *cache);

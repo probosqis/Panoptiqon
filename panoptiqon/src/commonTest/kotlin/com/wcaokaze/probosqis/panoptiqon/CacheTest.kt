@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 wcaokaze
+ * Copyright 2023-2024 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,10 @@ import kotlin.test.assertIsNot
 import kotlin.test.assertNotSame
 
 class CacheTest {
+   init {
+      loadNativeLib()
+   }
+
    @Test
    fun value() {
       val cache = WritableCache(42)
@@ -49,4 +53,7 @@ class CacheTest {
       assertNotSame(writableCache as Any, cache as Any)
       assertIsNot<WritableCache<*>>(cache)
    }
+
+   @Test
+   external fun deref()
 }

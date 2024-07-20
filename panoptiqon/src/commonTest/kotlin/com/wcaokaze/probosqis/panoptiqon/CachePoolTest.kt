@@ -13,28 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#![cfg(feature="jni-test")]
-use std::ptr::null_mut;
 
-use jni::JavaVM;
-use jni::sys::{JNI_GetCreatedJavaVMs, JNI_OK, jsize};
+package com.wcaokaze.probosqis.panoptiqon
 
-pub(crate) fn get_vm() -> JavaVM {
-   let mut buf: [*mut jni::sys::JavaVM; 4] = [null_mut(); 4];
-   let mut vm_count = 0;
+import kotlin.test.Test
 
-   let result_code = unsafe {
-      JNI_GetCreatedJavaVMs(
-         &mut buf as *mut _,
-         buf.len() as jsize,
-         &mut vm_count as *mut _
-      )
-   };
-
-   if result_code != JNI_OK { panic!(); }
-   if vm_count != 1 { panic!(); }
-
-   unsafe {
-      JavaVM::from_raw(buf[0]).unwrap()
+class CachePoolTest {
+   init {
+      loadNativeLib()
    }
+
+   @Test
+   external fun createCache()
+
+   @Test
+   external fun pooling()
 }

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#![feature(mapped_lock_guards)]
+
 pub mod cache;
 mod pool;
 

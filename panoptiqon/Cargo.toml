@@ -20,9 +20,10 @@ edition = "2021"
 path = "src/rust/lib.rs"
 
 [features]
-jni-test = []
+jvm = ["dep:jni"]
+jni-test = ["jvm"]
 
 [dependencies]
-jni = "0.21.1"
+jni = { version = "0.21.1", optional = true }
 
 fnv = "1.0.7"
