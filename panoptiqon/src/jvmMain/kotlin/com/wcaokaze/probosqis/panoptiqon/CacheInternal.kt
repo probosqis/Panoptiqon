@@ -16,4 +16,8 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
-internal class CacheInternal
+import androidx.compose.runtime.mutableStateOf
+
+internal class CacheInternal<T>(initialValue: T) {
+   private var state = mutableStateOf(initialValue)
+}

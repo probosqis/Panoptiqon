@@ -23,7 +23,7 @@ use crate::cache::Cache;
 
 pub(crate) struct CachePool<K, T> {
    #[cfg(feature="jvm")]
-   jvm_state_instantiation: Box<dyn Fn() -> GlobalRef>,
+   jvm_state_instantiation: Box<dyn Fn(&T) -> GlobalRef>,
    map: FnvHashMap<K, Cache<T>>
 }
 
@@ -31,7 +31,7 @@ impl<K, T> CachePool<K, T>
    where K: Hash + Eq
 {
    #[cfg(feature="jvm")]
-   pub fn new(jvm_state_instantiation: Box<dyn Fn() -> GlobalRef>) -> Self {
+   pub fn new(jvm_state_instantiation: Box<dyn Fn(&T) -> GlobalRef>) -> Self {
       CachePool {
          jvm_state_instantiation,
          map: FnvHashMap::default()
@@ -52,7 +52,7 @@ impl<K, T> CachePool<K, T>
             let initial_value = initial_value();
 
             let jvm_state_instantiation = &self.jvm_state_instantiation;
-            let jvm_state = jvm_state_instantiation();
+            let jvm_state = jvm_state_instantiation(&initial_value);
             Cache::new(jvm_state, initial_value)
          })
       }
@@ -72,16 +72,25 @@ mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::{GlobalRef, JObject};
 
+   use crate::convert_java::ConvertJava;
    use crate::test_utils::get_vm;
 
    use super::CachePool;
 
-   fn instantiate_state_wrapper() -> GlobalRef {
+   fn instantiate_jvm_state(initial_value: &i32) -> GlobalRef {
       let vm = get_vm();
       let mut env = vm.get_env().unwrap();
+
+      let java_initial_value = initial_value.clone_into_java(&mut env);
+
       let local_object = env
-         .new_object("com/wcaokaze/probosqis/panoptiqon/CacheInternal", "()V", &[])
+         .new_object(
+            "com/wcaokaze/probosqis/panoptiqon/CacheInternal",
+            "(java/lang/Object)V",
+            &[(&java_initial_value).into()]
+         )
          .unwrap();
+
       env.new_global_ref(local_object).unwrap()
    }
 
@@ -90,8 +99,8 @@ mod jni_tests {
       _env: JNIEnv,
       _obj: JObject
    ) {
-      let state_wrapper_instantiation = Box::new(instantiate_state_wrapper);
-      let mut pool = CachePool::new(state_wrapper_instantiation);
+      let jvm_state_instantiation = Box::new(instantiate_jvm_state);
+      let mut pool = CachePool::new(jvm_state_instantiation);
 
       let cache = pool.get("A".to_string(), || 42);
       assert_eq!(42, **cache);
@@ -105,8 +114,8 @@ mod jni_tests {
       _env: JNIEnv,
       _obj: JObject
    ) {
-      let state_wrapper_instantiation = Box::new(instantiate_state_wrapper);
-      let mut pool = CachePool::new(state_wrapper_instantiation);
+      let jvm_state_instantiation = Box::new(instantiate_jvm_state);
+      let mut pool = CachePool::new(jvm_state_instantiation);
       let cache1_ptr = pool.get("A".to_string(), || 42) as *const _;
       let cache2_ptr = pool.get("A".to_string(), || 42) as *const _;
       let cache3_ptr = pool.get("B".to_string(), || 42) as *const _;
