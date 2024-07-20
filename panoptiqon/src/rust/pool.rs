@@ -72,7 +72,7 @@ mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::{GlobalRef, JObject};
 
-   use crate::testutils::get_vm;
+   use crate::test_utils::get_vm;
 
    use super::CachePool;
 

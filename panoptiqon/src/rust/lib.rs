@@ -20,4 +20,4 @@ pub mod cache;
 mod pool;
 
 #[cfg(feature="jni-test")]
-mod testutils;
+mod test_utils;
