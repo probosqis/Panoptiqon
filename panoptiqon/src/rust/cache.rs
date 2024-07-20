@@ -67,7 +67,9 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let jvm_state = env.new_object("java/lang/Object", "()V", &[]).unwrap();
+      let jvm_state = env
+         .new_object("com/wcaokaze/probosqis/panoptiqon/CacheInternal", "()V", &[])
+         .unwrap();
       let jvm_state = env.new_global_ref(jvm_state).unwrap();
       let mut cache = Cache::new(jvm_state, 42);
       assert_eq!(42, cache.value);

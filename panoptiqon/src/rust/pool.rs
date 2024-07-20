@@ -79,7 +79,9 @@ mod jni_tests {
    fn instantiate_state_wrapper() -> GlobalRef {
       let vm = get_vm();
       let mut env = vm.get_env().unwrap();
-      let local_object = env.new_object("java/lang/Object", "()V", &[]).unwrap();
+      let local_object = env
+         .new_object("com/wcaokaze/probosqis/panoptiqon/CacheInternal", "()V", &[])
+         .unwrap();
       env.new_global_ref(local_object).unwrap()
    }
 
