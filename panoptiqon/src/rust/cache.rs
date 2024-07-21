@@ -17,15 +17,21 @@ use std::ops::Deref;
 
 #[cfg(feature="jvm")]
 use {
+   jni::objects::JValueGen,
+   jni::signature::{Primitive, ReturnType}
+};
+#[cfg(feature="jvm")]
+use {
    crate::convert_java::ConvertJava,
    jni::JavaVM,
-   jni::objects::GlobalRef
+   jni::objects::{GlobalRef, JMethodID}
 };
 
 #[cfg(feature="jvm")]
 pub struct Cache<T: ConvertJava> {
    jvm_state: GlobalRef,
    jvm: JavaVM,
+   update_method_id: JMethodID,
    value: T
 }
 
@@ -36,10 +42,16 @@ pub struct Cache<T> {
 
 #[cfg(feature="jvm")]
 impl<T: ConvertJava> Cache<T> {
-   pub(crate) fn new(jvm_state: GlobalRef, jvm: JavaVM, initial_value: T) -> Self {
+   pub(crate) fn new(
+      jvm_state: GlobalRef,
+      jvm: JavaVM,
+      update_method_id: JMethodID,
+      initial_value: T
+   ) -> Self {
       Cache {
          jvm_state,
          jvm,
+         update_method_id,
          value: initial_value
       }
    }
@@ -47,11 +59,15 @@ impl<T: ConvertJava> Cache<T> {
    pub fn save(&mut self, value: T) {
       let mut env = self.jvm.get_env().unwrap();
       let java_value = value.clone_into_java(&mut env);
-      env.call_method(
-         &self.jvm_state,
-         "updateStateFromRust", "(Ljava/lang/Object;)V",
-         &[(&java_value).into()]
-      ).unwrap();
+
+      unsafe {
+         env.call_method_unchecked(
+            &self.jvm_state,
+            self.update_method_id,
+            ReturnType::Primitive(Primitive::Void),
+            &[JValueGen::Object(java_value).as_jni()]
+         ).unwrap();
+      }
 
       self.value = value;
    }
@@ -105,7 +121,11 @@ mod jni_tests {
          .unwrap();
       let jvm_state = env.new_global_ref(jvm_state).unwrap();
       let jvm = env.get_java_vm().unwrap();
-      let mut cache = Cache::new(jvm_state, jvm, 42);
+      let update_method_id = env.get_method_id(
+         "com/wcaokaze/probosqis/panoptiqon/CacheInternal",
+         "updateStateFromRust", "(Ljava/lang/Object;)V"
+      ).unwrap();
+      let mut cache = Cache::new(jvm_state, jvm, update_method_id, 42);
       assert_eq!(42, cache.value);
 
       assert_eq!(42, *cache);

@@ -22,7 +22,7 @@ use {
    crate::convert_java::ConvertJava,
    jni::JavaVM,
    jni::JNIEnv,
-   jni::objects::GlobalRef
+   jni::objects::{GlobalRef, JMethodID, JValueGen}
 };
 
 use crate::cache::Cache;
@@ -30,6 +30,9 @@ use crate::cache::Cache;
 #[cfg(feature="jvm")]
 pub(crate) struct CachePool<K, T: ConvertJava> {
    jvm: JavaVM,
+   cache_jvm_class: GlobalRef,
+   cache_jvm_constructor_id: JMethodID,
+   cache_jvm_update_method_id: JMethodID,
    map: FnvHashMap<K, Cache<T>>
 }
 
@@ -43,9 +46,18 @@ impl<K, T> CachePool<K, T>
    where K: Hash + Eq,
          T: ConvertJava
 {
-   pub fn new(jvm: JavaVM) -> Self {
+   pub fn new(env: &mut JNIEnv) -> Self {
+      let jvm = env.get_java_vm().unwrap();
+      let cache_jvm_class = env.find_class("com/wcaokaze/probosqis/panoptiqon/CacheInternal").unwrap();
+      let cache_jvm_class = env.new_global_ref(cache_jvm_class).unwrap();
+      let cache_jvm_constructor_id = env.get_method_id(&cache_jvm_class, "<init>", "(java/lang/Object)V").unwrap();
+      let cache_jvm_update_method_id = env.get_method_id(&cache_jvm_class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
+
       CachePool {
          jvm,
+         cache_jvm_class,
+         cache_jvm_constructor_id,
+         cache_jvm_update_method_id,
          map: FnvHashMap::default()
       }
    }
@@ -55,23 +67,31 @@ impl<K, T> CachePool<K, T>
          let initial_value = initial_value();
 
          let mut env = self.jvm.get_env().unwrap();
-         let jvm_state = Self::create_jvm_state(&mut env, &initial_value);
+         let jvm_state = Self::create_jvm_state(
+            &mut env, &self.cache_jvm_class, self.cache_jvm_constructor_id, &initial_value
+         );
          let jvm = unsafe { JavaVM::from_raw(self.jvm.get_java_vm_pointer()).unwrap() };
 
-         Cache::new(jvm_state, jvm, initial_value)
+         Cache::new(jvm_state, jvm, self.cache_jvm_update_method_id, initial_value)
       })
    }
 
-   fn create_jvm_state(env: &mut JNIEnv, initial_value: &T) -> GlobalRef {
+   fn create_jvm_state(
+      env: &mut JNIEnv,
+      class: &GlobalRef,
+      constructor_id: JMethodID,
+      initial_value: &T
+   ) -> GlobalRef {
       let java_initial_value = initial_value.clone_into_java(env);
 
-      let local_object = env
-         .new_object(
-            "com/wcaokaze/probosqis/panoptiqon/CacheInternal",
-            "(java/lang/Object)V",
-            &[(&java_initial_value).into()]
-         )
-         .unwrap();
+      let local_object = unsafe {
+         env.new_object_unchecked(
+               class,
+               constructor_id,
+               &[JValueGen::Object(java_initial_value).as_jni()]
+            )
+            .unwrap()
+      };
 
       env.new_global_ref(local_object).unwrap()
    }
@@ -104,10 +124,10 @@ mod jni_tests {
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_createCache(
-      env: JNIEnv,
+      mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = CachePool::new(env.get_java_vm().unwrap());
+      let mut pool = CachePool::new(&mut env);
 
       let cache = pool.get("A".to_string(), || 42);
       assert_eq!(42, **cache);
@@ -118,10 +138,10 @@ mod jni_tests {
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_pooling(
-      env: JNIEnv,
+      mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = CachePool::new(env.get_java_vm().unwrap());
+      let mut pool = CachePool::new(&mut env);
       let cache1_ptr = pool.get("A".to_string(), || 42) as *const _;
       let cache2_ptr = pool.get("A".to_string(), || 42) as *const _;
       let cache3_ptr = pool.get("B".to_string(), || 42) as *const _;
