@@ -13,14 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#![cfg(feature="jni-test")]
+use std::ptr::null_mut;
 
-#![feature(mapped_lock_guards)]
+use jni::JavaVM;
+use jni::sys::{JNI_GetCreatedJavaVMs, JNI_OK, jsize};
 
-pub mod cache;
-mod pool;
+pub(crate) fn get_vm() -> JavaVM {
+   let mut buf: [*mut jni::sys::JavaVM; 4] = [null_mut(); 4];
+   let mut vm_count = 0;
 
-#[cfg(feature="jvm")]
-pub mod convert_java;
+   let result_code = unsafe {
+      JNI_GetCreatedJavaVMs(
+         &mut buf as *mut _,
+         buf.len() as jsize,
+         &mut vm_count as *mut _
+      )
+   };
 
-#[cfg(feature="jni-test")]
-mod test_utils;
+   if result_code != JNI_OK { panic!(); }
+   if vm_count != 1 { panic!(); }
+
+   unsafe {
+      JavaVM::from_raw(buf[0]).unwrap()
+   }
+}

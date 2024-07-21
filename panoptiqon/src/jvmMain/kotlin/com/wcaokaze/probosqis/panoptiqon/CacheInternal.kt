@@ -14,13 +14,23 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards)]
+package com.wcaokaze.probosqis.panoptiqon
 
-pub mod cache;
-mod pool;
+import androidx.compose.runtime.mutableStateOf
 
-#[cfg(feature="jvm")]
-pub mod convert_java;
+internal class CacheInternal<T>(initialValue: T) {
+   private var state = mutableStateOf(initialValue)
 
-#[cfg(feature="jni-test")]
-mod test_utils;
+   var value: T
+      get() = state.value
+      set(value) {
+         state.value = value
+         updateRustState(value)
+      }
+
+   fun updateStateFromRust(value: T) {
+      state.value = value
+   }
+
+   external fun updateRustState(value: T)
+}

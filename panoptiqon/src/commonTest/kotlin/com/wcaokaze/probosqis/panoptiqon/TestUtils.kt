@@ -14,13 +14,6 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards)]
+package com.wcaokaze.probosqis.panoptiqon
 
-pub mod cache;
-mod pool;
-
-#[cfg(feature="jvm")]
-pub mod convert_java;
-
-#[cfg(feature="jni-test")]
-mod test_utils;
+expect fun loadNativeLib()
