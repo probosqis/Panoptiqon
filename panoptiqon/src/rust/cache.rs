@@ -13,35 +13,65 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 
 #[cfg(feature="jvm")]
-use jni::objects::GlobalRef;
+use {
+   crate::convert_java::ConvertJava,
+   jni::JavaVM,
+   jni::objects::GlobalRef
+};
 
-pub struct Cache<T> {
-   #[cfg(feature="jvm")]
+#[cfg(feature="jvm")]
+pub struct Cache<T: ConvertJava> {
    jvm_state: GlobalRef,
+   jvm: JavaVM,
    value: T
 }
 
-impl<T> Cache<T> {
-   #[cfg(feature="jvm")]
-   pub(crate) fn new(jvm_state: GlobalRef, initial_value: T) -> Self {
+#[cfg(not(feature="jvm"))]
+pub struct Cache<T> {
+   value: T
+}
+
+#[cfg(feature="jvm")]
+impl<T: ConvertJava> Cache<T> {
+   pub(crate) fn new(jvm_state: GlobalRef, jvm: JavaVM, initial_value: T) -> Self {
       Cache {
          jvm_state,
+         jvm,
          value: initial_value
       }
    }
 
-   #[cfg(not(feature="jvm"))]
+   pub fn save(&mut self, value: T) {
+      let mut env = self.jvm.get_env().unwrap();
+      let java_value = value.clone_into_java(&mut env);
+      env.call_method(
+         &self.jvm_state,
+         "updateStateFromRust", "(Ljava/lang/Object;)V",
+         &[(&java_value).into()]
+      ).unwrap();
+
+      self.value = value;
+   }
+}
+
+#[cfg(not(feature="jvm"))]
+impl<T> Cache<T> {
    pub(crate) fn new(initial_state: T) -> Self {
       Cache {
          value: initial_state
       }
    }
+
+   pub fn save(&mut self, value: T) {
+      self.value = value;
+   }
 }
 
-impl<T> Deref for Cache<T> {
+#[cfg(feature="jvm")]
+impl<T: ConvertJava> Deref for Cache<T> {
    type Target = T;
 
    fn deref(&self) -> &T {
@@ -49,9 +79,12 @@ impl<T> Deref for Cache<T> {
    }
 }
 
-impl<T> DerefMut for Cache<T> {
-   fn deref_mut(&mut self) -> &mut T {
-      &mut self.value
+#[cfg(not(feature="jvm"))]
+impl<T> Deref for Cache<T> {
+   type Target = T;
+
+   fn deref(&self) -> &T {
+      &self.value
    }
 }
 
@@ -71,12 +104,13 @@ mod jni_tests {
          .new_object("com/wcaokaze/probosqis/panoptiqon/CacheInternal", "()V", &[])
          .unwrap();
       let jvm_state = env.new_global_ref(jvm_state).unwrap();
-      let mut cache = Cache::new(jvm_state, 42);
+      let jvm = env.get_java_vm().unwrap();
+      let mut cache = Cache::new(jvm_state, jvm, 42);
       assert_eq!(42, cache.value);
 
       assert_eq!(42, *cache);
 
-      *cache = 43;
+      cache.save(43);
       assert_eq!(43, cache.value);
    }
 }

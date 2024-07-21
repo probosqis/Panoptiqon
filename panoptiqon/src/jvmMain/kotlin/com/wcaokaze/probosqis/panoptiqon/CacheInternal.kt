@@ -20,4 +20,17 @@ import androidx.compose.runtime.mutableStateOf
 
 internal class CacheInternal<T>(initialValue: T) {
    private var state = mutableStateOf(initialValue)
+
+   var value: T
+      get() = state.value
+      set(value) {
+         state.value = value
+         updateRustState(value)
+      }
+
+   fun updateStateFromRust(value: T) {
+      state.value = value
+   }
+
+   external fun updateRustState(value: T)
 }
