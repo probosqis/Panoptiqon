@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards)]
+package com.wcaokaze.probosqis.panoptiqon
 
-mod unique_cache;
-mod pool;
+import kotlin.test.Test
 
-#[cfg(feature="jvm")]
-pub mod convert_java;
+class UniqueCacheTest {
+   init {
+      loadNativeLib()
+   }
 
-#[cfg(feature="jni-test")]
-mod test_utils;
+   @Test
+   external fun deref()
+}

@@ -17,18 +17,14 @@ use std::ops::Deref;
 
 #[cfg(feature="jvm")]
 use {
-   jni::objects::JValueGen,
-   jni::signature::{Primitive, ReturnType}
-};
-#[cfg(feature="jvm")]
-use {
    crate::convert_java::ConvertJava,
    jni::JavaVM,
-   jni::objects::{GlobalRef, JMethodID}
+   jni::objects::{GlobalRef, JMethodID, JValueGen},
+   jni::signature::{Primitive, ReturnType}
 };
 
 #[cfg(feature="jvm")]
-pub struct Cache<T: ConvertJava> {
+pub struct UniqueCache<T: ConvertJava> {
    jvm_state: GlobalRef,
    jvm: JavaVM,
    update_method_id: JMethodID,
@@ -36,19 +32,19 @@ pub struct Cache<T: ConvertJava> {
 }
 
 #[cfg(not(feature="jvm"))]
-pub struct Cache<T> {
+pub struct UniqueCache<T> {
    value: T
 }
 
 #[cfg(feature="jvm")]
-impl<T: ConvertJava> Cache<T> {
+impl<T: ConvertJava> UniqueCache<T> {
    pub(crate) fn new(
       jvm_state: GlobalRef,
       jvm: JavaVM,
       update_method_id: JMethodID,
       initial_value: T
    ) -> Self {
-      Cache {
+      UniqueCache {
          jvm_state,
          jvm,
          update_method_id,
@@ -74,9 +70,9 @@ impl<T: ConvertJava> Cache<T> {
 }
 
 #[cfg(not(feature="jvm"))]
-impl<T> Cache<T> {
+impl<T> UniqueCache<T> {
    pub(crate) fn new(initial_state: T) -> Self {
-      Cache {
+      UniqueCache {
          value: initial_state
       }
    }
@@ -87,7 +83,7 @@ impl<T> Cache<T> {
 }
 
 #[cfg(feature="jvm")]
-impl<T: ConvertJava> Deref for Cache<T> {
+impl<T: ConvertJava> Deref for UniqueCache<T> {
    type Target = T;
 
    fn deref(&self) -> &T {
@@ -96,7 +92,7 @@ impl<T: ConvertJava> Deref for Cache<T> {
 }
 
 #[cfg(not(feature="jvm"))]
-impl<T> Deref for Cache<T> {
+impl<T> Deref for UniqueCache<T> {
    type Target = T;
 
    fn deref(&self) -> &T {
@@ -109,23 +105,28 @@ mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::JObject;
 
-   use super::Cache;
+   use super::UniqueCache;
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_deref(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCacheTest_deref(
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let jvm_state = env
-         .new_object("com/wcaokaze/probosqis/panoptiqon/CacheInternal", "()V", &[])
-         .unwrap();
+      let initial_value = 42;
+      let java_initial_value = env.call_static_method(
+         "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", &[initial_value.into()]
+      ).unwrap();
+      let jvm_state = env.new_object(
+         "com/wcaokaze/probosqis/panoptiqon/UniqueCache", "(Ljava/lang/Object;)V",
+         &[java_initial_value.borrow()]
+      ).unwrap();
       let jvm_state = env.new_global_ref(jvm_state).unwrap();
       let jvm = env.get_java_vm().unwrap();
       let update_method_id = env.get_method_id(
-         "com/wcaokaze/probosqis/panoptiqon/CacheInternal",
+         "com/wcaokaze/probosqis/panoptiqon/UniqueCache",
          "updateStateFromRust", "(Ljava/lang/Object;)V"
       ).unwrap();
-      let mut cache = Cache::new(jvm_state, jvm, update_method_id, 42);
+      let mut cache = UniqueCache::new(jvm_state, jvm, update_method_id, 42);
       assert_eq!(42, cache.value);
 
       assert_eq!(42, *cache);

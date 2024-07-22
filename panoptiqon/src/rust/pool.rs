@@ -25,20 +25,20 @@ use {
    jni::objects::{GlobalRef, JMethodID, JValueGen}
 };
 
-use crate::cache::Cache;
+use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 pub(crate) struct CachePool<K, T: ConvertJava> {
    jvm: JavaVM,
-   cache_jvm_class: GlobalRef,
-   cache_jvm_constructor_id: JMethodID,
-   cache_jvm_update_method_id: JMethodID,
-   map: FnvHashMap<K, Cache<T>>
+   unique_cache_jvm_class: GlobalRef,
+   unique_cache_jvm_constructor_id: JMethodID,
+   unique_cache_jvm_update_method_id: JMethodID,
+   map: FnvHashMap<K, UniqueCache<T>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct CachePool<K, T> {
-   map: FnvHashMap<K, Cache<T>>
+   map: FnvHashMap<K, UniqueCache<T>>
 }
 
 #[cfg(feature="jvm")]
@@ -48,31 +48,33 @@ impl<K, T> CachePool<K, T>
 {
    pub fn new(env: &mut JNIEnv) -> Self {
       let jvm = env.get_java_vm().unwrap();
-      let cache_jvm_class = env.find_class("com/wcaokaze/probosqis/panoptiqon/CacheInternal").unwrap();
-      let cache_jvm_class = env.new_global_ref(cache_jvm_class).unwrap();
-      let cache_jvm_constructor_id = env.get_method_id(&cache_jvm_class, "<init>", "(java/lang/Object)V").unwrap();
-      let cache_jvm_update_method_id = env.get_method_id(&cache_jvm_class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
+      let unique_cache_jvm_class = env.find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
+      let unique_cache_jvm_class = env.new_global_ref(unique_cache_jvm_class).unwrap();
+      let unique_cache_jvm_constructor_id = env
+         .get_method_id(&unique_cache_jvm_class, "<init>", "(Ljava/lang/Object;)V").unwrap();
+      let unique_cache_jvm_update_method_id = env
+         .get_method_id(&unique_cache_jvm_class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
 
       CachePool {
          jvm,
-         cache_jvm_class,
-         cache_jvm_constructor_id,
-         cache_jvm_update_method_id,
+         unique_cache_jvm_class,
+         unique_cache_jvm_constructor_id,
+         unique_cache_jvm_update_method_id,
          map: FnvHashMap::default()
       }
    }
 
-   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &Cache<T> {
+   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &UniqueCache<T> {
       self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
 
          let mut env = self.jvm.get_env().unwrap();
          let jvm_state = Self::create_jvm_state(
-            &mut env, &self.cache_jvm_class, self.cache_jvm_constructor_id, &initial_value
+            &mut env, &self.unique_cache_jvm_class, self.unique_cache_jvm_constructor_id, &initial_value
          );
          let jvm = unsafe { JavaVM::from_raw(self.jvm.get_java_vm_pointer()).unwrap() };
 
-         Cache::new(jvm_state, jvm, self.cache_jvm_update_method_id, initial_value)
+         UniqueCache::new(jvm_state, jvm, self.unique_cache_jvm_update_method_id, initial_value)
       })
    }
 
@@ -107,10 +109,10 @@ impl<K, T> CachePool<K, T>
       }
    }
 
-   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &Cache<T> {
+   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &UniqueCache<T> {
       self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
-         Cache::new(initial_value)
+         UniqueCache::new(initial_value)
       })
    }
 }
