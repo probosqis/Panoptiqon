@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 use std::hash::Hash;
+use std::sync::{Arc, Mutex};
 
 use fnv::FnvHashMap;
 
@@ -33,12 +34,12 @@ pub(crate) struct CachePool<K, T: ConvertJava> {
    unique_cache_jvm_class: GlobalRef,
    unique_cache_jvm_constructor_id: JMethodID,
    unique_cache_jvm_update_method_id: JMethodID,
-   map: FnvHashMap<K, UniqueCache<T>>
+   map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct CachePool<K, T> {
-   map: FnvHashMap<K, UniqueCache<T>>
+   map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
 }
 
 #[cfg(feature="jvm")]
@@ -64,18 +65,31 @@ impl<K, T> CachePool<K, T>
       }
    }
 
-   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &UniqueCache<T> {
-      self.map.entry(key).or_insert_with(|| {
+   pub fn get(
+      &mut self,
+      key: K,
+      initial_value: impl Fn() -> T
+   ) -> Arc<Mutex<UniqueCache<T>>> {
+      let arc = self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
 
          let mut env = self.jvm.get_env().unwrap();
          let jvm_state = Self::create_jvm_state(
-            &mut env, &self.unique_cache_jvm_class, self.unique_cache_jvm_constructor_id, &initial_value
+            &mut env, &self.unique_cache_jvm_class,
+            self.unique_cache_jvm_constructor_id, &initial_value
          );
-         let jvm = unsafe { JavaVM::from_raw(self.jvm.get_java_vm_pointer()).unwrap() };
+         let jvm = unsafe {
+            JavaVM::from_raw(self.jvm.get_java_vm_pointer()).unwrap()
+         };
 
-         UniqueCache::new(jvm_state, jvm, self.unique_cache_jvm_update_method_id, initial_value)
-      })
+         let unique_cache = UniqueCache::new(
+            jvm_state, jvm, self.unique_cache_jvm_update_method_id, initial_value
+         );
+
+         Arc::new(Mutex::new(unique_cache))
+      });
+
+      arc.clone()
    }
 
    fn create_jvm_state(
@@ -109,16 +123,25 @@ impl<K, T> CachePool<K, T>
       }
    }
 
-   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &UniqueCache<T> {
-      self.map.entry(key).or_insert_with(|| {
+   pub fn get(
+      &mut self,
+      key: K,
+      initial_value: impl Fn() -> T
+   ) -> Arc<Mutex<UniqueCache<T>>> {
+      let arc = self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
-         UniqueCache::new(initial_value)
-      })
+         let unique_cache = UniqueCache::new(initial_value);
+         Arc::new(Mutex::new(unique_cache))
+      });
+
+      arc.clone()
    }
 }
 
 #[cfg(feature="jni-test")]
 mod jni_tests {
+   use std::sync::Arc;
+
    use jni::JNIEnv;
    use jni::objects::JObject;
 
@@ -132,10 +155,12 @@ mod jni_tests {
       let mut pool = CachePool::new(&mut env);
 
       let cache = pool.get("A".to_string(), || 42);
-      assert_eq!(42, **cache);
+      let unique_cache = cache.lock().unwrap();
+      assert_eq!(42, **unique_cache);
 
       let cache = pool.get("B".to_string(), || 43);
-      assert_eq!(43, **cache);
+      let unique_cache = cache.lock().unwrap();
+      assert_eq!(43, **unique_cache);
    }
 
    #[no_mangle]
@@ -144,9 +169,9 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = CachePool::new(&mut env);
-      let cache1_ptr = pool.get("A".to_string(), || 42) as *const _;
-      let cache2_ptr = pool.get("A".to_string(), || 42) as *const _;
-      let cache3_ptr = pool.get("B".to_string(), || 42) as *const _;
+      let cache1_ptr = Arc::as_ptr(&pool.get("A".to_string(), || 42)) as *const _;
+      let cache2_ptr = Arc::as_ptr(&pool.get("A".to_string(), || 42)) as *const _;
+      let cache3_ptr = Arc::as_ptr(&pool.get("B".to_string(), || 42)) as *const _;
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);
