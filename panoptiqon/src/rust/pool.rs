@@ -26,6 +26,7 @@ use {
    jni::objects::{GlobalRef, JMethodID, JValueGen}
 };
 
+use crate::cache::Cache;
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
@@ -69,7 +70,7 @@ impl<K, T> CachePool<K, T>
       &mut self,
       key: K,
       initial_value: impl Fn() -> T
-   ) -> Arc<Mutex<UniqueCache<T>>> {
+   ) -> Cache<T> {
       let arc = self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
 
@@ -89,7 +90,7 @@ impl<K, T> CachePool<K, T>
          Arc::new(Mutex::new(unique_cache))
       });
 
-      arc.clone()
+      Cache::new(arc.clone())
    }
 
    fn create_jvm_state(
@@ -140,8 +141,6 @@ impl<K, T> CachePool<K, T>
 
 #[cfg(feature="jni-test")]
 mod jni_tests {
-   use std::sync::Arc;
-
    use jni::JNIEnv;
    use jni::objects::JObject;
 
@@ -169,9 +168,9 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = CachePool::new(&mut env);
-      let cache1_ptr = Arc::as_ptr(&pool.get("A".to_string(), || 42)) as *const _;
-      let cache2_ptr = Arc::as_ptr(&pool.get("A".to_string(), || 42)) as *const _;
-      let cache3_ptr = Arc::as_ptr(&pool.get("B".to_string(), || 42)) as *const _;
+      let cache1_ptr = pool.get("A".to_string(), || 42).unique_cache_ptr() as *const _;
+      let cache2_ptr = pool.get("A".to_string(), || 42).unique_cache_ptr() as *const _;
+      let cache3_ptr = pool.get("B".to_string(), || 42).unique_cache_ptr() as *const _;
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);

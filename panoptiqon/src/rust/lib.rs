@@ -16,6 +16,7 @@
 
 #![feature(mapped_lock_guards)]
 
+pub mod cache;
 mod unique_cache;
 mod pool;
 
