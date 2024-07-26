@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards)]
+#![feature(mapped_lock_guards, ptr_metadata)]
 
 pub mod cache;
 mod unique_cache;

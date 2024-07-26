@@ -18,19 +18,32 @@ package com.wcaokaze.probosqis.panoptiqon
 
 import androidx.compose.runtime.mutableStateOf
 
-internal class UniqueCache<T>(initialValue: T) {
+internal class UniqueCache<T>(
+   initialValue: T,
+   private val rustStateUpdaterAddress: Long,
+   private val rustStateUpdaterVTableAddress: Long,
+) {
    private var state = mutableStateOf(initialValue)
 
    var value: T
       get() = state.value
       set(value) {
          state.value = value
-         updateRustState(value)
+
+         updateRustState(
+            rustStateUpdaterAddress, rustStateUpdaterVTableAddress, value
+         )
       }
 
+   // XXX: Rust側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
+   // Rust側とJVM側が同時にアクセスされた場合には不整合が起こる可能性がある
    fun updateStateFromRust(value: T) {
       state.value = value
    }
 
-   external fun updateRustState(value: T)
+   external fun updateRustState(
+      updaterAddress: Long,
+      updaterVTableAddress: Long,
+      value: T
+   )
 }

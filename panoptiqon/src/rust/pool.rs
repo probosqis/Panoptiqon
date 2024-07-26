@@ -21,9 +21,13 @@ use fnv::FnvHashMap;
 #[cfg(feature="jvm")]
 use {
    crate::convert_java::ConvertJava,
+   crate::unique_cache::UpdateUniqueCache,
    jni::JavaVM,
    jni::JNIEnv,
-   jni::objects::{GlobalRef, JMethodID, JValueGen}
+   jni::objects::{GlobalRef, JMethodID, JValue},
+   jni::sys::jlong,
+   std::mem::{self, MaybeUninit},
+   std::ptr,
 };
 
 use crate::cache::Cache;
@@ -50,12 +54,15 @@ impl<K, T> CachePool<K, T>
 {
    pub fn new(env: &mut JNIEnv) -> Self {
       let jvm = env.get_java_vm().unwrap();
-      let unique_cache_jvm_class = env.find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
+      let unique_cache_jvm_class = env
+         .find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
       let unique_cache_jvm_class = env.new_global_ref(unique_cache_jvm_class).unwrap();
-      let unique_cache_jvm_constructor_id = env
-         .get_method_id(&unique_cache_jvm_class, "<init>", "(Ljava/lang/Object;)V").unwrap();
-      let unique_cache_jvm_update_method_id = env
-         .get_method_id(&unique_cache_jvm_class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
+      let unique_cache_jvm_constructor_id = env.get_method_id(
+         &unique_cache_jvm_class, "<init>", "(Ljava/lang/Object;JJ)V"
+      ).unwrap();
+      let unique_cache_jvm_update_method_id = env.get_method_id(
+         &unique_cache_jvm_class, "updateStateFromRust", "(Ljava/lang/Object;)V"
+      ).unwrap();
 
       CachePool {
          jvm,
@@ -74,20 +81,25 @@ impl<K, T> CachePool<K, T>
       let arc = self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
 
+         let arc = Arc::new(Mutex::new(MaybeUninit::uninit()));
+
          let mut env = self.jvm.get_env().unwrap();
          let jvm_state = Self::create_jvm_state(
             &mut env, &self.unique_cache_jvm_class,
-            self.unique_cache_jvm_constructor_id, &initial_value
+            self.unique_cache_jvm_constructor_id, &initial_value,
+            unsafe { mem::transmute(arc.clone()) }
          );
          let jvm = unsafe {
             JavaVM::from_raw(self.jvm.get_java_vm_pointer()).unwrap()
          };
 
-         let unique_cache = UniqueCache::new(
-            jvm_state, jvm, self.unique_cache_jvm_update_method_id, initial_value
+         arc.lock().unwrap().write(
+            UniqueCache::new(
+               jvm_state, jvm, self.unique_cache_jvm_update_method_id, initial_value
+            )
          );
 
-         Arc::new(Mutex::new(unique_cache))
+         unsafe { mem::transmute(arc) }
       });
 
       Cache::new(arc.clone())
@@ -97,15 +109,23 @@ impl<K, T> CachePool<K, T>
       env: &mut JNIEnv,
       class: &GlobalRef,
       constructor_id: JMethodID,
-      initial_value: &T
+      initial_value: &T,
+      arc: Arc<Mutex<UniqueCache<T>>>
    ) -> GlobalRef {
       let java_initial_value = initial_value.clone_into_java(env);
+      let trait_obj: *const dyn UpdateUniqueCache = Arc::into_raw(arc);
+      let dyn_metadata = ptr::metadata(trait_obj);
+      let vtable_ptr = unsafe { mem::transmute::<_, usize>(dyn_metadata) };
 
       let local_object = unsafe {
          env.new_object_unchecked(
                class,
                constructor_id,
-               &[JValueGen::Object(java_initial_value).as_jni()]
+               &[
+                  JValue::Object(&java_initial_value).as_jni(),
+                  JValue::Long(trait_obj as *const () as jlong).as_jni(),
+                  JValue::Long(vtable_ptr as jlong).as_jni()
+               ]
             )
             .unwrap()
       };
@@ -174,5 +194,19 @@ mod jni_tests {
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_save(
+      mut env: JNIEnv,
+      _obj: JObject
+   ) {
+      let mut pool = CachePool::new(&mut env);
+      let mut cache = pool.get("A".to_string(), || 42);
+
+      assert_eq!(42, **cache.lock().unwrap());
+
+      cache.lock().unwrap().save(43);
+      assert_eq!(43, **cache.lock().unwrap());
    }
 }

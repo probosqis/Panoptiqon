@@ -14,13 +14,17 @@
  * limitations under the License.
  */
 use std::ops::Deref;
+use std::sync::Mutex;
 
 #[cfg(feature="jvm")]
 use {
    crate::convert_java::ConvertJava,
-   jni::JavaVM,
-   jni::objects::{GlobalRef, JMethodID, JValueGen},
-   jni::signature::{Primitive, ReturnType}
+   jni::{JavaVM, JNIEnv},
+   jni::objects::{GlobalRef, JMethodID, JObject, JValueGen},
+   jni::signature::{Primitive, ReturnType},
+   jni::sys::jlong,
+   std::mem::{self},
+   std::ptr::{self},
 };
 
 #[cfg(feature="jvm")]
@@ -100,38 +104,39 @@ impl<T> Deref for UniqueCache<T> {
    }
 }
 
-#[cfg(feature="jni-test")]
-mod jni_tests {
-   use jni::JNIEnv;
-   use jni::objects::JObject;
+#[cfg(feature="jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateRustState(
+   mut env: JNIEnv,
+   _obj: JObject,
+   updater_address: jlong,
+   updater_vtable_address: jlong,
+   value: JObject
+) {
+   unsafe {
+      let dyn_metadata = {
+         let updater_vtable_address = updater_vtable_address as usize;
+         mem::transmute(updater_vtable_address)
+      };
 
-   use super::UniqueCache;
+      let updater_ptr: *const dyn UpdateUniqueCache = ptr::from_raw_parts(
+         updater_address as *const (),
+         dyn_metadata
+      );
 
-   #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCacheTest_deref(
-      mut env: JNIEnv,
-      _obj: JObject
-   ) {
-      let initial_value = 42;
-      let java_initial_value = env.call_static_method(
-         "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", &[initial_value.into()]
-      ).unwrap();
-      let jvm_state = env.new_object(
-         "com/wcaokaze/probosqis/panoptiqon/UniqueCache", "(Ljava/lang/Object;)V",
-         &[java_initial_value.borrow()]
-      ).unwrap();
-      let jvm_state = env.new_global_ref(jvm_state).unwrap();
-      let jvm = env.get_java_vm().unwrap();
-      let update_method_id = env.get_method_id(
-         "com/wcaokaze/probosqis/panoptiqon/UniqueCache",
-         "updateStateFromRust", "(Ljava/lang/Object;)V"
-      ).unwrap();
-      let mut cache = UniqueCache::new(jvm_state, jvm, update_method_id, 42);
-      assert_eq!(42, cache.value);
+      (&*updater_ptr).update_unique_cache(&mut env, value);
+   }
+}
 
-      assert_eq!(42, *cache);
+#[cfg(feature="jvm")]
+pub(crate) trait UpdateUniqueCache {
+   fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject);
+}
 
-      cache.save(43);
-      assert_eq!(43, cache.value);
+#[cfg(feature="jvm")]
+impl<T: ConvertJava> UpdateUniqueCache for Mutex<UniqueCache<T>> {
+   fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject) {
+      let value = T::clone_from_java(env, value);
+      self.lock().unwrap().value = value;
    }
 }
