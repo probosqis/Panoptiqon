@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 use std::ops::Deref;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature="jvm")]
 use {
@@ -109,34 +109,67 @@ impl<T> Deref for UniqueCache<T> {
 extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateRustState(
    mut env: JNIEnv,
    _obj: JObject,
-   updater_address: jlong,
-   updater_vtable_address: jlong,
+   unique_cache_address: jlong,
+   unique_cache_vtable_address: jlong,
    value: JObject
 ) {
+   let dyn_unique_cache = get_dyn_unique_cache(
+      unique_cache_address, unique_cache_vtable_address
+   );
+
    unsafe {
-      let dyn_metadata = {
-         let updater_vtable_address = updater_vtable_address as usize;
-         mem::transmute(updater_vtable_address)
-      };
-
-      let updater_ptr: *const dyn UpdateUniqueCache = ptr::from_raw_parts(
-         updater_address as *const (),
-         dyn_metadata
-      );
-
-      (&*updater_ptr).update_unique_cache(&mut env, value);
+      (&*dyn_unique_cache).update_unique_cache(&mut env, value);
    }
 }
 
 #[cfg(feature="jvm")]
-pub(crate) trait UpdateUniqueCache {
-   fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject);
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementRustReferenceCount(
+   _env: JNIEnv,
+   _obj: JObject,
+   unique_cache_address: jlong,
+   unique_cache_vtable_address: jlong
+) {
+   let dyn_unique_cache = get_dyn_unique_cache(
+      unique_cache_address, unique_cache_vtable_address
+   );
+
+   unsafe {
+      (&*dyn_unique_cache).decrement_arc();
+   }
 }
 
 #[cfg(feature="jvm")]
-impl<T: ConvertJava> UpdateUniqueCache for Mutex<UniqueCache<T>> {
+fn get_dyn_unique_cache(
+   address: jlong,
+   vtable_address: jlong
+) -> *const dyn DynUniqueCache {
+   unsafe {
+      let vtable_address = vtable_address as usize;
+      let dyn_metadata = mem::transmute(vtable_address);
+
+      ptr::from_raw_parts(address as *const (), dyn_metadata)
+   }
+}
+
+#[cfg(feature="jvm")]
+pub(crate) trait DynUniqueCache {
+   fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject);
+
+   /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
+   /// 解放されている可能性がある
+   unsafe fn decrement_arc(&self);
+}
+
+#[cfg(feature="jvm")]
+impl<T: ConvertJava> DynUniqueCache for Mutex<UniqueCache<T>> {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject) {
       let value = T::clone_from_java(env, value);
       self.lock().unwrap().value = value;
+   }
+
+   unsafe fn decrement_arc(&self) {
+      let arc = Arc::from_raw(self as *const _);
+      drop(arc);
    }
 }

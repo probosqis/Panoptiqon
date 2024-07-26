@@ -21,7 +21,7 @@ use fnv::FnvHashMap;
 #[cfg(feature="jvm")]
 use {
    crate::convert_java::ConvertJava,
-   crate::unique_cache::UpdateUniqueCache,
+   crate::unique_cache::DynUniqueCache,
    jni::JavaVM,
    jni::JNIEnv,
    jni::objects::{GlobalRef, JMethodID, JValue},
@@ -113,7 +113,7 @@ impl<K, T> CachePool<K, T>
       arc: Arc<Mutex<UniqueCache<T>>>
    ) -> GlobalRef {
       let java_initial_value = initial_value.clone_into_java(env);
-      let trait_obj: *const dyn UpdateUniqueCache = Arc::into_raw(arc);
+      let trait_obj: *const dyn DynUniqueCache = Arc::into_raw(arc);
       let dyn_metadata = ptr::metadata(trait_obj);
       let vtable_ptr = unsafe { mem::transmute::<_, usize>(dyn_metadata) };
 
