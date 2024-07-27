@@ -95,7 +95,7 @@ impl<K, T> CachePool<K, T>
 
          arc.lock().unwrap().write(
             UniqueCache::new(
-               jvm_state, jvm, self.unique_cache_jvm_update_method_id, initial_value
+               jvm, jvm_state, self.unique_cache_jvm_update_method_id, initial_value
             )
          );
 

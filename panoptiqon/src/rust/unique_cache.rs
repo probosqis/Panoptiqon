@@ -29,9 +29,9 @@ use {
 
 #[cfg(feature="jvm")]
 pub struct UniqueCache<T: ConvertJava> {
-   jvm_state: GlobalRef,
    jvm: JavaVM,
-   update_method_id: JMethodID,
+   jvm_state: GlobalRef,
+   jvm_state_update_method_id: JMethodID,
    value: T
 }
 
@@ -43,15 +43,15 @@ pub struct UniqueCache<T> {
 #[cfg(feature="jvm")]
 impl<T: ConvertJava> UniqueCache<T> {
    pub(crate) fn new(
-      jvm_state: GlobalRef,
       jvm: JavaVM,
-      update_method_id: JMethodID,
+      jvm_state: GlobalRef,
+      jvm_state_update_method_id: JMethodID,
       initial_value: T
    ) -> Self {
       UniqueCache {
-         jvm_state,
          jvm,
-         update_method_id,
+         jvm_state,
+         jvm_state_update_method_id,
          value: initial_value
       }
    }
@@ -63,7 +63,7 @@ impl<T: ConvertJava> UniqueCache<T> {
       unsafe {
          env.call_method_unchecked(
             &self.jvm_state,
-            self.update_method_id,
+            self.jvm_state_update_method_id,
             ReturnType::Primitive(Primitive::Void),
             &[JValueGen::Object(java_value).as_jni()]
          ).unwrap();
