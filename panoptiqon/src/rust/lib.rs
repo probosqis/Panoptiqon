@@ -22,6 +22,3 @@ mod pool;
 
 #[cfg(feature="jvm")]
 pub mod convert_java;
-
-#[cfg(feature="jni-test")]
-mod test_utils;
