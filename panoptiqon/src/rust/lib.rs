@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards)]
+#![feature(mapped_lock_guards, ptr_metadata)]
 
 pub mod cache;
+mod unique_cache;
 mod pool;
 
 #[cfg(feature="jvm")]
 pub mod convert_java;
-
-#[cfg(feature="jni-test")]
-mod test_utils;

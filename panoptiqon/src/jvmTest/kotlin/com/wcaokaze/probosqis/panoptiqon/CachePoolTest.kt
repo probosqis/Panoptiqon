@@ -28,4 +28,7 @@ class CachePoolTest {
 
    @Test
    external fun pooling()
+
+   @Test
+   external fun save()
 }

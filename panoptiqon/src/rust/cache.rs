@@ -13,124 +13,46 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::ops::Deref;
+use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
 #[cfg(feature="jvm")]
-use {
-   jni::objects::JValueGen,
-   jni::signature::{Primitive, ReturnType}
-};
-#[cfg(feature="jvm")]
-use {
-   crate::convert_java::ConvertJava,
-   jni::JavaVM,
-   jni::objects::{GlobalRef, JMethodID}
-};
+use crate::convert_java::ConvertJava;
+use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
-pub struct Cache<T: ConvertJava> {
-   jvm_state: GlobalRef,
-   jvm: JavaVM,
-   update_method_id: JMethodID,
-   value: T
-}
+pub struct Cache<T: ConvertJava>(Arc<Mutex<UniqueCache<T>>>);
 
 #[cfg(not(feature="jvm"))]
-pub struct Cache<T> {
-   value: T
-}
+pub struct Cache<T>(Arc<Mutex<UniqueCache<T>>>);
 
 #[cfg(feature="jvm")]
 impl<T: ConvertJava> Cache<T> {
-   pub(crate) fn new(
-      jvm_state: GlobalRef,
-      jvm: JavaVM,
-      update_method_id: JMethodID,
-      initial_value: T
-   ) -> Self {
-      Cache {
-         jvm_state,
-         jvm,
-         update_method_id,
-         value: initial_value
-      }
+   pub(crate) fn new(arc: Arc<Mutex<UniqueCache<T>>>) -> Self {
+      Cache(arc)
    }
 
-   pub fn save(&mut self, value: T) {
-      let mut env = self.jvm.get_env().unwrap();
-      let java_value = value.clone_into_java(&mut env);
+   pub fn lock(&self) -> LockResult<MutexGuard<'_, UniqueCache<T>>> {
+      self.0.lock()
+   }
 
-      unsafe {
-         env.call_method_unchecked(
-            &self.jvm_state,
-            self.update_method_id,
-            ReturnType::Primitive(Primitive::Void),
-            &[JValueGen::Object(java_value).as_jni()]
-         ).unwrap();
-      }
-
-      self.value = value;
+   #[cfg(any(test, feature="jni-test"))]
+   pub fn unique_cache_ptr(&self) -> *const Mutex<UniqueCache<T>> {
+      Arc::as_ptr(&self.0)
    }
 }
 
 #[cfg(not(feature="jvm"))]
 impl<T> Cache<T> {
-   pub(crate) fn new(initial_state: T) -> Self {
-      Cache {
-         value: initial_state
-      }
+   pub(crate) fn new(arc: Arc<Mutex<UniqueCache<T>>>) -> Self {
+      Cache(arc)
    }
 
-   pub fn save(&mut self, value: T) {
-      self.value = value;
+   pub fn lock(&self) -> LockResult<MutexGuard<'_, UniqueCache<T>>> {
+      self.0.lock()
    }
-}
 
-#[cfg(feature="jvm")]
-impl<T: ConvertJava> Deref for Cache<T> {
-   type Target = T;
-
-   fn deref(&self) -> &T {
-      &self.value
-   }
-}
-
-#[cfg(not(feature="jvm"))]
-impl<T> Deref for Cache<T> {
-   type Target = T;
-
-   fn deref(&self) -> &T {
-      &self.value
-   }
-}
-
-#[cfg(feature="jni-test")]
-mod jni_tests {
-   use jni::JNIEnv;
-   use jni::objects::JObject;
-
-   use super::Cache;
-
-   #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_deref(
-      mut env: JNIEnv,
-      _obj: JObject
-   ) {
-      let jvm_state = env
-         .new_object("com/wcaokaze/probosqis/panoptiqon/CacheInternal", "()V", &[])
-         .unwrap();
-      let jvm_state = env.new_global_ref(jvm_state).unwrap();
-      let jvm = env.get_java_vm().unwrap();
-      let update_method_id = env.get_method_id(
-         "com/wcaokaze/probosqis/panoptiqon/CacheInternal",
-         "updateStateFromRust", "(Ljava/lang/Object;)V"
-      ).unwrap();
-      let mut cache = Cache::new(jvm_state, jvm, update_method_id, 42);
-      assert_eq!(42, cache.value);
-
-      assert_eq!(42, *cache);
-
-      cache.save(43);
-      assert_eq!(43, cache.value);
+   #[cfg(any(test, feature="jni-test"))]
+   pub fn unique_cache_ptr(&self) -> *const Mutex<UniqueCache<T>> {
+      Arc::as_ptr(&self.0)
    }
 }

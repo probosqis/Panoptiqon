@@ -23,10 +23,6 @@ import kotlin.test.assertIsNot
 import kotlin.test.assertNotSame
 
 class CacheTest {
-   init {
-      loadNativeLib()
-   }
-
    @Test
    fun value() {
       val cache = WritableCache(42)
@@ -53,7 +49,4 @@ class CacheTest {
       assertNotSame(writableCache as Any, cache as Any)
       assertIsNot<WritableCache<*>>(cache)
    }
-
-   @Test
-   external fun deref()
 }

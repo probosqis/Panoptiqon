@@ -14,31 +14,31 @@
  * limitations under the License.
  */
 use std::hash::Hash;
+use std::sync::{Arc, Mutex};
 
 use fnv::FnvHashMap;
 
 #[cfg(feature="jvm")]
 use {
    crate::convert_java::ConvertJava,
+   crate::unique_cache::JvmUniqueCacheRefs,
    jni::JavaVM,
    jni::JNIEnv,
-   jni::objects::{GlobalRef, JMethodID, JValueGen}
 };
 
 use crate::cache::Cache;
+use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 pub(crate) struct CachePool<K, T: ConvertJava> {
    jvm: JavaVM,
-   cache_jvm_class: GlobalRef,
-   cache_jvm_constructor_id: JMethodID,
-   cache_jvm_update_method_id: JMethodID,
-   map: FnvHashMap<K, Cache<T>>
+   jvm_unique_cache_refs: JvmUniqueCacheRefs,
+   map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct CachePool<K, T> {
-   map: FnvHashMap<K, Cache<T>>
+   map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
 }
 
 #[cfg(feature="jvm")]
@@ -48,53 +48,27 @@ impl<K, T> CachePool<K, T>
 {
    pub fn new(env: &mut JNIEnv) -> Self {
       let jvm = env.get_java_vm().unwrap();
-      let cache_jvm_class = env.find_class("com/wcaokaze/probosqis/panoptiqon/CacheInternal").unwrap();
-      let cache_jvm_class = env.new_global_ref(cache_jvm_class).unwrap();
-      let cache_jvm_constructor_id = env.get_method_id(&cache_jvm_class, "<init>", "(java/lang/Object)V").unwrap();
-      let cache_jvm_update_method_id = env.get_method_id(&cache_jvm_class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
 
       CachePool {
          jvm,
-         cache_jvm_class,
-         cache_jvm_constructor_id,
-         cache_jvm_update_method_id,
+         jvm_unique_cache_refs: JvmUniqueCacheRefs::new(env),
          map: FnvHashMap::default()
       }
    }
 
-   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &Cache<T> {
-      self.map.entry(key).or_insert_with(|| {
+   pub fn get(
+      &mut self,
+      key: K,
+      initial_value: impl Fn() -> T
+   ) -> Cache<T> {
+      let arc = self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
+         UniqueCache::new_arc(&self.jvm, &self.jvm_unique_cache_refs, initial_value)
+      });
 
-         let mut env = self.jvm.get_env().unwrap();
-         let jvm_state = Self::create_jvm_state(
-            &mut env, &self.cache_jvm_class, self.cache_jvm_constructor_id, &initial_value
-         );
-         let jvm = unsafe { JavaVM::from_raw(self.jvm.get_java_vm_pointer()).unwrap() };
-
-         Cache::new(jvm_state, jvm, self.cache_jvm_update_method_id, initial_value)
-      })
+      Cache::new(arc.clone())
    }
 
-   fn create_jvm_state(
-      env: &mut JNIEnv,
-      class: &GlobalRef,
-      constructor_id: JMethodID,
-      initial_value: &T
-   ) -> GlobalRef {
-      let java_initial_value = initial_value.clone_into_java(env);
-
-      let local_object = unsafe {
-         env.new_object_unchecked(
-               class,
-               constructor_id,
-               &[JValueGen::Object(java_initial_value).as_jni()]
-            )
-            .unwrap()
-      };
-
-      env.new_global_ref(local_object).unwrap()
-   }
 }
 
 #[cfg(not(feature="jvm"))]
@@ -107,11 +81,18 @@ impl<K, T> CachePool<K, T>
       }
    }
 
-   pub fn get(&mut self, key: K, initial_value: impl Fn() -> T) -> &Cache<T> {
-      self.map.entry(key).or_insert_with(|| {
+   pub fn get(
+      &mut self,
+      key: K,
+      initial_value: impl Fn() -> T
+   ) -> Arc<Mutex<UniqueCache<T>>> {
+      let arc = self.map.entry(key).or_insert_with(|| {
          let initial_value = initial_value();
-         Cache::new(initial_value)
-      })
+         let unique_cache = UniqueCache::new(initial_value);
+         Arc::new(Mutex::new(unique_cache))
+      });
+
+      arc.clone()
    }
 }
 
@@ -130,10 +111,12 @@ mod jni_tests {
       let mut pool = CachePool::new(&mut env);
 
       let cache = pool.get("A".to_string(), || 42);
-      assert_eq!(42, **cache);
+      let unique_cache = cache.lock().unwrap();
+      assert_eq!(42, **unique_cache);
 
       let cache = pool.get("B".to_string(), || 43);
-      assert_eq!(43, **cache);
+      let unique_cache = cache.lock().unwrap();
+      assert_eq!(43, **unique_cache);
    }
 
    #[no_mangle]
@@ -142,11 +125,28 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = CachePool::new(&mut env);
-      let cache1_ptr = pool.get("A".to_string(), || 42) as *const _;
-      let cache2_ptr = pool.get("A".to_string(), || 42) as *const _;
-      let cache3_ptr = pool.get("B".to_string(), || 42) as *const _;
+      let cache1_ptr = pool.get("A".to_string(), || 42).unique_cache_ptr() as *const _;
+      let cache2_ptr = pool.get("A".to_string(), || 42).unique_cache_ptr() as *const _;
+      let cache3_ptr = pool.get("B".to_string(), || 42).unique_cache_ptr() as *const _;
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_save(
+      mut env: JNIEnv,
+      _obj: JObject
+   ) {
+      let mut pool = CachePool::new(&mut env);
+      let cache = pool.get("A".to_string(), || 42);
+
+      let mut lock = cache.lock().unwrap();
+      assert_eq!(42, **lock);
+      lock.save(43);
+      assert_eq!(43, **lock);
+
+      let lock = cache.lock().unwrap();
+      assert_eq!(43, **lock);
    }
 }
