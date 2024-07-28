@@ -34,11 +34,6 @@ impl<T: ConvertJava> Cache<T> {
    pub fn lock(&self) -> LockResult<MutexGuard<'_, UniqueCache<T>>> {
       self.0.lock()
    }
-
-   #[cfg(any(test, feature="jni-test"))]
-   pub fn unique_cache_ptr(&self) -> *const Mutex<UniqueCache<T>> {
-      Arc::as_ptr(&self.0)
-   }
 }
 
 #[cfg(not(feature="jvm"))]
