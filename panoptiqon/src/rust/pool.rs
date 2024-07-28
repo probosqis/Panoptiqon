@@ -139,11 +139,14 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = CachePool::new(&mut env);
-      let mut cache = pool.get("A".to_string(), || 42);
+      let cache = pool.get("A".to_string(), || 42);
 
-      assert_eq!(42, **cache.lock().unwrap());
+      let mut lock = cache.lock().unwrap();
+      assert_eq!(42, **lock);
+      lock.save(43);
+      assert_eq!(43, **lock);
 
-      cache.lock().unwrap().save(43);
-      assert_eq!(43, **cache.lock().unwrap());
+      let lock = cache.lock().unwrap();
+      assert_eq!(43, **lock);
    }
 }
