@@ -17,6 +17,7 @@
 #![feature(mapped_lock_guards, ptr_metadata)]
 
 pub mod cache;
+pub mod repository;
 mod unique_cache;
 mod pool;
 
