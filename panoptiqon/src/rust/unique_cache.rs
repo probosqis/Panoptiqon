@@ -215,7 +215,7 @@ fn get_dyn_unique_cache(
 }
 
 #[cfg(feature="jvm")]
-pub(crate) trait DynUniqueCache {
+trait DynUniqueCache {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject);
 
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
