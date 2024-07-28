@@ -55,7 +55,7 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn get(
+   pub fn get_or_insert(
       &mut self,
       key: K,
       initial_value: impl Fn() -> T
@@ -80,7 +80,7 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn get(
+   pub fn get_or_insert(
       &mut self,
       key: K,
       initial_value: impl Fn() -> T
@@ -111,11 +111,11 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
 
-      let cache = pool.get("A".to_string(), || 42);
+      let cache = pool.get_or_insert("A".to_string(), || 42);
       let unique_cache = cache.lock().unwrap();
       assert_eq!(42, **unique_cache);
 
-      let cache = pool.get("B".to_string(), || 43);
+      let cache = pool.get_or_insert("B".to_string(), || 43);
       let unique_cache = cache.lock().unwrap();
       assert_eq!(43, **unique_cache);
    }
@@ -126,9 +126,9 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache1_ptr = Arc::as_ptr(&pool.get("A".to_string(), || 42)) as *const _;
-      let cache2_ptr = Arc::as_ptr(&pool.get("A".to_string(), || 42)) as *const _;
-      let cache3_ptr = Arc::as_ptr(&pool.get("B".to_string(), || 42)) as *const _;
+      let cache1_ptr = Arc::as_ptr(&pool.get_or_insert("A".to_string(), || 42)) as *const _;
+      let cache2_ptr = Arc::as_ptr(&pool.get_or_insert("A".to_string(), || 42)) as *const _;
+      let cache3_ptr = Arc::as_ptr(&pool.get_or_insert("B".to_string(), || 42)) as *const _;
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);
@@ -140,7 +140,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache = pool.get("A".to_string(), || 42);
+      let cache = pool.get_or_insert("A".to_string(), || 42);
 
       let mut lock = cache.lock().unwrap();
       assert_eq!(42, **lock);
