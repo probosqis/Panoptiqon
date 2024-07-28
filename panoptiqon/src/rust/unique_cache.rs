@@ -20,12 +20,33 @@ use std::sync::{Arc, Mutex};
 use {
    crate::convert_java::ConvertJava,
    jni::{JavaVM, JNIEnv},
-   jni::objects::{GlobalRef, JMethodID, JObject, JValueGen},
+   jni::objects::{GlobalRef, JMethodID, JObject, JValue, JValueGen},
    jni::signature::{Primitive, ReturnType},
    jni::sys::jlong,
-   std::mem::{self},
+   std::mem::{self, MaybeUninit},
    std::ptr::{self},
 };
+
+#[cfg(feature="jvm")]
+pub(crate) struct JvmUniqueCacheRefs {
+   pub class: GlobalRef,
+   pub constructor_id: JMethodID,
+   pub update_method_id: JMethodID,
+}
+
+#[cfg(feature="jvm")]
+impl JvmUniqueCacheRefs {
+   pub(crate) fn new(env: &mut JNIEnv) -> Self {
+      let class = env.find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
+      let class = env.new_global_ref(class).unwrap();
+      let constructor_id = env
+         .get_method_id(&class, "<init>", "(Ljava/lang/Object;JJ)V").unwrap();
+      let update_method_id = env
+         .get_method_id(&class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
+
+      JvmUniqueCacheRefs { class, constructor_id, update_method_id }
+   }
+}
 
 #[cfg(feature="jvm")]
 pub struct UniqueCache<T: ConvertJava> {
@@ -42,18 +63,30 @@ pub struct UniqueCache<T> {
 
 #[cfg(feature="jvm")]
 impl<T: ConvertJava> UniqueCache<T> {
-   pub(crate) fn new(
-      jvm: JavaVM,
-      jvm_state: GlobalRef,
-      jvm_state_update_method_id: JMethodID,
+   pub(crate) fn new_arc(
+      jvm: &JavaVM,
+      jvm_refs: &JvmUniqueCacheRefs,
       initial_value: T
-   ) -> Self {
-      UniqueCache {
+   ) -> Arc<Mutex<Self>> {
+      let arc = Arc::new(Mutex::new(MaybeUninit::uninit()));
+
+      let jvm_state = Self::create_jvm_state(
+         jvm, jvm_refs, &initial_value,
+         unsafe { mem::transmute(arc.clone()) }
+      );
+
+      let jvm = unsafe { JavaVM::from_raw(jvm.get_java_vm_pointer()).unwrap() };
+
+      let unique_cache = UniqueCache {
          jvm,
          jvm_state,
-         jvm_state_update_method_id,
+         jvm_state_update_method_id: jvm_refs.update_method_id,
          value: initial_value
-      }
+      };
+
+      arc.lock().unwrap().write(unique_cache);
+
+      unsafe { mem::transmute(arc) }
    }
 
    pub fn save(&mut self, value: T) {
@@ -70,6 +103,35 @@ impl<T: ConvertJava> UniqueCache<T> {
       }
 
       self.value = value;
+   }
+
+   fn create_jvm_state(
+      jvm: &JavaVM,
+      jvm_unique_cache_refs: &JvmUniqueCacheRefs,
+      initial_value: &T,
+      arc: Arc<Mutex<UniqueCache<T>>>
+   ) -> GlobalRef {
+      let mut env = jvm.get_env().unwrap();
+
+      let java_initial_value = initial_value.clone_into_java(&mut env);
+      let trait_obj: *const dyn DynUniqueCache = Arc::into_raw(arc);
+      let dyn_metadata = ptr::metadata(trait_obj);
+      let vtable_ptr = unsafe { mem::transmute::<_, usize>(dyn_metadata) };
+
+      let local_object = unsafe {
+         env.new_object_unchecked(
+               &jvm_unique_cache_refs.class,
+               jvm_unique_cache_refs.constructor_id,
+               &[
+                  JValue::Object(&java_initial_value).as_jni(),
+                  JValue::Long(trait_obj as *const () as jlong).as_jni(),
+                  JValue::Long(vtable_ptr as jlong).as_jni()
+               ]
+            )
+            .unwrap()
+      };
+
+      env.new_global_ref(local_object).unwrap()
    }
 }
 
