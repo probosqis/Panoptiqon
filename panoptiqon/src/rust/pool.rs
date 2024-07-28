@@ -30,26 +30,26 @@ use crate::cache::Cache;
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
-pub(crate) struct CachePool<K, T: ConvertJava> {
+pub(crate) struct UniqueCachePool<K, T: ConvertJava> {
    jvm: JavaVM,
    jvm_unique_cache_refs: JvmUniqueCacheRefs,
    map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
 }
 
 #[cfg(not(feature="jvm"))]
-pub(crate) struct CachePool<K, T> {
+pub(crate) struct UniqueCachePool<K, T> {
    map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
 }
 
 #[cfg(feature="jvm")]
-impl<K, T> CachePool<K, T>
+impl<K, T> UniqueCachePool<K, T>
    where K: Hash + Eq,
          T: ConvertJava
 {
    pub fn new(env: &mut JNIEnv) -> Self {
       let jvm = env.get_java_vm().unwrap();
 
-      CachePool {
+      UniqueCachePool {
          jvm,
          jvm_unique_cache_refs: JvmUniqueCacheRefs::new(env),
          map: FnvHashMap::default()
@@ -72,11 +72,11 @@ impl<K, T> CachePool<K, T>
 }
 
 #[cfg(not(feature="jvm"))]
-impl<K, T> CachePool<K, T>
+impl<K, T> UniqueCachePool<K, T>
    where K: Hash + Eq
 {
    pub fn new() -> Self {
-      CachePool {
+      UniqueCachePool {
          map: FnvHashMap::default()
       }
    }
@@ -101,14 +101,14 @@ mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::JObject;
 
-   use super::CachePool;
+   use super::UniqueCachePool;
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_createCache(
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = CachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(&mut env);
 
       let cache = pool.get("A".to_string(), || 42);
       let unique_cache = cache.lock().unwrap();
@@ -124,7 +124,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = CachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(&mut env);
       let cache1_ptr = pool.get("A".to_string(), || 42).unique_cache_ptr() as *const _;
       let cache2_ptr = pool.get("A".to_string(), || 42).unique_cache_ptr() as *const _;
       let cache3_ptr = pool.get("B".to_string(), || 42).unique_cache_ptr() as *const _;
@@ -138,7 +138,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = CachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(&mut env);
       let cache = pool.get("A".to_string(), || 42);
 
       let mut lock = cache.lock().unwrap();
