@@ -55,6 +55,10 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
+   pub fn get(&self, key: K) -> Option<Arc<Mutex<UniqueCache<T>>>> {
+      self.map.get(&key).map(|arc| arc.clone())
+   }
+
    pub fn get_or_insert(
       &mut self,
       key: K,
@@ -67,7 +71,6 @@ impl<K, T> UniqueCachePool<K, T>
 
       arc.clone()
    }
-
 }
 
 #[cfg(not(feature="jvm"))]
@@ -78,6 +81,10 @@ impl<K, T> UniqueCachePool<K, T>
       UniqueCachePool {
          map: FnvHashMap::default()
       }
+   }
+
+   pub fn get(&self, key: K) -> Option<Arc<Mutex<UniqueCache<T>>>> {
+      self.map.get(&key).map(|arc| arc.clone())
    }
 
    pub fn get_or_insert(
@@ -118,6 +125,25 @@ mod jni_tests {
       let cache = pool.get_or_insert("B".to_string(), || 43);
       let unique_cache = cache.lock().unwrap();
       assert_eq!(43, **unique_cache);
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_getCache(
+      mut env: JNIEnv,
+      _obj: JObject
+   ) {
+      let mut pool = UniqueCachePool::new(&mut env);
+
+      let _ = pool.get_or_insert("A".to_string(), || 42);
+
+      let cache = pool.get("A".to_string());
+      assert!(cache.is_some());
+      let unique_cache = cache.unwrap();
+      let cache_lock = unique_cache.lock().unwrap();
+      assert_eq!(42, **cache_lock);
+
+      let cache = pool.get("B".to_string());
+      assert!(cache.is_none());
    }
 
    #[no_mangle]
