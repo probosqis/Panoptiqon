@@ -168,12 +168,16 @@ mod jni_tests {
       let mut pool = UniqueCachePool::new(&mut env);
       let cache = pool.get_or_insert("A".to_string(), || 42);
 
-      let mut lock = cache.lock().unwrap();
-      assert_eq!(42, **lock);
-      lock.save(43);
-      assert_eq!(43, **lock);
+      {
+         let mut lock = cache.lock().unwrap();
+         assert_eq!(42, **lock);
+         lock.save(43);
+         assert_eq!(43, **lock);
+      }
 
-      let lock = cache.lock().unwrap();
-      assert_eq!(43, **lock);
+      {
+         let lock = cache.lock().unwrap();
+         assert_eq!(43, **lock);
+      }
    }
 }
