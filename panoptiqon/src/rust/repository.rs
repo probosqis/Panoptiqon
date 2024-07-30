@@ -23,12 +23,6 @@ use {
 
 use crate::pool::UniqueCachePool;
 
-#[cfg(feature="jvm")]
-pub struct Repository<K, T: ConvertJava> {
-   pool: UniqueCachePool<K, T>
-}
-
-#[cfg(not(feature="jvm"))]
 pub struct Repository<K, T> {
    pool: UniqueCachePool<K, T>
 }

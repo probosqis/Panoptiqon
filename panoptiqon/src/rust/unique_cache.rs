@@ -49,7 +49,7 @@ impl JvmUniqueCacheRefs {
 }
 
 #[cfg(feature="jvm")]
-pub struct UniqueCache<T: ConvertJava> {
+pub struct UniqueCache<T> {
    jvm: JavaVM,
    jvm_state: GlobalRef,
    jvm_state_update_method_id: JMethodID,
@@ -148,16 +148,6 @@ impl<T> UniqueCache<T> {
    }
 }
 
-#[cfg(feature="jvm")]
-impl<T: ConvertJava> Deref for UniqueCache<T> {
-   type Target = T;
-
-   fn deref(&self) -> &T {
-      &self.value
-   }
-}
-
-#[cfg(not(feature="jvm"))]
 impl<T> Deref for UniqueCache<T> {
    type Target = T;
 

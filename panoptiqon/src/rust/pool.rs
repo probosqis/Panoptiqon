@@ -29,7 +29,7 @@ use {
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
-pub(crate) struct UniqueCachePool<K, T: ConvertJava> {
+pub(crate) struct UniqueCachePool<K, T> {
    jvm: JavaVM,
    jvm_unique_cache_refs: JvmUniqueCacheRefs,
    map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
@@ -38,6 +38,14 @@ pub(crate) struct UniqueCachePool<K, T: ConvertJava> {
 #[cfg(not(feature="jvm"))]
 pub(crate) struct UniqueCachePool<K, T> {
    map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
+}
+
+impl<K, T> UniqueCachePool<K, T>
+   where K: Hash + Eq
+{
+   pub fn get(&self, key: K) -> Option<Arc<Mutex<UniqueCache<T>>>> {
+      self.map.get(&key).map(|arc| arc.clone())
+   }
 }
 
 #[cfg(feature="jvm")]
@@ -53,10 +61,6 @@ impl<K, T> UniqueCachePool<K, T>
          jvm_unique_cache_refs: JvmUniqueCacheRefs::new(env),
          map: FnvHashMap::default()
       }
-   }
-
-   pub fn get(&self, key: K) -> Option<Arc<Mutex<UniqueCache<T>>>> {
-      self.map.get(&key).map(|arc| arc.clone())
    }
 
    pub fn get_or_insert(
@@ -81,10 +85,6 @@ impl<K, T> UniqueCachePool<K, T>
       UniqueCachePool {
          map: FnvHashMap::default()
       }
-   }
-
-   pub fn get(&self, key: K) -> Option<Arc<Mutex<UniqueCache<T>>>> {
-      self.map.get(&key).map(|arc| arc.clone())
    }
 
    pub fn get_or_insert(

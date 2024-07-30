@@ -15,28 +15,10 @@
  */
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
-#[cfg(feature="jvm")]
-use crate::convert_java::ConvertJava;
 use crate::unique_cache::UniqueCache;
 
-#[cfg(feature="jvm")]
-pub struct Cache<T: ConvertJava>(Arc<Mutex<UniqueCache<T>>>);
-
-#[cfg(not(feature="jvm"))]
 pub struct Cache<T>(Arc<Mutex<UniqueCache<T>>>);
 
-#[cfg(feature="jvm")]
-impl<T: ConvertJava> Cache<T> {
-   pub(crate) fn new(arc: Arc<Mutex<UniqueCache<T>>>) -> Self {
-      Cache(arc)
-   }
-
-   pub fn lock(&self) -> LockResult<MutexGuard<'_, UniqueCache<T>>> {
-      self.0.lock()
-   }
-}
-
-#[cfg(not(feature="jvm"))]
 impl<T> Cache<T> {
    pub(crate) fn new(arc: Arc<Mutex<UniqueCache<T>>>) -> Self {
       Cache(arc)
