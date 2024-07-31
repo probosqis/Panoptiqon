@@ -32,7 +32,7 @@ use crate::unique_cache::UniqueCache;
 #[cfg(feature="jvm")]
 pub(crate) struct UniqueCachePool<K, T> {
    jvm: JavaVM,
-   jvm_unique_cache_refs: JvmUniqueCacheRefs,
+   jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
    map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
 }
 
@@ -59,7 +59,7 @@ impl<K, T> UniqueCachePool<K, T>
 
       UniqueCachePool {
          jvm,
-         jvm_unique_cache_refs: JvmUniqueCacheRefs::new(env),
+         jvm_unique_cache_refs: Arc::new(JvmUniqueCacheRefs::new(env)),
          map: FnvHashMap::default()
       }
    }
@@ -75,7 +75,9 @@ impl<K, T> UniqueCachePool<K, T>
             arc.clone()
          }
          Entry::Vacant(entry) => {
-            let arc = UniqueCache::new_arc(&self.jvm, &self.jvm_unique_cache_refs, value);
+            let arc = UniqueCache::new_arc(
+               &self.jvm, self.jvm_unique_cache_refs.clone(), value
+            );
             entry.insert(arc.clone());
             arc
          }

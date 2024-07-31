@@ -51,8 +51,8 @@ impl JvmUniqueCacheRefs {
 #[cfg(feature="jvm")]
 pub struct UniqueCache<T> {
    jvm: JavaVM,
+   jvm_refs: Arc<JvmUniqueCacheRefs>,
    jvm_state: GlobalRef,
-   jvm_state_update_method_id: JMethodID,
    value: T
 }
 
@@ -65,13 +65,13 @@ pub struct UniqueCache<T> {
 impl<T: ConvertJava> UniqueCache<T> {
    pub(crate) fn new_arc(
       jvm: &JavaVM,
-      jvm_refs: &JvmUniqueCacheRefs,
+      jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
    ) -> Arc<Mutex<Self>> {
       let arc = Arc::new(Mutex::new(MaybeUninit::uninit()));
 
       let jvm_state = Self::create_jvm_state(
-         jvm, jvm_refs, &initial_value,
+         jvm, jvm_refs.as_ref(), &initial_value,
          unsafe { mem::transmute(arc.clone()) }
       );
 
@@ -79,8 +79,8 @@ impl<T: ConvertJava> UniqueCache<T> {
 
       let unique_cache = UniqueCache {
          jvm,
+         jvm_refs,
          jvm_state,
-         jvm_state_update_method_id: jvm_refs.update_method_id,
          value: initial_value
       };
 
@@ -96,7 +96,7 @@ impl<T: ConvertJava> UniqueCache<T> {
       unsafe {
          env.call_method_unchecked(
             &self.jvm_state,
-            self.jvm_state_update_method_id,
+            self.jvm_refs.update_method_id,
             ReturnType::Primitive(Primitive::Void),
             &[JValueGen::Object(java_value).as_jni()]
          ).unwrap();
