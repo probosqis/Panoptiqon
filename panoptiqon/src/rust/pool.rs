@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+use std::collections::hash_map::Entry;
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 
@@ -63,17 +64,22 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn get_or_insert(
-      &mut self,
-      key: K,
-      initial_value: impl Fn() -> T
-   ) -> Arc<Mutex<UniqueCache<T>>> {
-      let arc = self.map.entry(key).or_insert_with(|| {
-         let initial_value = initial_value();
-         UniqueCache::new_arc(&self.jvm, &self.jvm_unique_cache_refs, initial_value)
-      });
+   pub fn update(&mut self, key: K, value: T) -> Arc<Mutex<UniqueCache<T>>> {
+      let entry = self.map.entry(key);
 
-      arc.clone()
+      match entry {
+         Entry::Occupied(entry) => {
+            let arc = entry.get();
+            let mut cache_lock = arc.lock().unwrap();
+            cache_lock.save(value);
+            arc.clone()
+         }
+         Entry::Vacant(entry) => {
+            let arc = UniqueCache::new_arc(&self.jvm, &self.jvm_unique_cache_refs, value);
+            entry.insert(arc.clone());
+            arc
+         }
+      }
    }
 }
 
@@ -87,18 +93,23 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn get_or_insert(
-      &mut self,
-      key: K,
-      initial_value: impl Fn() -> T
-   ) -> Arc<Mutex<UniqueCache<T>>> {
-      let arc = self.map.entry(key).or_insert_with(|| {
-         let initial_value = initial_value();
-         let unique_cache = UniqueCache::new(initial_value);
-         Arc::new(Mutex::new(unique_cache))
-      });
+   pub fn update(&mut self, key: K, value: T) -> Arc<Mutex<UniqueCache<T>>> {
+      let entry = self.map.entry(key);
 
-      arc.clone()
+      match entry {
+         Entry::Occupied(entry) => {
+            let arc = entry.get();
+            let mut cache_lock = arc.lock().unwrap();
+            cache_lock.save(value);
+            arc.clone()
+         }
+         Entry::Vacant(entry) => {
+            let unique_cache = UniqueCache::new(value);
+            let arc = Arc::new(Mutex::new(unique_cache));
+            entry.insert(arc.clone());
+            arc
+         }
+      }
    }
 }
 
@@ -118,11 +129,11 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
 
-      let cache = pool.get_or_insert("A".to_string(), || 42);
+      let cache = pool.update("A".to_string(), 42);
       let unique_cache = cache.lock().unwrap();
       assert_eq!(42, **unique_cache);
 
-      let cache = pool.get_or_insert("B".to_string(), || 43);
+      let cache = pool.update("B".to_string(), 43);
       let unique_cache = cache.lock().unwrap();
       assert_eq!(43, **unique_cache);
    }
@@ -134,7 +145,7 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
 
-      let _ = pool.get_or_insert("A".to_string(), || 42);
+      let _ = pool.update("A".to_string(), 42);
 
       let cache = pool.get("A".to_string());
       assert!(cache.is_some());
@@ -152,9 +163,9 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache1_ptr = Arc::as_ptr(&pool.get_or_insert("A".to_string(), || 42)) as *const _;
-      let cache2_ptr = Arc::as_ptr(&pool.get_or_insert("A".to_string(), || 42)) as *const _;
-      let cache3_ptr = Arc::as_ptr(&pool.get_or_insert("B".to_string(), || 42)) as *const _;
+      let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), 42)) as *const _;
+      let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), 42)) as *const _;
+      let cache3_ptr = Arc::as_ptr(&pool.update("B".to_string(), 42)) as *const _;
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);
@@ -166,7 +177,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache = pool.get_or_insert("A".to_string(), || 42);
+      let cache = pool.update("A".to_string(), 42);
 
       {
          let mut lock = cache.lock().unwrap();
