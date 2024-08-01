@@ -32,19 +32,30 @@ pub(crate) struct JvmUniqueCacheRefs {
    pub class: GlobalRef,
    pub constructor_id: JMethodID,
    pub update_method_id: JMethodID,
+   pub cache_class: GlobalRef,
+   pub cache_constructor_id: JMethodID,
 }
 
 #[cfg(feature="jvm")]
 impl JvmUniqueCacheRefs {
    pub(crate) fn new(env: &mut JNIEnv) -> Self {
-      let class = env.find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
+      let class = env
+         .find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
       let class = env.new_global_ref(class).unwrap();
       let constructor_id = env
          .get_method_id(&class, "<init>", "(Ljava/lang/Object;JJ)V").unwrap();
       let update_method_id = env
          .get_method_id(&class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
 
-      JvmUniqueCacheRefs { class, constructor_id, update_method_id }
+      let cache_class = env
+         .find_class("com/wcaokaze/probosqis/panoptiqon/RepositoryCache").unwrap();
+      let cache_class = env.new_global_ref(cache_class).unwrap();
+      let cache_constructor_id = env
+         .get_method_id(&cache_class, "<init>", "(Lcom/wcaokaze/probosqis/panoptiqon/UniqueCache;)V").unwrap();
+
+      JvmUniqueCacheRefs {
+         class, constructor_id, update_method_id, cache_class, cache_constructor_id
+      }
    }
 }
 
@@ -103,6 +114,18 @@ impl<T: ConvertJava> UniqueCache<T> {
       }
 
       self.value = value;
+   }
+
+   pub fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      unsafe {
+         env.new_object_unchecked(
+            &self.jvm_refs.cache_class,
+            self.jvm_refs.cache_constructor_id,
+            &[
+               JValueGen::Object(&self.jvm_state).as_jni()
+            ]
+         ).unwrap()
+      }
    }
 
    fn create_jvm_state(

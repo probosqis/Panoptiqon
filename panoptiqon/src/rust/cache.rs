@@ -15,6 +15,13 @@
  */
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
+#[cfg(feature="jvm")]
+use {
+   crate::convert_java::ConvertJava,
+   jni::JNIEnv,
+   jni::objects::JObject,
+};
+
 use crate::unique_cache::UniqueCache;
 
 pub struct Cache<T>(Arc<Mutex<UniqueCache<T>>>);
@@ -26,6 +33,14 @@ impl<T> Cache<T> {
 
    pub fn lock(&self) -> LockResult<MutexGuard<'_, UniqueCache<T>>> {
       self.0.lock()
+   }
+
+   #[cfg(feature="jvm")]
+   pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>
+      where T: ConvertJava
+   {
+      let unique_cache_lock = self.0.lock().unwrap();
+      unique_cache_lock.create_jvm_cache(env)
    }
 
    #[cfg(any(test, feature="jni-test"))]

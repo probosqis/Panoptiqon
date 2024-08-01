@@ -17,6 +17,7 @@
 package com.wcaokaze.probosqis.panoptiqon
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 class RepositoryTest {
    init {
@@ -34,4 +35,59 @@ class RepositoryTest {
 
    @Test
    external fun save_affectAnotherCache()
+
+   @Test
+   fun jvmCache() {
+      val cache = `jvmCache$getCache`()
+      assertEquals(42, cache.value)
+   }
+
+   external fun `jvmCache$getCache`(): Cache<Int>
+
+   @Test
+   fun jvmCache_valueChangeFromNative() {
+      val cache = `jvmCache_valueChangeFromNative$getCache`()
+      assertEquals(42, cache.value)
+      `jvmCache_valueChangeFromNative$changeValue`()
+      assertEquals(13, cache.value)
+   }
+
+   external fun `jvmCache_valueChangeFromNative$getCache`(): Cache<Int>
+   external fun `jvmCache_valueChangeFromNative$changeValue`()
+
+   @Test
+   fun jvmCache_valueChangeFromJvm() {
+      val cache = `jvmCache_valueChangeFromJvm$getCache`()
+      assertEquals(42, cache.value)
+      cache.value = 13
+      `jvmCache_valueChangeFromJvm$assertValue`()
+   }
+
+   external fun `jvmCache_valueChangeFromJvm$getCache`(): WritableCache<Int>
+   external fun `jvmCache_valueChangeFromJvm$assertValue`()
+
+   @Test
+   fun jvmCache_valueChange_doesntAffectOtherKeyCaches() {
+      `jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
+      val cacheA = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`()
+      val cacheB = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`()
+      val cacheC = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`()
+      assertEquals(0, cacheA.value)
+      assertEquals(1, cacheB.value)
+      assertEquals(2, cacheC.value)
+      `jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
+      assertEquals(0, cacheA.value)
+      assertEquals(3, cacheB.value)
+      assertEquals(2, cacheC.value)
+
+      cacheB.value++
+      `jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
+   }
+
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`(): WritableCache<Int>
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`(): WritableCache<Int>
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`(): WritableCache<Int>
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
 }

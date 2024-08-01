@@ -24,7 +24,7 @@ internal class UniqueCache<T>(
    private val rustStateAddress: Long,
    private val rustStateVTableAddress: Long,
 ) : Object() {
-   private var state = mutableStateOf(initialValue)
+   internal var state = mutableStateOf(initialValue)
 
    var value: T
       get() = state.value
