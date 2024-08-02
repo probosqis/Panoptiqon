@@ -45,7 +45,7 @@ impl JvmUniqueCacheRefs {
       let constructor_id = env
          .get_method_id(&class, "<init>", "(Ljava/lang/Object;JJ)V").unwrap();
       let update_method_id = env
-         .get_method_id(&class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
+         .get_method_id(&class, "updateStateFromNative", "(Ljava/lang/Object;)V").unwrap();
 
       let cache_class = env
          .find_class("com/wcaokaze/probosqis/panoptiqon/RepositoryCache").unwrap();
@@ -181,7 +181,7 @@ impl<T> Deref for UniqueCache<T> {
 
 #[cfg(feature="jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateRustState(
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateNativeState(
    mut env: JNIEnv,
    _obj: JObject,
    unique_cache_address: jlong,
@@ -199,7 +199,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateRustState
 
 #[cfg(feature="jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementRustReferenceCount(
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNativeReferenceCount(
    _env: JNIEnv,
    _obj: JObject,
    unique_cache_address: jlong,
