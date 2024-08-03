@@ -63,6 +63,11 @@ impl JvmUniqueCacheRefs {
 pub struct UniqueCache<T> {
    jvm: JavaVM,
    jvm_refs: Arc<JvmUniqueCacheRefs>,
+   // XXX: この構造体でJVM側のUniqueCacheの強参照を持ち、JVM側のUniqueCacheに
+   // この構造体のポインタを渡す際にArcの強参照をインクリメントしているため
+   // 循環参照しており絶対に解放されない。
+   // jvm_stateと同一インスタンスを指す弱参照も別途持っておき、Arcの強参照が
+   // 1(JVMからのものだけ)になったとき強参照のjvm_stateは解放するなどの対応が必要か
    jvm_state: GlobalRef,
    value: T
 }
