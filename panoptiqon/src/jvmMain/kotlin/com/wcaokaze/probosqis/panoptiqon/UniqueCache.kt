@@ -21,37 +21,37 @@ import androidx.compose.runtime.mutableStateOf
 @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
 internal class UniqueCache<T>(
    initialValue: T,
-   private val rustStateAddress: Long,
-   private val rustStateVTableAddress: Long,
+   private val nativeStateAddress: Long,
+   private val nativeStateVTableAddress: Long,
 ) : Object() {
-   private var state = mutableStateOf(initialValue)
+   internal var state = mutableStateOf(initialValue)
 
    var value: T
       get() = state.value
       set(value) {
          state.value = value
-         updateRustState(rustStateAddress, rustStateVTableAddress, value)
+         updateNativeState(nativeStateAddress, nativeStateVTableAddress, value)
       }
 
-   // XXX: Rust側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
-   // Rust側とJVM側が同時にアクセスされた場合には不整合が起こる可能性がある
-   fun updateStateFromRust(value: T) {
+   // XXX: ネイティブ側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
+   // ネイティブ側とJVM側が同時にアクセスされた場合には不整合が起こる可能性がある
+   fun updateStateFromNative(value: T) {
       state.value = value
    }
 
-   external fun updateRustState(
+   external fun updateNativeState(
       rustStateAddress: Long,
       rustStateVTableAddress: Long,
       value: T
    )
 
-   external fun decrementRustReferenceCount(
+   external fun decrementNativeReferenceCount(
       rustStateAddress: Long,
       rustStateVTableAddress: Long
    )
 
    @Deprecated("")
    override fun finalize() {
-      decrementRustReferenceCount(rustStateAddress, rustStateVTableAddress)
+      decrementNativeReferenceCount(nativeStateAddress, nativeStateVTableAddress)
    }
 }

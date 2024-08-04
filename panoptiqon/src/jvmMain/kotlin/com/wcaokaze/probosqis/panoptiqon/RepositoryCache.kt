@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards, ptr_metadata)]
+package com.wcaokaze.probosqis.panoptiqon
 
-pub mod cache;
-pub mod repository;
-mod unique_cache;
-mod pool;
+internal class RepositoryCache<T>(
+   private val uniqueCache: UniqueCache<T>
+) : Cache<T>, WritableCache<T> {
+   @InternalCacheApi
+   override val state get() = uniqueCache.state
 
-#[cfg(feature="jvm")]
-pub mod convert_java;
+   @InternalCacheApi
+   override val mutableState get() = uniqueCache.state
+
+   override var value: T by uniqueCache::value
+
+   override fun asCache(): Cache<T> = this
+}

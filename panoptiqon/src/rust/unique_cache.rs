@@ -32,27 +32,43 @@ pub(crate) struct JvmUniqueCacheRefs {
    pub class: GlobalRef,
    pub constructor_id: JMethodID,
    pub update_method_id: JMethodID,
+   pub cache_class: GlobalRef,
+   pub cache_constructor_id: JMethodID,
 }
 
 #[cfg(feature="jvm")]
 impl JvmUniqueCacheRefs {
    pub(crate) fn new(env: &mut JNIEnv) -> Self {
-      let class = env.find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
+      let class = env
+         .find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
       let class = env.new_global_ref(class).unwrap();
       let constructor_id = env
          .get_method_id(&class, "<init>", "(Ljava/lang/Object;JJ)V").unwrap();
       let update_method_id = env
-         .get_method_id(&class, "updateStateFromRust", "(Ljava/lang/Object;)V").unwrap();
+         .get_method_id(&class, "updateStateFromNative", "(Ljava/lang/Object;)V").unwrap();
 
-      JvmUniqueCacheRefs { class, constructor_id, update_method_id }
+      let cache_class = env
+         .find_class("com/wcaokaze/probosqis/panoptiqon/RepositoryCache").unwrap();
+      let cache_class = env.new_global_ref(cache_class).unwrap();
+      let cache_constructor_id = env
+         .get_method_id(&cache_class, "<init>", "(Lcom/wcaokaze/probosqis/panoptiqon/UniqueCache;)V").unwrap();
+
+      JvmUniqueCacheRefs {
+         class, constructor_id, update_method_id, cache_class, cache_constructor_id
+      }
    }
 }
 
 #[cfg(feature="jvm")]
-pub struct UniqueCache<T: ConvertJava> {
+pub struct UniqueCache<T> {
    jvm: JavaVM,
+   jvm_refs: Arc<JvmUniqueCacheRefs>,
+   // XXX: この構造体でJVM側のUniqueCacheの強参照を持ち、JVM側のUniqueCacheに
+   // この構造体のポインタを渡す際にArcの強参照をインクリメントしているため
+   // 循環参照しており絶対に解放されない。
+   // jvm_stateと同一インスタンスを指す弱参照も別途持っておき、Arcの強参照が
+   // 1(JVMからのものだけ)になったとき強参照のjvm_stateは解放するなどの対応が必要か
    jvm_state: GlobalRef,
-   jvm_state_update_method_id: JMethodID,
    value: T
 }
 
@@ -65,13 +81,13 @@ pub struct UniqueCache<T> {
 impl<T: ConvertJava> UniqueCache<T> {
    pub(crate) fn new_arc(
       jvm: &JavaVM,
-      jvm_refs: &JvmUniqueCacheRefs,
+      jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
    ) -> Arc<Mutex<Self>> {
       let arc = Arc::new(Mutex::new(MaybeUninit::uninit()));
 
       let jvm_state = Self::create_jvm_state(
-         jvm, jvm_refs, &initial_value,
+         jvm, jvm_refs.as_ref(), &initial_value,
          unsafe { mem::transmute(arc.clone()) }
       );
 
@@ -79,8 +95,8 @@ impl<T: ConvertJava> UniqueCache<T> {
 
       let unique_cache = UniqueCache {
          jvm,
+         jvm_refs,
          jvm_state,
-         jvm_state_update_method_id: jvm_refs.update_method_id,
          value: initial_value
       };
 
@@ -96,13 +112,25 @@ impl<T: ConvertJava> UniqueCache<T> {
       unsafe {
          env.call_method_unchecked(
             &self.jvm_state,
-            self.jvm_state_update_method_id,
+            self.jvm_refs.update_method_id,
             ReturnType::Primitive(Primitive::Void),
             &[JValueGen::Object(java_value).as_jni()]
          ).unwrap();
       }
 
       self.value = value;
+   }
+
+   pub fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      unsafe {
+         env.new_object_unchecked(
+            &self.jvm_refs.cache_class,
+            self.jvm_refs.cache_constructor_id,
+            &[
+               JValueGen::Object(&self.jvm_state).as_jni()
+            ]
+         ).unwrap()
+      }
    }
 
    fn create_jvm_state(
@@ -148,16 +176,6 @@ impl<T> UniqueCache<T> {
    }
 }
 
-#[cfg(feature="jvm")]
-impl<T: ConvertJava> Deref for UniqueCache<T> {
-   type Target = T;
-
-   fn deref(&self) -> &T {
-      &self.value
-   }
-}
-
-#[cfg(not(feature="jvm"))]
 impl<T> Deref for UniqueCache<T> {
    type Target = T;
 
@@ -168,7 +186,7 @@ impl<T> Deref for UniqueCache<T> {
 
 #[cfg(feature="jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateRustState(
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateNativeState(
    mut env: JNIEnv,
    _obj: JObject,
    unique_cache_address: jlong,
@@ -186,7 +204,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateRustState
 
 #[cfg(feature="jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementRustReferenceCount(
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNativeReferenceCount(
    _env: JNIEnv,
    _obj: JObject,
    unique_cache_address: jlong,
