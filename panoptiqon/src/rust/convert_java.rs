@@ -25,6 +25,26 @@ pub trait ConvertJava
    fn clone_from_java(env: &mut JNIEnv, java_object: JObject) -> Self;
 }
 
+/// T?
+impl<T> ConvertJava for Option<T>
+   where T: ConvertJava
+{
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      match self {
+         Some(t) => t.clone_into_java(env),
+         None => JObject::null()
+      }
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: JObject) -> Self {
+      if java_object.is_null() {
+         None
+      } else {
+         Some(T::clone_from_java(env, java_object))
+      }
+   }
+}
+
 /// java.lang.Integer
 impl ConvertJava for i32 {
    fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
@@ -35,5 +55,16 @@ impl ConvertJava for i32 {
 
    fn clone_from_java(env: &mut JNIEnv, java_object: JObject) -> Self {
       env.call_method(&java_object, "intValue", "()I", &[]).unwrap().i().unwrap()
+   }
+}
+
+/// java.lang.String
+impl ConvertJava for String {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.new_string(&self).unwrap().into()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: JObject) -> Self {
+      env.get_string(&java_object.into()).unwrap().into()
    }
 }

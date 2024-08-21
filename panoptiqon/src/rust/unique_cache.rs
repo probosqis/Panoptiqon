@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
 
 #[cfg(feature="jvm")]
 use {
@@ -25,6 +24,7 @@ use {
    jni::sys::jlong,
    std::mem::{self, MaybeUninit},
    std::ptr::{self},
+   std::sync::{Arc, Mutex},
 };
 
 #[cfg(feature="jvm")]
