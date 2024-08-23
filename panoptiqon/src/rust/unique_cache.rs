@@ -198,7 +198,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateNativeSta
    );
 
    unsafe {
-      (&*dyn_unique_cache).update_unique_cache(&mut env, value);
+      (&*dyn_unique_cache).update_unique_cache(&mut env, &value);
    }
 }
 
@@ -234,7 +234,7 @@ fn get_dyn_unique_cache(
 
 #[cfg(feature="jvm")]
 trait DynUniqueCache {
-   fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject);
+   fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject);
 
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
    /// 解放されている可能性がある
@@ -243,7 +243,7 @@ trait DynUniqueCache {
 
 #[cfg(feature="jvm")]
 impl<T: ConvertJava> DynUniqueCache for Mutex<UniqueCache<T>> {
-   fn update_unique_cache(&self, env: &mut JNIEnv, value: JObject) {
+   fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject) {
       let value = T::clone_from_java(env, value);
       self.lock().unwrap().value = value;
    }
