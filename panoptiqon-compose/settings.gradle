@@ -32,9 +32,9 @@ dependencyResolutionManagement {
       libs {
          version('kotlin', '2.0.20')
          version('android-plugin', '8.5.0')
-         version('compose-jb', '1.5.11')
-         version('compose-androidx', '1.5.4')
-         version('compose-compiler', '1.5.7')
+         version('compose-jb', '1.6.11')
+         version('compose-androidx', '1.6.8')
+         version('compose-compiler', '1.5.15')
 
          plugin('kotlin-multiplatform', 'org.jetbrains.kotlin.multiplatform').versionRef('kotlin')
          plugin('kotlinx-serialization', 'org.jetbrains.kotlin.plugin.serialization').versionRef('kotlin')
