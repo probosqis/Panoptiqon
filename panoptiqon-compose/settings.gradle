@@ -30,7 +30,7 @@ dependencyResolutionManagement {
 
    versionCatalogs {
       libs {
-         version('kotlin', '1.9.21')
+         version('kotlin', '2.0.20')
          version('android-plugin', '8.5.0')
          version('compose-jb', '1.5.11')
          version('compose-androidx', '1.5.4')
