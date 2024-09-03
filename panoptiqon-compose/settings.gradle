@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 wcaokaze
+ * Copyright 2023-2024 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ dependencyResolutionManagement {
    versionCatalogs {
       libs {
          version('kotlin', '1.9.21')
-         version('android-plugin', '8.2.0')
+         version('android-plugin', '8.5.0')
          version('compose-jb', '1.5.11')
          version('compose-androidx', '1.5.4')
          version('compose-compiler', '1.5.7')
