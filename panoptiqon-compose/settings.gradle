@@ -40,6 +40,7 @@ dependencyResolutionManagement {
          plugin('kotlinx-serialization', 'org.jetbrains.kotlin.plugin.serialization').versionRef('kotlin')
          plugin('android-library', 'com.android.library').versionRef('android-plugin')
          plugin('compose-jb', 'org.jetbrains.compose').versionRef('compose-jb')
+         plugin('compose-compiler', 'org.jetbrains.kotlin.plugin.compose').versionRef('kotlin')
 
          library('kotlinx-serialization', 'org.jetbrains.kotlinx', 'kotlinx-serialization-json').version('1.6.2')
          library('android-desugaring-jdk', 'com.android.tools', 'desugar_jdk_libs').version('1.2.2')
