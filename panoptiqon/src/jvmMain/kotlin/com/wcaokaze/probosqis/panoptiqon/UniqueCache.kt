@@ -21,7 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 @Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
 internal class UniqueCache<T>(
    initialValue: T,
-   private val nativeStateAddress: Long,
+   internal val nativeStateAddress: Long,
    private val nativeStateVTableAddress: Long,
 ) : Object() {
    internal var state = mutableStateOf(initialValue)

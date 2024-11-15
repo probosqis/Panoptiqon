@@ -18,11 +18,28 @@
 use jni::JNIEnv;
 use jni::objects::JObject;
 
+use crate::cache::Cache;
+
 pub trait ConvertJava
    where Self: Sized
 {
    fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>;
    fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self;
+}
+
+/// RepositoryCache<T>
+impl<T> ConvertJava for Cache<T>
+   where T: ConvertJava
+{
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      self.create_jvm_instance(env)
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      unsafe {
+         Self::from_jvm_instance(env, &java_object)
+      }
+   }
 }
 
 /// T?

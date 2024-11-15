@@ -43,6 +43,27 @@ impl<T> Cache<T> {
       unique_cache_lock.create_jvm_cache(env)
    }
 
+   /// RepositoryCacheのインスタンスからCacheを生成する。
+   ///
+   /// # Safety
+   /// 指定したJVMインスタンスに対応するネイティブ側の[UniqueCache]のメモリ領域が
+   /// Tと違う型を格納している場合、この関数の返り値のCacheに対するすべての動作は
+   /// 未定義となる。
+   #[cfg(feature="jvm")]
+   pub unsafe fn from_jvm_instance<'local>(
+      env: &mut JNIEnv<'local>,
+      java_instance: &JObject
+   ) -> Self
+      where T: ConvertJava
+   {
+      let address = env.call_method(
+         &java_instance, "getUniqueCacheRustStateAddress", "()J", &[]
+      ).unwrap().j().unwrap() as *const _;
+
+      let unique_cache = unsafe { Arc::<Mutex<_>>::from_raw(address) };
+      Cache::new(unique_cache.clone())
+   }
+
    #[cfg(any(test, feature="jni-test"))]
    pub fn unique_cache_ptr(&self) -> *const Mutex<UniqueCache<T>> {
       Arc::as_ptr(&self.0)
