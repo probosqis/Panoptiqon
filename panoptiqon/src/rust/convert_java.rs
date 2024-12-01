@@ -85,3 +85,75 @@ impl ConvertJava for String {
       env.get_string(java_object.into()).unwrap().into()
    }
 }
+
+/// kotlin.Unit
+impl ConvertJava for () {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.get_static_field("kotlin/Unit", "INSTANCE", "Lkotlin/Unit;")
+         .unwrap().l().unwrap()
+   }
+
+   fn clone_from_java(_env: &mut JNIEnv, _java_object: &JObject) -> Self {
+      ()
+   }
+}
+
+/// kotlin.Pair
+impl<A, B> ConvertJava for (A, B)
+   where A: ConvertJava, B: ConvertJava
+{
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      let first  = self.0.clone_into_java(env);
+      let second = self.1.clone_into_java(env);
+
+      env.new_object(
+         "kotlin/Pair", "(Ljava/lang/Object;Ljava/lang/Object;)V",
+         &[(&first).into(), (&second).into()]
+      ).unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      let first = env
+         .call_method(java_object, "getFirst", "()Ljava/lang/Object;", &[])
+         .unwrap().l().unwrap();
+      let second = env
+         .call_method(java_object, "getSecond", "()Ljava/lang/Object;", &[])
+         .unwrap().l().unwrap();
+
+      (A::clone_from_java(env, &first), B::clone_from_java(env, &second))
+   }
+}
+
+/// kotlin.Triple
+impl<A, B, C> ConvertJava for (A, B, C)
+   where A: ConvertJava, B: ConvertJava, C: ConvertJava
+{
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      let first  = self.0.clone_into_java(env);
+      let second = self.1.clone_into_java(env);
+      let third  = self.2.clone_into_java(env);
+
+      env.new_object(
+         "kotlin/Triple", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",
+         &[(&first).into(), (&second).into(), (&third).into()]
+      ).unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      let first = env
+         .call_method(java_object, "getFirst", "()Ljava/lang/Object;", &[])
+         .unwrap().l().unwrap();
+      let second = env
+         .call_method(java_object, "getSecond", "()Ljava/lang/Object;", &[])
+         .unwrap().l().unwrap();
+      let third = env
+         .call_method(java_object, "getThird", "()Ljava/lang/Object;", &[])
+         .unwrap().l().unwrap();
+
+      (
+         A::clone_from_java(env, &first),
+         B::clone_from_java(env, &second),
+         C::clone_from_java(env, &third)
+      )
+   }
+}
