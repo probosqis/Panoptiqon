@@ -39,31 +39,31 @@ class RepositoryTest {
    @Test
    fun jvmCache() {
       val cache = `jvmCache$getCache`()
-      assertEquals(42, cache.value)
+      assertEquals(Pair("A", 42), cache.value)
    }
 
-   external fun `jvmCache$getCache`(): Cache<Int>
+   external fun `jvmCache$getCache`(): Cache<Pair<String, Int>>
 
    @Test
    fun jvmCache_valueChangeFromNative() {
       val cache = `jvmCache_valueChangeFromNative$getCache`()
-      assertEquals(42, cache.value)
+      assertEquals(Pair("A", 42), cache.value)
       `jvmCache_valueChangeFromNative$changeValue`()
-      assertEquals(13, cache.value)
+      assertEquals(Pair("A", 13), cache.value)
    }
 
-   external fun `jvmCache_valueChangeFromNative$getCache`(): Cache<Int>
+   external fun `jvmCache_valueChangeFromNative$getCache`(): Cache<Pair<String, Int>>
    external fun `jvmCache_valueChangeFromNative$changeValue`()
 
    @Test
    fun jvmCache_valueChangeFromJvm() {
       val cache = `jvmCache_valueChangeFromJvm$getCache`()
-      assertEquals(42, cache.value)
-      cache.value = 13
+      assertEquals(Pair("A", 42), cache.value)
+      cache.value = Pair("A", 13)
       `jvmCache_valueChangeFromJvm$assertValue`()
    }
 
-   external fun `jvmCache_valueChangeFromJvm$getCache`(): WritableCache<Int>
+   external fun `jvmCache_valueChangeFromJvm$getCache`(): WritableCache<Pair<String, Int>>
    external fun `jvmCache_valueChangeFromJvm$assertValue`()
 
    @Test
@@ -72,22 +72,22 @@ class RepositoryTest {
       val cacheA = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`()
       val cacheB = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`()
       val cacheC = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`()
-      assertEquals(0, cacheA.value)
-      assertEquals(1, cacheB.value)
-      assertEquals(2, cacheC.value)
+      assertEquals(Pair("A", 0), cacheA.value)
+      assertEquals(Pair("B", 1), cacheB.value)
+      assertEquals(Pair("C", 2), cacheC.value)
       `jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
-      assertEquals(0, cacheA.value)
-      assertEquals(3, cacheB.value)
-      assertEquals(2, cacheC.value)
+      assertEquals(Pair("A", 0), cacheA.value)
+      assertEquals(Pair("B", 3), cacheB.value)
+      assertEquals(Pair("C", 2), cacheC.value)
 
-      cacheB.value++
+      cacheB.value = Pair("B", 4)
       `jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
    }
 
    external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`(): WritableCache<Int>
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`(): WritableCache<Int>
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`(): WritableCache<Int>
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`(): WritableCache<Pair<String, Int>>
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`(): WritableCache<Pair<String, Int>>
+   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`(): WritableCache<Pair<String, Int>>
    external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
    external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
 }

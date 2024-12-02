@@ -26,12 +26,16 @@ use {
 use crate::cache::Cache;
 use crate::pool::UniqueCachePool;
 
-pub struct Repository<K, T> {
-   pool: UniqueCachePool<K, T>
+pub struct Repository<K, T, S>
+   where S: Fn(&T) -> K
+{
+   pool: UniqueCachePool<K, T>,
+   key_selector: S
 }
 
-impl<K, T> Repository<K, T>
-   where K: Hash + Eq
+impl<K, T, S> Repository<K, T, S>
+   where K: Hash + Eq,
+         S: Fn(&T) -> K
 {
    pub fn load(&mut self, key: K) -> Result<Cache<T>> {
       let Some(arc) = self.pool.get(key) else { bail!("not yet implemented."); };
@@ -42,29 +46,38 @@ impl<K, T> Repository<K, T>
 }
 
 #[cfg(feature="jvm")]
-impl<K, T> Repository<K, T>
+impl<K, T, S> Repository<K, T, S>
    where K: Hash + Eq,
-         T: ConvertJava
+         T: ConvertJava,
+         S: Fn(&T) -> K
 {
-   pub fn new(env: &mut JNIEnv) -> Self {
+   pub fn new(
+      env: &mut JNIEnv,
+      key: S
+   ) -> Self {
       Repository {
-         pool: UniqueCachePool::new(env)
+         pool: UniqueCachePool::new(env),
+         key_selector: key
       }
    }
 
-   pub fn save(&mut self, key: K, value: T) -> Cache<T> {
+   pub fn save(&mut self, value: T) -> Cache<T> {
+      let key_selector = &self.key_selector;
+      let key = key_selector(&value);
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
 }
 
 #[cfg(not(feature="jvm"))]
-impl<K, T> Repository<K, T>
-   where K: Hash + Eq
+impl<K, T, S> Repository<K, T, S>
+   where K: Hash + Eq,
+         S: Fn(&T) -> K
 {
-   pub fn new() -> Self {
+   pub fn new(key: S) -> Self {
       Repository {
-         pool: UniqueCachePool::new()
+         pool: UniqueCachePool::new(),
+         key_selector: key
       }
    }
 
@@ -88,25 +101,27 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::new(&mut env);
-      repository.save("A".to_string(), 42);
+      let mut repository = Repository::<String, (String, i32), _>::new(
+         &mut env, |(k, _)| k.clone()
+      );
+      repository.save(("A".to_string(), 42));
 
       {
          let result = repository.load("A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
          let cache_lock = cache.lock().unwrap();
-         assert_eq!(42, **cache_lock);
+         assert_eq!(("A".to_string(), 42), **cache_lock);
       }
 
-      repository.save("A".to_string(), 13);
+      repository.save(("A".to_string(), 13));
 
       {
          let result = repository.load("A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
          let cache_lock = cache.lock().unwrap();
-         assert_eq!(13, **cache_lock);
+         assert_eq!(("A".to_string(), 13), **cache_lock);
       }
    }
 
@@ -115,7 +130,9 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<_, i32>::new(&mut env);
+      let mut repository = Repository::<String, (String, i32), _>::new(
+         &mut env, |(k, _)| k.clone()
+      );
 
       let result = repository.load("A".to_string());
       assert!(result.is_err());
@@ -126,20 +143,22 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::new(&mut env);
-      repository.save("A".to_string(), 42);
+      let mut repository = Repository::<String, (String, i32), _>::new(
+         &mut env, |(k, _)| k.clone()
+      );
+      repository.save(("A".to_string(), 42));
 
       {
          let cache = repository.load("A".to_string()).unwrap();
          let mut cache_lock = cache.lock().unwrap();
-         assert_eq!(42, **cache_lock);
-         cache_lock.save(13);
+         assert_eq!(("A".to_string(), 42), **cache_lock);
+         cache_lock.save(("A".to_string(), 13));
       }
 
       {
          let cache = repository.load("A".to_string()).unwrap();
          let cache_lock = cache.lock().unwrap();
-         assert_eq!(13, **cache_lock);
+         assert_eq!(("A".to_string(), 13), **cache_lock);
       }
    }
 
@@ -148,35 +167,37 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::new(&mut env);
-      repository.save("A".to_string(), 42);
+      let mut repository = Repository::<String, (String, i32), _>::new(
+         &mut env, |(k, _)| k.clone()
+      );
+      repository.save(("A".to_string(), 42));
 
       let cache1 = repository.load("A".to_string()).unwrap();
       {
          let cache1_lock = cache1.lock().unwrap();
-         assert_eq!(42, **cache1_lock);
+         assert_eq!(("A".to_string(), 42), **cache1_lock);
       }
 
-      repository.save("A".to_string(), 13);
+      repository.save(("A".to_string(), 13));
 
       let cache2 = repository.load("A".to_string()).unwrap();
       {
          let cache1_lock = cache1.lock().unwrap();
-         assert_eq!(13, **cache1_lock);
+         assert_eq!(("A".to_string(), 13), **cache1_lock);
       }
       {
          let mut cache2_lock = cache2.lock().unwrap();
-         assert_eq!(13, **cache2_lock);
-         cache2_lock.save(0);
+         assert_eq!(("A".to_string(), 13), **cache2_lock);
+         cache2_lock.save(("A".to_string(), 0));
       }
 
       {
          let cache1_lock = cache1.lock().unwrap();
-         assert_eq!(0, **cache1_lock);
+         assert_eq!(("A".to_string(), 0), **cache1_lock);
       }
       {
          let cache2_lock = cache2.lock().unwrap();
-         assert_eq!(0, **cache2_lock);
+         assert_eq!(("A".to_string(), 0), **cache2_lock);
       }
    }
 
@@ -185,13 +206,15 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::new(&mut env);
-      let cache = repository.save("A".to_string(), 42);
+      let mut repository = Repository::<String, (String, i32), _>::new(
+         &mut env, |(k, _)| k.to_owned()
+      );
+      let cache = repository.save(("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChangeFromNative_repository: Mutex<Option<Repository<String, i32>>> = Mutex::new(None);
+   static valueChangeFromNative_repository: Mutex<Option<Repository<String, (String, i32), fn(&(String, i32)) -> String>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChangeFromNative_00024getCache<'local>(
@@ -199,8 +222,8 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = valueChangeFromNative_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
-      let cache = repo_lock.as_mut().unwrap().save("A".to_string(), 42);
+      *repo_lock = Some(Repository::new(&mut env, |(k, _)| k.to_owned()));
+      let cache = repo_lock.as_mut().unwrap().save(("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
 
@@ -210,11 +233,11 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = valueChangeFromNative_repository.lock().unwrap();
-      repo_lock.as_mut().unwrap().save("A".to_string(), 13);
+      repo_lock.as_mut().unwrap().save(("A".to_string(), 13));
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChangeFromJvm_repository: Mutex<Option<Repository<String, i32>>> = Mutex::new(None);
+   static valueChangeFromJvm_repository: Mutex<Option<Repository<String, (String, i32), fn(&(String, i32)) -> String>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChangeFromJvm_00024getCache<'local>(
@@ -222,8 +245,8 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
-      let cache = repo_lock.as_mut().unwrap().save("A".to_string(), 42);
+      *repo_lock = Some(Repository::new(&mut env, |(k, _)| k.clone()));
+      let cache = repo_lock.as_mut().unwrap().save(("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
 
@@ -237,11 +260,11 @@ mod jni_tests {
       assert!(cache.is_ok());
       let cache = cache.unwrap();
       let cache_lock = cache.lock().unwrap();
-      assert_eq!(13, **cache_lock);
+      assert_eq!(("A".to_string(), 13), **cache_lock);
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<String, i32>>> = Mutex::new(None);
+   static valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<String, (String, i32), fn(&(String, i32)) -> String>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
@@ -249,7 +272,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
+      *repo_lock = Some(Repository::new(&mut env, |(k, _)| k.clone()));
    }
 
    #[no_mangle]
@@ -258,7 +281,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      let cache = repo_lock.as_mut().unwrap().save("A".to_string(), 0);
+      let cache = repo_lock.as_mut().unwrap().save(("A".to_string(), 0));
       cache.create_jvm_instance(&mut env)
    }
 
@@ -268,7 +291,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      let cache = repo_lock.as_mut().unwrap().save("B".to_string(), 1);
+      let cache = repo_lock.as_mut().unwrap().save(("B".to_string(), 1));
       cache.create_jvm_instance(&mut env)
    }
 
@@ -278,7 +301,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      let cache = repo_lock.as_mut().unwrap().save("C".to_string(), 2);
+      let cache = repo_lock.as_mut().unwrap().save(("C".to_string(), 2));
       cache.create_jvm_instance(&mut env)
    }
 
@@ -288,7 +311,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      repo_lock.as_mut().unwrap().save("B".to_string(), 3);
+      repo_lock.as_mut().unwrap().save(("B".to_string(), 3));
    }
 
    #[no_mangle]
@@ -301,6 +324,6 @@ mod jni_tests {
       assert!(cache.is_ok());
       let cache = cache.unwrap();
       let cache_lock = cache.lock().unwrap();
-      assert_eq!(4, **cache_lock);
+      assert_eq!(("B".to_string(), 4), **cache_lock);
    }
 }
