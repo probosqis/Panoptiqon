@@ -19,7 +19,7 @@ package com.wcaokaze.probosqis.panoptiqon
 internal class RepositoryCache<T>(
    private val uniqueCache: UniqueCache<T>
 ) : Cache<T>, WritableCache<T> {
-   internal val uniqueCacheRustStateAddress: Long
+   val uniqueCacheRustStateAddress: Long
       get() = uniqueCache.nativeStateAddress
 
    @InternalCacheApi
