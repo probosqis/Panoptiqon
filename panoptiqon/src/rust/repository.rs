@@ -81,7 +81,9 @@ impl<K, T, S> Repository<K, T, S>
       }
    }
 
-   pub fn save(&mut self, key: K, value: T) -> Cache<T> {
+   pub fn save(&mut self, value: T) -> Cache<T> {
+      let key_selector = &self.key_selector;
+      let key = key_selector(&value);
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
