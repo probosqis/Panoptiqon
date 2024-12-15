@@ -31,4 +31,8 @@ internal class RepositoryCache<T>(
    override var value: T by uniqueCache::value
 
    override fun asCache(): Cache<T> = this
+
+   override fun hashCode() = uniqueCache.hashCode()
+   override fun equals(other: Any?)
+       = other is RepositoryCache<*> && uniqueCache === other.uniqueCache
 }
