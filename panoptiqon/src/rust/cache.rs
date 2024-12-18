@@ -15,6 +15,8 @@
  */
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
+use serde::{Deserialize, Deserializer};
+
 #[cfg(feature="jvm")]
 use {
    crate::convert_java::ConvertJava,
@@ -67,5 +69,13 @@ impl<T> Cache<T> {
    #[cfg(any(test, feature="jni-test"))]
    pub fn unique_cache_ptr(&self) -> *const Mutex<UniqueCache<T>> {
       Arc::as_ptr(&self.0)
+   }
+}
+
+impl<'de, T> Deserialize<'de> for Cache<T> {
+   fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+      where D: Deserializer<'de>
+   {
+      Err(serde::de::Error::custom("not implemented"))
    }
 }
