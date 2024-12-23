@@ -62,6 +62,45 @@ impl<T> ConvertJava for Option<T>
    }
 }
 
+/// java.lang.Boolean
+impl ConvertJava for bool {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.call_static_method(
+         "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", &[(*self).into()]
+      ).unwrap().l().unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      env.call_method(&java_object, "booleanValue", "()Z", &[]).unwrap().z().unwrap()
+   }
+}
+
+/// java.lang.Byte
+impl ConvertJava for i8 {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.call_static_method(
+         "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", &[(*self).into()]
+      ).unwrap().l().unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      env.call_method(&java_object, "byteValue", "()B", &[]).unwrap().b().unwrap()
+   }
+}
+
+/// java.lang.Short
+impl ConvertJava for i16 {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.call_static_method(
+         "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;", &[(*self).into()]
+      ).unwrap().l().unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      env.call_method(&java_object, "shortValue", "()S", &[]).unwrap().s().unwrap()
+   }
+}
+
 /// java.lang.Integer
 impl ConvertJava for i32 {
    fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
@@ -72,6 +111,45 @@ impl ConvertJava for i32 {
 
    fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
       env.call_method(&java_object, "intValue", "()I", &[]).unwrap().i().unwrap()
+   }
+}
+
+/// java.lang.Long
+impl ConvertJava for i64 {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.call_static_method(
+         "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", &[(*self).into()]
+      ).unwrap().l().unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      env.call_method(&java_object, "longValue", "()J", &[]).unwrap().j().unwrap()
+   }
+}
+
+/// java.lang.Float
+impl ConvertJava for f32 {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.call_static_method(
+         "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", &[(*self).into()]
+      ).unwrap().l().unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      env.call_method(&java_object, "floatValue", "()F", &[]).unwrap().f().unwrap()
+   }
+}
+
+/// java.lang.Double
+impl ConvertJava for f64 {
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      env.call_static_method(
+         "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", &[(*self).into()]
+      ).unwrap().l().unwrap()
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      env.call_method(&java_object, "doubleValue", "()D", &[]).unwrap().d().unwrap()
    }
 }
 
