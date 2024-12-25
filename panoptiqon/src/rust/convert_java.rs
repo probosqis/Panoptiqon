@@ -17,7 +17,8 @@
 
 use jni::JNIEnv;
 use jni::objects::JObject;
-
+use jni::signature::{Primitive, ReturnType};
+use jni::sys::jvalue;
 use crate::cache::Cache;
 
 pub trait ConvertJava
@@ -39,6 +40,69 @@ impl<T> ConvertJava for Cache<T>
       unsafe {
          Self::from_jvm_instance(env, &java_object)
       }
+   }
+}
+
+/// T
+impl<T> ConvertJava for Box<T>
+   where T: ConvertJava
+{
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      self.as_ref().clone_into_java(env)
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      Box::new(T::clone_from_java(env, java_object))
+   }
+}
+
+/// java.util.ArrayList (=kotlin.collections.ArrayList)
+impl<T> ConvertJava for Vec<T>
+   where T: ConvertJava
+{
+   fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      let list = env.new_object("Ljava/util/ArrayList;", "()V", &[]).unwrap();
+
+      let add_method_id = env
+         .get_method_id("Ljava/util/ArrayList;", "add", "(Ljava/lang/Object;)Z")
+         .unwrap();
+
+      for element in self {
+         let element = element.clone_into_java(env);
+         unsafe {
+            env.call_method_unchecked(
+                  &list, add_method_id, ReturnType::Primitive(Primitive::Boolean),
+                  &[jvalue { l: element.into_raw() }]
+               )
+               .unwrap();
+         }
+      }
+
+      list
+   }
+
+   fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self {
+      let mut vec = Vec::new();
+
+      let len = env.call_method(&java_object, "size", "()I", &[]).unwrap().i().unwrap();
+
+      let get_method_id = env
+         .get_method_id("Ljava/util/ArrayList;", "get", "(I)Ljava/lang/Object;")
+         .unwrap();
+
+      for index in 0..len {
+         let element = unsafe {
+            env.call_method_unchecked(
+                  &java_object, get_method_id, ReturnType::Object,
+                  &[jvalue { i: index }]
+               )
+               .unwrap().l().unwrap()
+         };
+
+         vec.push(T::clone_from_java(env, &element));
+      }
+
+      vec
    }
 }
 
