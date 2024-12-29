@@ -15,8 +15,8 @@
  */
 use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
-
 use serde::{Deserialize, Deserializer};
+use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 use {
@@ -24,8 +24,6 @@ use {
    jni::JNIEnv,
    jni::objects::JObject,
 };
-
-use crate::unique_cache::UniqueCache;
 
 #[derive(Clone)]
 pub struct Cache<T>(Arc<Mutex<UniqueCache<T>>>);
