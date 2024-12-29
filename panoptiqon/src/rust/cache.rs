@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+use std::fmt::{Debug, Formatter};
 use std::sync::{Arc, LockResult, Mutex, MutexGuard};
 
 use serde::{Deserialize, Deserializer};
@@ -26,6 +27,7 @@ use {
 
 use crate::unique_cache::UniqueCache;
 
+#[derive(Clone)]
 pub struct Cache<T>(Arc<Mutex<UniqueCache<T>>>);
 
 impl<T> Cache<T> {
@@ -71,6 +73,22 @@ impl<T> Cache<T> {
       Arc::as_ptr(&self.0)
    }
 }
+
+impl<T> Debug for Cache<T> where T: Debug {
+   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+      let cache_lock = self.lock().unwrap();
+      let value = cache_lock.get();
+      write!(f, "Cache({:?})", value)
+   }
+}
+
+impl<T> PartialEq for Cache<T> where T: PartialEq {
+   fn eq(&self, other: &Self) -> bool {
+      Arc::ptr_eq(&self.0, &other.0)
+   }
+}
+
+impl<T> Eq for Cache<T> where T: Eq {}
 
 impl<'de, T> Deserialize<'de> for Cache<T> {
    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
