@@ -78,12 +78,14 @@ pub struct UniqueCache<T> {
 }
 
 #[cfg(feature="jvm")]
-impl<T: ConvertJava> UniqueCache<T> {
+impl<T> UniqueCache<T> {
    pub(crate) fn new_arc(
       jvm: &JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
-   ) -> Arc<Mutex<Self>> {
+   ) -> Arc<Mutex<Self>>
+      where T: ConvertJava
+   {
       let arc = Arc::new(Mutex::new(MaybeUninit::uninit()));
 
       let jvm_state = Self::create_jvm_state(
@@ -105,7 +107,13 @@ impl<T: ConvertJava> UniqueCache<T> {
       unsafe { mem::transmute(arc) }
    }
 
-   pub fn save(&mut self, value: T) {
+   pub fn get(&self) -> &T {
+      &self.value
+   }
+
+   pub fn save(&mut self, value: T)
+      where T: ConvertJava
+   {
       let mut env = self.jvm.get_env().unwrap();
       let java_value = value.clone_into_java(&mut env);
 
@@ -121,7 +129,7 @@ impl<T: ConvertJava> UniqueCache<T> {
       self.value = value;
    }
 
-   pub fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+   pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       unsafe {
          env.new_object_unchecked(
             &self.jvm_refs.cache_class,
@@ -138,7 +146,9 @@ impl<T: ConvertJava> UniqueCache<T> {
       jvm_unique_cache_refs: &JvmUniqueCacheRefs,
       initial_value: &T,
       arc: Arc<Mutex<UniqueCache<T>>>
-   ) -> GlobalRef {
+   ) -> GlobalRef
+      where T: ConvertJava
+   {
       let mut env = jvm.get_env().unwrap();
 
       let java_initial_value = initial_value.clone_into_java(&mut env);
@@ -169,6 +179,10 @@ impl<T> UniqueCache<T> {
       UniqueCache {
          value: initial_state
       }
+   }
+
+   pub fn get(&self) -> &T {
+      &self.value
    }
 
    pub fn save(&mut self, value: T) {
