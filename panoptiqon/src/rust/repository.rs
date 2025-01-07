@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 wcaokaze
+ * Copyright 2024-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ use {
 use crate::cache::Cache;
 use crate::pool::UniqueCachePool;
 
-pub struct Repository<K, T, S>
+pub struct Repository<K, T, S = fn(&T) -> K>
    where S: Fn(&T) -> K
 {
    pool: UniqueCachePool<K, T>,
