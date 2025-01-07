@@ -14,17 +14,14 @@
  * limitations under the License.
  */
 use std::hash::Hash;
-
-use anyhow::{bail, Result};
+use crate::cache::Cache;
+use crate::pool::UniqueCachePool;
 
 #[cfg(feature="jvm")]
 use {
    crate::convert_java::ConvertJava,
    jni::JNIEnv,
 };
-
-use crate::cache::Cache;
-use crate::pool::UniqueCachePool;
 
 pub struct Repository<K, T, S = fn(&T) -> K>
    where S: Fn(&T) -> K
@@ -37,8 +34,8 @@ impl<K, T, S> Repository<K, T, S>
    where K: Hash + Eq,
          S: Fn(&T) -> K
 {
-   pub fn load(&mut self, key: K) -> Result<Cache<T>> {
-      let Some(arc) = self.pool.get(key) else { bail!("not yet implemented."); };
+   pub fn load(&mut self, key: K) -> anyhow::Result<Cache<T>> {
+      let Some(arc) = self.pool.get(key) else { anyhow::bail!("not yet implemented."); };
 
       let cache = Cache::new(arc);
       Ok(cache)
@@ -92,10 +89,8 @@ impl<K, T, S> Repository<K, T, S>
 #[cfg(feature="jni-test")]
 mod jni_tests {
    use std::sync::Mutex;
-
    use jni::JNIEnv;
    use jni::objects::JObject;
-
    use super::Repository;
 
    #[no_mangle]
@@ -112,7 +107,7 @@ mod jni_tests {
          let result = repository.load("A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
-         let cache_lock = cache.lock().unwrap();
+         let cache_lock = cache.read().unwrap();
          assert_eq!(("A".to_string(), 42), **cache_lock);
       }
 
@@ -122,7 +117,7 @@ mod jni_tests {
          let result = repository.load("A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
-         let cache_lock = cache.lock().unwrap();
+         let cache_lock = cache.read().unwrap();
          assert_eq!(("A".to_string(), 13), **cache_lock);
       }
    }
@@ -152,14 +147,14 @@ mod jni_tests {
 
       {
          let cache = repository.load("A".to_string()).unwrap();
-         let mut cache_lock = cache.lock().unwrap();
+         let mut cache_lock = cache.write().unwrap();
          assert_eq!(("A".to_string(), 42), **cache_lock);
          cache_lock.save(("A".to_string(), 13));
       }
 
       {
          let cache = repository.load("A".to_string()).unwrap();
-         let cache_lock = cache.lock().unwrap();
+         let cache_lock = cache.read().unwrap();
          assert_eq!(("A".to_string(), 13), **cache_lock);
       }
    }
@@ -176,7 +171,7 @@ mod jni_tests {
 
       let cache1 = repository.load("A".to_string()).unwrap();
       {
-         let cache1_lock = cache1.lock().unwrap();
+         let cache1_lock = cache1.read().unwrap();
          assert_eq!(("A".to_string(), 42), **cache1_lock);
       }
 
@@ -184,21 +179,21 @@ mod jni_tests {
 
       let cache2 = repository.load("A".to_string()).unwrap();
       {
-         let cache1_lock = cache1.lock().unwrap();
+         let cache1_lock = cache1.read().unwrap();
          assert_eq!(("A".to_string(), 13), **cache1_lock);
       }
       {
-         let mut cache2_lock = cache2.lock().unwrap();
+         let mut cache2_lock = cache2.write().unwrap();
          assert_eq!(("A".to_string(), 13), **cache2_lock);
          cache2_lock.save(("A".to_string(), 0));
       }
 
       {
-         let cache1_lock = cache1.lock().unwrap();
+         let cache1_lock = cache1.read().unwrap();
          assert_eq!(("A".to_string(), 0), **cache1_lock);
       }
       {
-         let cache2_lock = cache2.lock().unwrap();
+         let cache2_lock = cache2.read().unwrap();
          assert_eq!(("A".to_string(), 0), **cache2_lock);
       }
    }
@@ -216,7 +211,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChangeFromNative_repository: Mutex<Option<Repository<String, (String, i32), fn(&(String, i32)) -> String>>> = Mutex::new(None);
+   static valueChangeFromNative_repository: Mutex<Option<Repository<String, (String, i32)>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChangeFromNative_00024getCache<'local>(
@@ -239,7 +234,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChangeFromJvm_repository: Mutex<Option<Repository<String, (String, i32), fn(&(String, i32)) -> String>>> = Mutex::new(None);
+   static valueChangeFromJvm_repository: Mutex<Option<Repository<String, (String, i32)>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChangeFromJvm_00024getCache<'local>(
@@ -261,12 +256,12 @@ mod jni_tests {
       let cache = repo_lock.as_mut().unwrap().load("A".to_string());
       assert!(cache.is_ok());
       let cache = cache.unwrap();
-      let cache_lock = cache.lock().unwrap();
+      let cache_lock = cache.read().unwrap();
       assert_eq!(("A".to_string(), 13), **cache_lock);
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<String, (String, i32), fn(&(String, i32)) -> String>>> = Mutex::new(None);
+   static valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<String, (String, i32)>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
@@ -325,7 +320,7 @@ mod jni_tests {
       let cache = repo_lock.as_mut().unwrap().load("B".to_string());
       assert!(cache.is_ok());
       let cache = cache.unwrap();
-      let cache_lock = cache.lock().unwrap();
+      let cache_lock = cache.read().unwrap();
       assert_eq!(("B".to_string(), 4), **cache_lock);
    }
 }

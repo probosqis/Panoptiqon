@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 wcaokaze
+ * Copyright 2024-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::collections::hash_map::Entry;
 use std::hash::Hash;
-use std::sync::{Arc, Mutex};
-
+use std::sync::{Arc, RwLock};
 use fnv::FnvHashMap;
 
 #[cfg(feature="jvm")]
@@ -33,18 +31,18 @@ use crate::unique_cache::UniqueCache;
 pub(crate) struct UniqueCachePool<K, T> {
    jvm: JavaVM,
    jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
-   map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
+   map: FnvHashMap<K, Arc<RwLock<UniqueCache<T>>>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct UniqueCachePool<K, T> {
-   map: FnvHashMap<K, Arc<Mutex<UniqueCache<T>>>>
+   map: FnvHashMap<K, Arc<RwLock<UniqueCache<T>>>>
 }
 
 impl<K, T> UniqueCachePool<K, T>
    where K: Hash + Eq
 {
-   pub fn get(&self, key: K) -> Option<Arc<Mutex<UniqueCache<T>>>> {
+   pub fn get(&self, key: K) -> Option<Arc<RwLock<UniqueCache<T>>>> {
       self.map.get(&key).map(|arc| arc.clone())
    }
 }
@@ -64,13 +62,15 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn update(&mut self, key: K, value: T) -> Arc<Mutex<UniqueCache<T>>> {
+   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>> {
+      use std::collections::hash_map::Entry;
+
       let entry = self.map.entry(key);
 
       match entry {
          Entry::Occupied(entry) => {
             let arc = entry.get();
-            let mut cache_lock = arc.lock().unwrap();
+            let mut cache_lock = arc.write().unwrap();
             cache_lock.save(value);
             arc.clone()
          }
@@ -95,19 +95,21 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn update(&mut self, key: K, value: T) -> Arc<Mutex<UniqueCache<T>>> {
+   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>> {
+      use std::collections::hash_map::Entry;
+
       let entry = self.map.entry(key);
 
       match entry {
          Entry::Occupied(entry) => {
             let arc = entry.get();
-            let mut cache_lock = arc.lock().unwrap();
+            let mut cache_lock = arc.write().unwrap();
             cache_lock.save(value);
             arc.clone()
          }
          Entry::Vacant(entry) => {
             let unique_cache = UniqueCache::new(value);
-            let arc = Arc::new(Mutex::new(unique_cache));
+            let arc = Arc::new(RwLock::new(unique_cache));
             entry.insert(arc.clone());
             arc
          }
@@ -117,11 +119,8 @@ impl<K, T> UniqueCachePool<K, T>
 
 #[cfg(feature="jni-test")]
 mod jni_tests {
-   use std::sync::Arc;
-
    use jni::JNIEnv;
    use jni::objects::JObject;
-
    use super::UniqueCachePool;
 
    #[no_mangle]
@@ -132,11 +131,11 @@ mod jni_tests {
       let mut pool = UniqueCachePool::new(&mut env);
 
       let cache = pool.update("A".to_string(), 42);
-      let unique_cache = cache.lock().unwrap();
+      let unique_cache = cache.read().unwrap();
       assert_eq!(42, **unique_cache);
 
       let cache = pool.update("B".to_string(), 43);
-      let unique_cache = cache.lock().unwrap();
+      let unique_cache = cache.read().unwrap();
       assert_eq!(43, **unique_cache);
    }
 
@@ -152,7 +151,7 @@ mod jni_tests {
       let cache = pool.get("A".to_string());
       assert!(cache.is_some());
       let unique_cache = cache.unwrap();
-      let cache_lock = unique_cache.lock().unwrap();
+      let cache_lock = unique_cache.read().unwrap();
       assert_eq!(42, **cache_lock);
 
       let cache = pool.get("B".to_string());
@@ -164,6 +163,8 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use std::sync::Arc;
+
       let mut pool = UniqueCachePool::new(&mut env);
       let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), 42)) as *const _;
       let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), 42)) as *const _;
@@ -182,14 +183,14 @@ mod jni_tests {
       let cache = pool.update("A".to_string(), 42);
 
       {
-         let mut lock = cache.lock().unwrap();
+         let mut lock = cache.write().unwrap();
          assert_eq!(42, **lock);
          lock.save(43);
          assert_eq!(43, **lock);
       }
 
       {
-         let lock = cache.lock().unwrap();
+         let lock = cache.read().unwrap();
          assert_eq!(43, **lock);
       }
    }

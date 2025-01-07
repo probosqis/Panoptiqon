@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 wcaokaze
+ * Copyright 2024-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 use std::fmt::{Debug, Formatter};
-use std::sync::{Arc, LockResult, Mutex, MutexGuard};
+use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Deserializer};
 use crate::unique_cache::UniqueCache;
 
@@ -26,22 +26,26 @@ use {
 };
 
 #[derive(Clone)]
-pub struct Cache<T>(Arc<Mutex<UniqueCache<T>>>);
+pub struct Cache<T>(Arc<RwLock<UniqueCache<T>>>);
 
 impl<T> Cache<T> {
-   pub(crate) fn new(arc: Arc<Mutex<UniqueCache<T>>>) -> Self {
+   pub(crate) fn new(arc: Arc<RwLock<UniqueCache<T>>>) -> Self {
       Cache(arc)
    }
 
-   pub fn lock(&self) -> LockResult<MutexGuard<'_, UniqueCache<T>>> {
-      self.0.lock()
+   pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, UniqueCache<T>>> {
+      self.0.write()
+   }
+
+   pub fn read(&self) -> LockResult<RwLockReadGuard<'_, UniqueCache<T>>> {
+      self.0.read()
    }
 
    #[cfg(feature="jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>
       where T: ConvertJava
    {
-      let unique_cache_lock = self.0.lock().unwrap();
+      let unique_cache_lock = self.0.read().unwrap();
       unique_cache_lock.create_jvm_cache(env)
    }
 
@@ -62,19 +66,19 @@ impl<T> Cache<T> {
          &java_instance, "getUniqueCacheRustStateAddress", "()J", &[]
       ).unwrap().j().unwrap() as *const _;
 
-      let unique_cache = unsafe { Arc::<Mutex<_>>::from_raw(address) };
+      let unique_cache = unsafe { Arc::<RwLock<_>>::from_raw(address) };
       Cache::new(unique_cache.clone())
    }
 
    #[cfg(any(test, feature="jni-test"))]
-   pub fn unique_cache_ptr(&self) -> *const Mutex<UniqueCache<T>> {
+   pub fn unique_cache_ptr(&self) -> *const RwLock<UniqueCache<T>> {
       Arc::as_ptr(&self.0)
    }
 }
 
 impl<T> Debug for Cache<T> where T: Debug {
    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-      let cache_lock = self.lock().unwrap();
+      let cache_lock = self.read().unwrap();
       let value = cache_lock.get();
       write!(f, "Cache({:?})", value)
    }
