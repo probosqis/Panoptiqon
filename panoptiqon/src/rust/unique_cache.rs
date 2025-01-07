@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 wcaokaze
+ * Copyright 2024-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,11 @@ use std::ops::Deref;
 use {
    crate::convert_java::ConvertJava,
    jni::{JavaVM, JNIEnv},
-   jni::objects::{GlobalRef, JMethodID, JObject, JValue, JValueGen},
-   jni::signature::{Primitive, ReturnType},
+   jni::objects::{GlobalRef, JMethodID, JObject},
    jni::sys::jlong,
-   std::mem::{self, MaybeUninit},
-   std::ptr::{self},
-   std::sync::{Arc, Mutex},
+   std::mem,
+   std::ptr,
+   std::sync::{Arc, RwLock},
 };
 
 #[cfg(feature="jvm")]
@@ -83,10 +82,12 @@ impl<T> UniqueCache<T> {
       jvm: &JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
-   ) -> Arc<Mutex<Self>>
+   ) -> Arc<RwLock<Self>>
       where T: ConvertJava
    {
-      let arc = Arc::new(Mutex::new(MaybeUninit::uninit()));
+      use std::mem::MaybeUninit;
+
+      let arc = Arc::new(RwLock::new(MaybeUninit::uninit()));
 
       let jvm_state = Self::create_jvm_state(
          jvm, jvm_refs.as_ref(), &initial_value,
@@ -102,7 +103,7 @@ impl<T> UniqueCache<T> {
          value: initial_value
       };
 
-      arc.lock().unwrap().write(unique_cache);
+      arc.write().unwrap().write(unique_cache);
 
       unsafe { mem::transmute(arc) }
    }
@@ -114,6 +115,9 @@ impl<T> UniqueCache<T> {
    pub fn save(&mut self, value: T)
       where T: ConvertJava
    {
+      use jni::objects::JValueGen;
+      use jni::signature::{Primitive, ReturnType};
+
       let mut env = self.jvm.get_env().unwrap();
       let java_value = value.clone_into_java(&mut env);
 
@@ -130,6 +134,8 @@ impl<T> UniqueCache<T> {
    }
 
    pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      use jni::objects::JValueGen;
+
       unsafe {
          env.new_object_unchecked(
             &self.jvm_refs.cache_class,
@@ -145,10 +151,12 @@ impl<T> UniqueCache<T> {
       jvm: &JavaVM,
       jvm_unique_cache_refs: &JvmUniqueCacheRefs,
       initial_value: &T,
-      arc: Arc<Mutex<UniqueCache<T>>>
+      arc: Arc<RwLock<UniqueCache<T>>>
    ) -> GlobalRef
       where T: ConvertJava
    {
+      use jni::objects::JValue;
+
       let mut env = jvm.get_env().unwrap();
 
       let java_initial_value = initial_value.clone_into_java(&mut env);
@@ -256,10 +264,10 @@ trait DynUniqueCache {
 }
 
 #[cfg(feature="jvm")]
-impl<T: ConvertJava> DynUniqueCache for Mutex<UniqueCache<T>> {
+impl<T: ConvertJava> DynUniqueCache for RwLock<UniqueCache<T>> {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject) {
       let value = T::clone_from_java(env, value);
-      self.lock().unwrap().value = value;
+      self.write().unwrap().value = value;
    }
 
    unsafe fn decrement_arc(&self) {
