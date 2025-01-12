@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 wcaokaze
+ * Copyright 2024-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
-internal class RepositoryCache<T>(
-   private val uniqueCache: UniqueCache<T>
+internal class WritableRepositoryCache<T>(
+   private val uniqueCache: WritableUniqueCache<T>
 ) : Cache<T>, WritableCache<T> {
    val uniqueCacheRustStateAddress: Long
       get() = uniqueCache.nativeStateAddress
@@ -34,5 +34,5 @@ internal class RepositoryCache<T>(
 
    override fun hashCode() = uniqueCache.hashCode()
    override fun equals(other: Any?)
-       = other is RepositoryCache<*> && uniqueCache === other.uniqueCache
+       = other is WritableRepositoryCache<*> && uniqueCache === other.uniqueCache
 }

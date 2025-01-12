@@ -39,7 +39,7 @@ pub(crate) struct JvmUniqueCacheRefs {
 impl JvmUniqueCacheRefs {
    pub(crate) fn new(env: &mut JNIEnv) -> Self {
       let class = env
-         .find_class("com/wcaokaze/probosqis/panoptiqon/UniqueCache").unwrap();
+         .find_class("com/wcaokaze/probosqis/panoptiqon/WritableUniqueCache").unwrap();
       let class = env.new_global_ref(class).unwrap();
       let constructor_id = env
          .get_method_id(&class, "<init>", "(Ljava/lang/Object;JJ)V").unwrap();
@@ -47,10 +47,10 @@ impl JvmUniqueCacheRefs {
          .get_method_id(&class, "updateStateFromNative", "(Ljava/lang/Object;)V").unwrap();
 
       let cache_class = env
-         .find_class("com/wcaokaze/probosqis/panoptiqon/RepositoryCache").unwrap();
+         .find_class("com/wcaokaze/probosqis/panoptiqon/WritableRepositoryCache").unwrap();
       let cache_class = env.new_global_ref(cache_class).unwrap();
       let cache_constructor_id = env
-         .get_method_id(&cache_class, "<init>", "(Lcom/wcaokaze/probosqis/panoptiqon/UniqueCache;)V").unwrap();
+         .get_method_id(&cache_class, "<init>", "(Lcom/wcaokaze/probosqis/panoptiqon/WritableUniqueCache;)V").unwrap();
 
       JvmUniqueCacheRefs {
          class, constructor_id, update_method_id, cache_class, cache_constructor_id
@@ -208,7 +208,7 @@ impl<T> Deref for UniqueCache<T> {
 
 #[cfg(feature="jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateNativeState(
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_updateNativeState(
    mut env: JNIEnv,
    _obj: JObject,
    unique_cache_address: jlong,
@@ -226,7 +226,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_updateNativeSta
 
 #[cfg(feature="jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNativeReferenceCount(
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decrementNativeReferenceCount(
    _env: JNIEnv,
    _obj: JObject,
    unique_cache_address: jlong,
