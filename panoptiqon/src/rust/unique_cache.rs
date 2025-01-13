@@ -160,7 +160,7 @@ impl<T> UniqueCache<T> {
       let mut env = jvm.get_env().unwrap();
 
       let java_initial_value = initial_value.clone_into_java(&mut env);
-      let trait_obj: *const dyn DynUniqueCache = Arc::into_raw(arc);
+      let trait_obj: *const dyn DynTwoWayUniqueCache = Arc::into_raw(arc);
       let dyn_metadata = ptr::metadata(trait_obj);
       let vtable_ptr = unsafe { mem::transmute::<_, usize>(dyn_metadata) };
 
@@ -215,7 +215,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_updateN
    unique_cache_vtable_address: jlong,
    value: JObject
 ) {
-   let dyn_unique_cache = get_dyn_unique_cache(
+   let dyn_unique_cache = get_dyn_two_way_unique_cache(
       unique_cache_address, unique_cache_vtable_address
    );
 
@@ -232,7 +232,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decreme
    unique_cache_address: jlong,
    unique_cache_vtable_address: jlong
 ) {
-   let dyn_unique_cache = get_dyn_unique_cache(
+   let dyn_unique_cache = get_dyn_two_way_unique_cache(
       unique_cache_address, unique_cache_vtable_address
    );
 
@@ -242,10 +242,10 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decreme
 }
 
 #[cfg(feature="jvm")]
-fn get_dyn_unique_cache(
+fn get_dyn_two_way_unique_cache(
    address: jlong,
    vtable_address: jlong
-) -> *const dyn DynUniqueCache {
+) -> *const dyn DynTwoWayUniqueCache {
    unsafe {
       let vtable_address = vtable_address as usize;
       let dyn_metadata = mem::transmute(vtable_address);
@@ -255,7 +255,7 @@ fn get_dyn_unique_cache(
 }
 
 #[cfg(feature="jvm")]
-trait DynUniqueCache {
+trait DynTwoWayUniqueCache {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject);
 
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
@@ -264,7 +264,7 @@ trait DynUniqueCache {
 }
 
 #[cfg(feature="jvm")]
-impl<T: ConvertJava> DynUniqueCache for RwLock<UniqueCache<T>> {
+impl<T: ConvertJava> DynTwoWayUniqueCache for RwLock<UniqueCache<T>> {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject) {
       let value = T::clone_from_java(env, value);
       self.write().unwrap().value = value;
