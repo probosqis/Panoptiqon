@@ -16,16 +16,15 @@
 use std::hash::Hash;
 use std::sync::{Arc, RwLock};
 use fnv::FnvHashMap;
+use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 use {
-   crate::convert_java::ConvertJava,
-   crate::unique_cache::JvmUniqueCacheRefs,
    jni::JavaVM,
    jni::JNIEnv,
+   crate::convert_java::ConvertJava,
+   crate::unique_cache::{UniqueCacheJniHelper, JvmUniqueCacheRefs},
 };
-
-use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 pub(crate) struct UniqueCachePool<K, T> {
@@ -52,17 +51,21 @@ impl<K, T> UniqueCachePool<K, T>
    where K: Hash + Eq,
          T: ConvertJava
 {
-   pub fn new(env: &mut JNIEnv) -> Self {
+   pub fn new(env: &mut JNIEnv) -> Self
+      where T: UniqueCacheJniHelper
+   {
       let jvm = env.get_java_vm().unwrap();
 
       UniqueCachePool {
          jvm,
-         jvm_unique_cache_refs: Arc::new(JvmUniqueCacheRefs::new(env)),
+         jvm_unique_cache_refs: Arc::new(T::get_jvm_refs(env)),
          map: FnvHashMap::default()
       }
    }
 
-   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>> {
+   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>>
+      where T: UniqueCacheJniHelper
+   {
       use std::collections::hash_map::Entry;
 
       let entry = self.map.entry(key);

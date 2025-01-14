@@ -17,13 +17,13 @@ use std::ops::Deref;
 
 #[cfg(feature="jvm")]
 use {
-   crate::convert_java::ConvertJava,
    jni::{JavaVM, JNIEnv},
    jni::objects::{GlobalRef, JMethodID, JObject},
    jni::sys::jlong,
    std::mem,
    std::ptr,
    std::sync::{Arc, RwLock},
+   crate::convert_java::ConvertJava,
 };
 
 #[cfg(feature="jvm")]
@@ -36,8 +36,22 @@ pub(crate) struct JvmUniqueCacheRefs {
 }
 
 #[cfg(feature="jvm")]
-impl JvmUniqueCacheRefs {
-   pub(crate) fn new(env: &mut JNIEnv) -> Self {
+type VTable = ();
+
+#[cfg(feature="jvm")]
+pub(crate) trait UniqueCacheJniHelper
+   where Self: Sized
+{
+   fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs;
+
+   fn get_unique_cache_address(
+      unique_cache: Arc<RwLock<UniqueCache<Self>>>
+   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable);
+}
+
+#[cfg(feature="jvm")]
+impl<T> UniqueCacheJniHelper for T where T: ConvertJava {
+   fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
       let class = env
          .find_class("com/wcaokaze/probosqis/panoptiqon/WritableUniqueCache").unwrap();
       let class = env.new_global_ref(class).unwrap();
@@ -55,6 +69,20 @@ impl JvmUniqueCacheRefs {
       JvmUniqueCacheRefs {
          class, constructor_id, update_method_id, cache_class, cache_constructor_id
       }
+   }
+
+   fn get_unique_cache_address(
+      unique_cache: Arc<RwLock<UniqueCache<Self>>>
+   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable) {
+      let trait_obj: *const dyn DynTwoWayUniqueCache = Arc::into_raw(unique_cache);
+      let unique_cache_address = trait_obj as *const RwLock<UniqueCache<Self>>;
+
+      let trait_object_metadata = ptr::metadata(trait_obj);
+      let vtable_address = unsafe {
+         mem::transmute::<_, *const ()>(trait_object_metadata)
+      };
+
+      (unique_cache_address, vtable_address)
    }
 }
 
@@ -83,7 +111,7 @@ impl<T> UniqueCache<T> {
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
    ) -> Arc<RwLock<Self>>
-      where T: ConvertJava
+      where T: ConvertJava + UniqueCacheJniHelper
    {
       use std::mem::MaybeUninit;
 
@@ -153,16 +181,16 @@ impl<T> UniqueCache<T> {
       initial_value: &T,
       arc: Arc<RwLock<UniqueCache<T>>>
    ) -> GlobalRef
-      where T: ConvertJava
+      where T: ConvertJava + UniqueCacheJniHelper
    {
       use jni::objects::JValue;
 
       let mut env = jvm.get_env().unwrap();
 
       let java_initial_value = initial_value.clone_into_java(&mut env);
-      let trait_obj: *const dyn DynTwoWayUniqueCache = Arc::into_raw(arc);
-      let dyn_metadata = ptr::metadata(trait_obj);
-      let vtable_ptr = unsafe { mem::transmute::<_, usize>(dyn_metadata) };
+
+      let (unique_cache_address, unique_cache_vtable_address)
+         = T::get_unique_cache_address(arc);
 
       let local_object = unsafe {
          env.new_object_unchecked(
@@ -170,8 +198,8 @@ impl<T> UniqueCache<T> {
                jvm_unique_cache_refs.constructor_id,
                &[
                   JValue::Object(&java_initial_value).as_jni(),
-                  JValue::Long(trait_obj as *const () as jlong).as_jni(),
-                  JValue::Long(vtable_ptr as jlong).as_jni()
+                  JValue::Long(unique_cache_address as jlong).as_jni(),
+                  JValue::Long(unique_cache_vtable_address as jlong).as_jni()
                ]
             )
             .unwrap()

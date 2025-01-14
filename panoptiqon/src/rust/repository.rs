@@ -19,8 +19,9 @@ use crate::pool::UniqueCachePool;
 
 #[cfg(feature="jvm")]
 use {
-   crate::convert_java::ConvertJava,
    jni::JNIEnv,
+   crate::convert_java::ConvertJava,
+   crate::unique_cache::UniqueCacheJniHelper,
 };
 
 pub struct Repository<K, T, S = fn(&T) -> K>
@@ -45,7 +46,7 @@ impl<K, T, S> Repository<K, T, S>
 #[cfg(feature="jvm")]
 impl<K, T, S> Repository<K, T, S>
    where K: Hash + Eq,
-         T: ConvertJava,
+         T: ConvertJava + UniqueCacheJniHelper,
          S: Fn(&T) -> K
 {
    pub fn new(
