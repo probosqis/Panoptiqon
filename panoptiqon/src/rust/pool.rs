@@ -22,8 +22,8 @@ use crate::unique_cache::UniqueCache;
 use {
    jni::JavaVM,
    jni::JNIEnv,
-   crate::convert_java::CloneIntoJava,
-   crate::unique_cache::{UniqueCacheJniHelper, JvmUniqueCacheRefs},
+   crate::convert_java::{CloneIntoJava, CloneIntoJavaHelper},
+   crate::unique_cache::JvmUniqueCacheRefs,
 };
 
 #[cfg(feature="jvm")]
@@ -52,7 +52,7 @@ impl<K, T> UniqueCachePool<K, T>
          T: CloneIntoJava
 {
    pub fn new(env: &mut JNIEnv) -> Self
-      where T: UniqueCacheJniHelper
+      where T: CloneIntoJavaHelper
    {
       let jvm = env.get_java_vm().unwrap();
 
@@ -64,7 +64,7 @@ impl<K, T> UniqueCachePool<K, T>
    }
 
    pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>>
-      where T: UniqueCacheJniHelper
+      where T: CloneIntoJavaHelper
    {
       use std::collections::hash_map::Entry;
 

@@ -20,10 +20,8 @@ use {
    jni::{JavaVM, JNIEnv},
    jni::objects::{GlobalRef, JMethodID, JObject},
    jni::sys::jlong,
-   std::mem,
-   std::ptr,
    std::sync::{Arc, RwLock},
-   crate::convert_java::{CloneFromJava, CloneIntoJava},
+   crate::convert_java::{CloneFromJava, CloneIntoJava, CloneIntoJavaHelper},
 };
 
 #[cfg(feature="jvm")]
@@ -33,57 +31,6 @@ pub(crate) struct JvmUniqueCacheRefs {
    pub update_method_id: JMethodID,
    pub cache_class: GlobalRef,
    pub cache_constructor_id: JMethodID,
-}
-
-#[cfg(feature="jvm")]
-type VTable = ();
-
-#[cfg(feature="jvm")]
-pub(crate) trait UniqueCacheJniHelper
-   where Self: Sized
-{
-   fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs;
-
-   fn get_unique_cache_address(
-      unique_cache: Arc<RwLock<UniqueCache<Self>>>
-   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable);
-}
-
-#[cfg(feature="jvm")]
-impl<T> UniqueCacheJniHelper for T where T: CloneIntoJava + CloneFromJava {
-   fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
-      let class = env
-         .find_class("com/wcaokaze/probosqis/panoptiqon/WritableUniqueCache").unwrap();
-      let class = env.new_global_ref(class).unwrap();
-      let constructor_id = env
-         .get_method_id(&class, "<init>", "(Ljava/lang/Object;JJ)V").unwrap();
-      let update_method_id = env
-         .get_method_id(&class, "updateStateFromNative", "(Ljava/lang/Object;)V").unwrap();
-
-      let cache_class = env
-         .find_class("com/wcaokaze/probosqis/panoptiqon/WritableRepositoryCache").unwrap();
-      let cache_class = env.new_global_ref(cache_class).unwrap();
-      let cache_constructor_id = env
-         .get_method_id(&cache_class, "<init>", "(Lcom/wcaokaze/probosqis/panoptiqon/WritableUniqueCache;)V").unwrap();
-
-      JvmUniqueCacheRefs {
-         class, constructor_id, update_method_id, cache_class, cache_constructor_id
-      }
-   }
-
-   fn get_unique_cache_address(
-      unique_cache: Arc<RwLock<UniqueCache<Self>>>
-   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable) {
-      let trait_obj: *const dyn DynTwoWayUniqueCache = Arc::into_raw(unique_cache);
-      let unique_cache_address = trait_obj as *const RwLock<UniqueCache<Self>>;
-
-      let trait_object_metadata = ptr::metadata(trait_obj);
-      let vtable_address = unsafe {
-         mem::transmute::<_, *const ()>(trait_object_metadata)
-      };
-
-      (unique_cache_address, vtable_address)
-   }
 }
 
 #[cfg(feature="jvm")]
@@ -111,9 +58,9 @@ impl<T> UniqueCache<T> {
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
    ) -> Arc<RwLock<Self>>
-      where T: CloneIntoJava + UniqueCacheJniHelper
+      where T: CloneIntoJava + CloneIntoJavaHelper
    {
-      use std::mem::MaybeUninit;
+      use std::mem::{self, MaybeUninit};
 
       let arc = Arc::new(RwLock::new(MaybeUninit::uninit()));
 
@@ -181,7 +128,7 @@ impl<T> UniqueCache<T> {
       initial_value: &T,
       arc: Arc<RwLock<UniqueCache<T>>>
    ) -> GlobalRef
-      where T: CloneIntoJava + UniqueCacheJniHelper
+      where T: CloneIntoJava + CloneIntoJavaHelper
    {
       use jni::objects::JValue;
 
@@ -274,6 +221,9 @@ fn get_dyn_two_way_unique_cache(
    address: jlong,
    vtable_address: jlong
 ) -> *const dyn DynTwoWayUniqueCache {
+   use std::mem;
+   use std::ptr;
+
    unsafe {
       let vtable_address = vtable_address as usize;
       let dyn_metadata = mem::transmute(vtable_address);
@@ -283,7 +233,7 @@ fn get_dyn_two_way_unique_cache(
 }
 
 #[cfg(feature="jvm")]
-trait DynTwoWayUniqueCache {
+pub(crate) trait DynTwoWayUniqueCache {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject);
 
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は

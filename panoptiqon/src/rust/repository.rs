@@ -21,7 +21,7 @@ use crate::pool::UniqueCachePool;
 use {
    jni::JNIEnv,
    crate::convert_java::CloneIntoJava,
-   crate::unique_cache::UniqueCacheJniHelper,
+   crate::convert_java::CloneIntoJavaHelper,
 };
 
 pub struct Repository<K, T, S = fn(&T) -> K>
@@ -46,20 +46,24 @@ impl<K, T, S> Repository<K, T, S>
 #[cfg(feature="jvm")]
 impl<K, T, S> Repository<K, T, S>
    where K: Hash + Eq,
-         T: CloneIntoJava + UniqueCacheJniHelper,
+         T: CloneIntoJava,
          S: Fn(&T) -> K
 {
    pub fn new(
       env: &mut JNIEnv,
       key: S
-   ) -> Self {
+   ) -> Self
+      where T: CloneIntoJavaHelper
+   {
       Repository {
          pool: UniqueCachePool::new(env),
          key_selector: key
       }
    }
 
-   pub fn save(&mut self, value: T) -> Cache<T> {
+   pub fn save(&mut self, value: T) -> Cache<T>
+      where T: CloneIntoJavaHelper
+   {
       let key_selector = &self.key_selector;
       let key = key_selector(&value);
       let arc = self.pool.update(key, value);

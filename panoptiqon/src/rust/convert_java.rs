@@ -15,11 +15,67 @@
  */
 #![cfg(feature="jvm")]
 
+use std::sync::{Arc, RwLock};
 use jni::JNIEnv;
 use jni::objects::JObject;
-use jni::signature::{Primitive, ReturnType};
 use jni::sys::jvalue;
 use crate::cache::Cache;
+use crate::unique_cache::{DynTwoWayUniqueCache, JvmUniqueCacheRefs, UniqueCache};
+
+type VTable = ();
+
+/// [CloneIntoJava]を実装すれば自動的に実装される。
+/// こちらを手で実装する必要はない
+pub trait CloneIntoJavaHelper
+   where Self: Sized
+{
+   #[allow(private_interfaces)]
+   fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs;
+
+   fn get_unique_cache_address(
+      unique_cache: Arc<RwLock<UniqueCache<Self>>>
+   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable);
+}
+
+impl<T> CloneIntoJavaHelper for T where T: CloneIntoJava + CloneFromJava {
+   #[allow(private_interfaces)]
+   fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
+      let class = env
+         .find_class("com/wcaokaze/probosqis/panoptiqon/WritableUniqueCache").unwrap();
+      let class = env.new_global_ref(class).unwrap();
+      let constructor_id = env
+         .get_method_id(&class, "<init>", "(Ljava/lang/Object;JJ)V").unwrap();
+      let update_method_id = env
+         .get_method_id(&class, "updateStateFromNative", "(Ljava/lang/Object;)V").unwrap();
+
+      let cache_class = env
+         .find_class("com/wcaokaze/probosqis/panoptiqon/WritableRepositoryCache").unwrap();
+      let cache_class = env.new_global_ref(cache_class).unwrap();
+      let cache_constructor_id = env
+         .get_method_id(&cache_class, "<init>", "(Lcom/wcaokaze/probosqis/panoptiqon/WritableUniqueCache;)V").unwrap();
+
+      JvmUniqueCacheRefs {
+         class, constructor_id, update_method_id, cache_class, cache_constructor_id
+      }
+   }
+
+   fn get_unique_cache_address(
+      unique_cache: Arc<RwLock<UniqueCache<Self>>>
+   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable) {
+      use std::mem;
+      use std::ptr;
+
+      let trait_obj: *const dyn DynTwoWayUniqueCache = Arc::into_raw(unique_cache);
+      let unique_cache_address = trait_obj as *const RwLock<UniqueCache<Self>>;
+
+      let trait_object_metadata = ptr::metadata(trait_obj);
+      let vtable_address = unsafe {
+         mem::transmute::<_, *const ()>(trait_object_metadata)
+      };
+
+      (unique_cache_address, vtable_address)
+   }
+}
 
 pub trait CloneIntoJava {
    fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>;
@@ -70,6 +126,8 @@ impl<T> CloneIntoJava for Vec<T>
    where T: CloneIntoJava
 {
    fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      use jni::signature::{Primitive, ReturnType};
+
       let list = env.new_object("Ljava/util/ArrayList;", "()V", &[]).unwrap();
 
       let add_method_id = env
@@ -95,6 +153,8 @@ impl<T> CloneFromJava for Vec<T>
    where T: CloneFromJava
 {
    fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Vec<T> {
+      use jni::signature::ReturnType;
+
       let mut vec = Vec::new();
 
       let len = env.call_method(&java_object, "size", "()I", &[]).unwrap().i().unwrap();
