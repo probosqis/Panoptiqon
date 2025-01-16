@@ -23,7 +23,7 @@ use {
    std::mem,
    std::ptr,
    std::sync::{Arc, RwLock},
-   crate::convert_java::ConvertJava,
+   crate::convert_java::{CloneFromJava, CloneIntoJava},
 };
 
 #[cfg(feature="jvm")]
@@ -50,7 +50,7 @@ pub(crate) trait UniqueCacheJniHelper
 }
 
 #[cfg(feature="jvm")]
-impl<T> UniqueCacheJniHelper for T where T: ConvertJava {
+impl<T> UniqueCacheJniHelper for T where T: CloneIntoJava + CloneFromJava {
    fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
       let class = env
          .find_class("com/wcaokaze/probosqis/panoptiqon/WritableUniqueCache").unwrap();
@@ -111,7 +111,7 @@ impl<T> UniqueCache<T> {
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
    ) -> Arc<RwLock<Self>>
-      where T: ConvertJava + UniqueCacheJniHelper
+      where T: CloneIntoJava + UniqueCacheJniHelper
    {
       use std::mem::MaybeUninit;
 
@@ -141,7 +141,7 @@ impl<T> UniqueCache<T> {
    }
 
    pub fn save(&mut self, value: T)
-      where T: ConvertJava
+      where T: CloneIntoJava
    {
       use jni::objects::JValueGen;
       use jni::signature::{Primitive, ReturnType};
@@ -181,7 +181,7 @@ impl<T> UniqueCache<T> {
       initial_value: &T,
       arc: Arc<RwLock<UniqueCache<T>>>
    ) -> GlobalRef
-      where T: ConvertJava + UniqueCacheJniHelper
+      where T: CloneIntoJava + UniqueCacheJniHelper
    {
       use jni::objects::JValue;
 
@@ -292,7 +292,9 @@ trait DynTwoWayUniqueCache {
 }
 
 #[cfg(feature="jvm")]
-impl<T: ConvertJava> DynTwoWayUniqueCache for RwLock<UniqueCache<T>> {
+impl<T> DynTwoWayUniqueCache for RwLock<UniqueCache<T>>
+   where T: CloneFromJava
+{
    fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject) {
       let value = T::clone_from_java(env, value);
       self.write().unwrap().value = value;

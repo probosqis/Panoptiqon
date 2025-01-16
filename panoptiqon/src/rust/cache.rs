@@ -20,7 +20,7 @@ use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 use {
-   crate::convert_java::ConvertJava,
+   crate::convert_java::CloneIntoJava,
    jni::JNIEnv,
    jni::objects::JObject,
 };
@@ -43,7 +43,7 @@ impl<T> Cache<T> {
 
    #[cfg(feature="jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>
-      where T: ConvertJava
+      where T: CloneIntoJava
    {
       let unique_cache_lock = self.0.read().unwrap();
       unique_cache_lock.create_jvm_cache(env)
@@ -59,9 +59,7 @@ impl<T> Cache<T> {
    pub unsafe fn from_jvm_instance<'local>(
       env: &mut JNIEnv<'local>,
       java_instance: &JObject
-   ) -> Self
-      where T: ConvertJava
-   {
+   ) -> Self {
       let address = env.call_method(
          &java_instance, "getUniqueCacheRustStateAddress", "()J", &[]
       ).unwrap().j().unwrap() as *const _;

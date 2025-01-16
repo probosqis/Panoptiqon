@@ -31,22 +31,16 @@ pub trait CloneFromJava
    fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Self;
 }
 
-pub trait ConvertJava: CloneIntoJava + CloneFromJava {}
-impl<AutoImpl> ConvertJava for AutoImpl where AutoImpl: CloneIntoJava + CloneFromJava {}
-
 /// RepositoryCache<T>
 impl<T> CloneIntoJava for Cache<T>
-   // TODO: create_jvm_instanceがConvertJavaを要求しなくなったらCloneIntoJavaにする
-   where T: ConvertJava
+   where T: CloneIntoJava
 {
    fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       self.create_jvm_instance(env)
    }
 }
 
-impl<T> CloneFromJava for Cache<T>
-   where T: ConvertJava
-{
+impl<T> CloneFromJava for Cache<T> {
    fn clone_from_java(env: &mut JNIEnv, java_object: &JObject) -> Cache<T> {
       unsafe {
          Cache::<T>::from_jvm_instance(env, &java_object)
