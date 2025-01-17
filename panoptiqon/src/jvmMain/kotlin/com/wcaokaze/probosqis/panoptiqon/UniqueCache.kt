@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 wcaokaze
+ * Copyright 2024-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,34 @@ internal class UniqueCache<T>(
 ) : Object() {
    internal var state = mutableStateOf(initialValue)
 
+   val value: T
+      get() = state.value
+
+   // XXX: ネイティブ側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
+   // ネイティブ側とJVM側が同時にアクセスされた場合には不整合が起こる可能性がある
+   private fun updateStateFromNative(value: T) {
+      state.value = value
+   }
+
+   private external fun decrementNativeReferenceCount(
+      rustStateAddress: Long,
+      rustStateVTableAddress: Long
+   )
+
+   @Deprecated("")
+   override fun finalize() {
+      decrementNativeReferenceCount(nativeStateAddress, nativeStateVTableAddress)
+   }
+}
+
+@Suppress("PLATFORM_CLASS_MAPPED_TO_KOTLIN")
+internal class WritableUniqueCache<T>(
+   initialValue: T,
+   internal val nativeStateAddress: Long,
+   private val nativeStateVTableAddress: Long,
+) : Object() {
+   internal var state = mutableStateOf(initialValue)
+
    var value: T
       get() = state.value
       set(value) {
@@ -35,17 +63,17 @@ internal class UniqueCache<T>(
 
    // XXX: ネイティブ側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
    // ネイティブ側とJVM側が同時にアクセスされた場合には不整合が起こる可能性がある
-   fun updateStateFromNative(value: T) {
+   private fun updateStateFromNative(value: T) {
       state.value = value
    }
 
-   external fun updateNativeState(
+   private external fun updateNativeState(
       rustStateAddress: Long,
       rustStateVTableAddress: Long,
       value: T
    )
 
-   external fun decrementNativeReferenceCount(
+   private external fun decrementNativeReferenceCount(
       rustStateAddress: Long,
       rustStateVTableAddress: Long
    )
