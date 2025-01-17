@@ -15,7 +15,7 @@
  */
 use std::ops::Deref;
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 use {
    jni::{JavaVM, JNIEnv},
    jni::objects::{GlobalRef, JMethodID, JObject},
@@ -24,7 +24,7 @@ use {
    crate::convert_java::{CloneFromJava, CloneIntoJava, CloneIntoJavaHelper},
 };
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 pub(crate) struct JvmUniqueCacheRefs {
    pub class: GlobalRef,
    pub constructor_id: JMethodID,
@@ -33,7 +33,7 @@ pub(crate) struct JvmUniqueCacheRefs {
    pub cache_constructor_id: JMethodID,
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 pub struct UniqueCache<T> {
    jvm: JavaVM,
    jvm_refs: Arc<JvmUniqueCacheRefs>,
@@ -46,12 +46,12 @@ pub struct UniqueCache<T> {
    value: T
 }
 
-#[cfg(not(feature="jvm"))]
+#[cfg(not(feature = "jvm"))]
 pub struct UniqueCache<T> {
    value: T
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 impl<T> UniqueCache<T> {
    pub(crate) fn new_arc(
       jvm: &JavaVM,
@@ -156,7 +156,7 @@ impl<T> UniqueCache<T> {
    }
 }
 
-#[cfg(not(feature="jvm"))]
+#[cfg(not(feature = "jvm"))]
 impl<T> UniqueCache<T> {
    pub(crate) fn new(initial_state: T) -> Self {
       UniqueCache {
@@ -181,7 +181,7 @@ impl<T> Deref for UniqueCache<T> {
    }
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 #[no_mangle]
 extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_updateNativeState(
    mut env: JNIEnv,
@@ -196,6 +196,23 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_updateN
 
    unsafe {
       (&*dyn_unique_cache).update_unique_cache(&mut env, &value);
+   }
+}
+
+#[cfg(feature = "jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNativeReferenceCount(
+   _env: JNIEnv,
+   _obj: JObject,
+   unique_cache_address: jlong,
+   unique_cache_vtable_address: jlong
+) {
+   let dyn_unique_cache = get_dyn_one_way_unique_cache(
+      unique_cache_address, unique_cache_vtable_address
+   );
+
+   unsafe {
+      (&*dyn_unique_cache).decrement_arc();
    }
 }
 
@@ -217,6 +234,22 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decreme
 }
 
 #[cfg(feature="jvm")]
+fn get_dyn_one_way_unique_cache(
+   address: jlong,
+   vtable_address: jlong
+) -> *const dyn DynOneWayUniqueCache {
+   use std::mem;
+   use std::ptr;
+
+   unsafe {
+      let vtable_address = vtable_address as usize;
+      let dyn_metadata = mem::transmute(vtable_address);
+
+      ptr::from_raw_parts(address as *const (), dyn_metadata)
+   }
+}
+
+#[cfg(feature="jvm")]
 fn get_dyn_two_way_unique_cache(
    address: jlong,
    vtable_address: jlong
@@ -232,16 +265,30 @@ fn get_dyn_two_way_unique_cache(
    }
 }
 
-#[cfg(feature="jvm")]
-pub(crate) trait DynTwoWayUniqueCache {
-   fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject);
-
+#[cfg(feature = "jvm")]
+pub(crate) trait DynOneWayUniqueCache {
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
    /// 解放されている可能性がある
    unsafe fn decrement_arc(&self);
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
+pub(crate) trait DynTwoWayUniqueCache {
+   fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject);
+   unsafe fn decrement_arc(&self);
+}
+
+#[cfg(feature = "jvm")]
+impl<T> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
+   where T: CloneIntoJava
+{
+   unsafe fn decrement_arc(&self) {
+      let arc = Arc::from_raw(self as *const _);
+      drop(arc);
+   }
+}
+
+#[cfg(feature = "jvm")]
 impl<T> DynTwoWayUniqueCache for RwLock<UniqueCache<T>>
    where T: CloneFromJava
 {

@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 wcaokaze
+ * Copyright 2024-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,11 +18,26 @@ package com.wcaokaze.probosqis.panoptiqon
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 
 class RepositoryTest {
    init {
       loadNativeLib()
    }
+
+   data class OneWayConversionData(val first: String, val second: Int)
+
+   @Test
+   fun switchCacheClass() {
+      val oneWayCache = `switchCacheClass$saveOneWayData`()
+      val twoWayCache = `switchCacheClass$saveTwoWayData`()
+
+      assertIs<RepositoryCache<*>>(oneWayCache)
+      assertIs<WritableRepositoryCache<*>>(twoWayCache)
+   }
+
+   private external fun `switchCacheClass$saveOneWayData`(): Cache<OneWayConversionData>
+   private external fun `switchCacheClass$saveTwoWayData`(): WritableCache<Int>
 
    @Test
    external fun saveLoad()
@@ -37,23 +52,42 @@ class RepositoryTest {
    external fun save_affectAnotherCache()
 
    @Test
-   fun jvmCache() {
-      val cache = `jvmCache$getCache`()
+   fun oneWay_jvmCache() {
+      val cache = `oneWay_jvmCache$getCache`()
+      assertEquals(OneWayConversionData("A", 42), cache.value)
+   }
+
+   private external fun `oneWay_jvmCache$getCache`(): Cache<OneWayConversionData>
+
+   @Test
+   fun twoWay_jvmCache() {
+      val cache = `twoWay_jvmCache$getCache`()
       assertEquals(Pair("A", 42), cache.value)
    }
 
-   external fun `jvmCache$getCache`(): Cache<Pair<String, Int>>
+   private external fun `twoWay_jvmCache$getCache`(): Cache<Pair<String, Int>>
 
    @Test
-   fun jvmCache_valueChangeFromNative() {
-      val cache = `jvmCache_valueChangeFromNative$getCache`()
+   fun oneWay_jvmCache_valueChangeFromNative() {
+      val cache = `oneWay_jvmCache_valueChangeFromNative$getCache`()
+      assertEquals(OneWayConversionData("A", 42), cache.value)
+      `oneWay_jvmCache_valueChangeFromNative$changeValue`()
+      assertEquals(OneWayConversionData("A", 13), cache.value)
+   }
+
+   private external fun `oneWay_jvmCache_valueChangeFromNative$getCache`(): Cache<OneWayConversionData>
+   private external fun `oneWay_jvmCache_valueChangeFromNative$changeValue`()
+
+   @Test
+   fun twoWay_jvmCache_valueChangeFromNative() {
+      val cache = `twoWay_jvmCache_valueChangeFromNative$getCache`()
       assertEquals(Pair("A", 42), cache.value)
-      `jvmCache_valueChangeFromNative$changeValue`()
+      `twoWay_jvmCache_valueChangeFromNative$changeValue`()
       assertEquals(Pair("A", 13), cache.value)
    }
 
-   external fun `jvmCache_valueChangeFromNative$getCache`(): Cache<Pair<String, Int>>
-   external fun `jvmCache_valueChangeFromNative$changeValue`()
+   private external fun `twoWay_jvmCache_valueChangeFromNative$getCache`(): Cache<Pair<String, Int>>
+   private external fun `twoWay_jvmCache_valueChangeFromNative$changeValue`()
 
    @Test
    fun jvmCache_valueChangeFromJvm() {
@@ -63,31 +97,52 @@ class RepositoryTest {
       `jvmCache_valueChangeFromJvm$assertValue`()
    }
 
-   external fun `jvmCache_valueChangeFromJvm$getCache`(): WritableCache<Pair<String, Int>>
-   external fun `jvmCache_valueChangeFromJvm$assertValue`()
+   private external fun `jvmCache_valueChangeFromJvm$getCache`(): WritableCache<Pair<String, Int>>
+   private external fun `jvmCache_valueChangeFromJvm$assertValue`()
 
    @Test
-   fun jvmCache_valueChange_doesntAffectOtherKeyCaches() {
-      `jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
-      val cacheA = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`()
-      val cacheB = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`()
-      val cacheC = `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`()
+   fun oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches() {
+      `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
+      val cacheA = `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`()
+      val cacheB = `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`()
+      val cacheC = `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`()
+      assertEquals(OneWayConversionData("A", 0), cacheA.value)
+      assertEquals(OneWayConversionData("B", 1), cacheB.value)
+      assertEquals(OneWayConversionData("C", 2), cacheC.value)
+      `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
+      assertEquals(OneWayConversionData("A", 0), cacheA.value)
+      assertEquals(OneWayConversionData("B", 3), cacheB.value)
+      assertEquals(OneWayConversionData("C", 2), cacheC.value)
+   }
+
+   private external fun `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
+   private external fun `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`(): Cache<OneWayConversionData>
+   private external fun `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`(): Cache<OneWayConversionData>
+   private external fun `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`(): Cache<OneWayConversionData>
+   private external fun `oneWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
+
+   @Test
+   fun twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches() {
+      `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
+      val cacheA = `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`()
+      val cacheB = `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`()
+      val cacheC = `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`()
       assertEquals(Pair("A", 0), cacheA.value)
       assertEquals(Pair("B", 1), cacheB.value)
       assertEquals(Pair("C", 2), cacheC.value)
-      `jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
+      `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
       assertEquals(Pair("A", 0), cacheA.value)
       assertEquals(Pair("B", 3), cacheB.value)
       assertEquals(Pair("C", 2), cacheC.value)
 
       cacheB.value = Pair("B", 4)
-      `jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
+      `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
    }
 
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`(): WritableCache<Pair<String, Int>>
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`(): WritableCache<Pair<String, Int>>
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`(): WritableCache<Pair<String, Int>>
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
-   external fun `jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
+   private external fun `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$createRepository`()
+   private external fun `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheA`(): WritableCache<Pair<String, Int>>
+   private external fun `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheB`(): WritableCache<Pair<String, Int>>
+   private external fun `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$getCacheC`(): WritableCache<Pair<String, Int>>
+   private external fun `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$changeCacheB`()
+   private external fun `twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches$assertCacheB`()
 }

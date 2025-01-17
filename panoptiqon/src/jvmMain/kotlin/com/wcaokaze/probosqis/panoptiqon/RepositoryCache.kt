@@ -16,6 +16,22 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
+internal class RepositoryCache<T>(
+   private val uniqueCache: UniqueCache<T>
+) : Cache<T> {
+   val uniqueCacheRustStateAddress: Long
+      get() = uniqueCache.nativeStateAddress
+
+   @InternalCacheApi
+   override val state get() = uniqueCache.state
+
+   override val value: T by uniqueCache::value
+
+   override fun hashCode() = uniqueCache.hashCode()
+   override fun equals(other: Any?)
+       = other is RepositoryCache<*> && uniqueCache === other.uniqueCache
+}
+
 internal class WritableRepositoryCache<T>(
    private val uniqueCache: WritableUniqueCache<T>
 ) : Cache<T>, WritableCache<T> {
