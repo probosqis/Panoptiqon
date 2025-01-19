@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2025 wcaokaze
+ * Copyright 2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,29 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards, ptr_metadata, specialization)]
+use jni::objects::JObject;
+use crate::jvm_type::{jvm_type, JvmType};
 
-pub mod cache;
-pub mod jvm_type;
-pub mod jvm_types;
-pub mod repository;
-mod unique_cache;
-mod pool;
+pub struct JvmNullable<T: JvmType>(pub T);
 
-#[cfg(feature = "jvm")]
-pub mod convert_java;
+impl<T: JvmType> JvmType for JvmNullable<T> {
+   fn j_object(&self) -> &JObject {
+      self.0.j_object()
+   }
+}
+
+jvm_type! {
+   JvmCache,
+   JvmBoolean,
+   JvmByte,
+   JvmShort,
+   JvmInteger,
+   JvmLong,
+   JvmFloat,
+   JvmDouble,
+   JvmString,
+   JvmUnit,
+   JvmPair,
+   JvmTriple,
+   JvmList,
+}

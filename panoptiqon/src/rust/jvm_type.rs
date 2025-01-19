@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2025 wcaokaze
+ * Copyright 2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,26 @@
  * limitations under the License.
  */
 
-#![feature(mapped_lock_guards, ptr_metadata, specialization)]
+use jni::objects::JObject;
 
-pub mod cache;
-pub mod jvm_type;
-pub mod jvm_types;
-pub mod repository;
-mod unique_cache;
-mod pool;
+pub trait JvmType {
+   fn j_object(&self) -> &JObject;
+}
 
-#[cfg(feature = "jvm")]
-pub mod convert_java;
+macro_rules! jvm_type {
+   () => {
+   };
+   ($($type_name:ident),+ $(,)?) => {
+      $(
+         pub struct $type_name<'local>(pub JObject<'local>);
+
+         impl JvmType for $type_name<'_> {
+            fn j_object(&self) -> &JObject {
+               &self.0
+            }
+         }
+      )+
+   };
+}
+
+pub(crate) use jvm_type;
