@@ -22,7 +22,7 @@ use crate::unique_cache::UniqueCache;
 use {
    jni::JavaVM,
    jni::JNIEnv,
-   crate::convert_java::{CloneIntoJava, CloneIntoJavaHelper},
+   crate::convert_jni::{CloneIntoJni, CloneIntoJavaHelper},
    crate::unique_cache::JvmUniqueCacheRefs,
 };
 
@@ -49,7 +49,7 @@ impl<K, T> UniqueCachePool<K, T>
 #[cfg(feature="jvm")]
 impl<K, T> UniqueCachePool<K, T>
    where K: Hash + Eq,
-         T: CloneIntoJava
+         T: CloneIntoJni
 {
    pub fn new(env: &mut JNIEnv) -> Self
       where T: CloneIntoJavaHelper

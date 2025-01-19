@@ -20,8 +20,8 @@ use crate::pool::UniqueCachePool;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
-   crate::convert_java::CloneIntoJava,
-   crate::convert_java::CloneIntoJavaHelper,
+   crate::convert_jni::CloneIntoJni,
+   crate::convert_jni::CloneIntoJavaHelper,
 };
 
 pub struct Repository<K, T, S = fn(&T) -> K>
@@ -46,7 +46,7 @@ impl<K, T, S> Repository<K, T, S>
 #[cfg(feature = "jvm")]
 impl<K, T, S> Repository<K, T, S>
    where K: Hash + Eq,
-         T: CloneIntoJava,
+         T: CloneIntoJni,
          S: Fn(&T) -> K
 {
    pub fn new(
@@ -96,15 +96,15 @@ mod jni_tests {
    use std::sync::Mutex;
    use jni::JNIEnv;
    use jni::objects::JObject;
-   use crate::convert_java::CloneIntoJava;
+   use crate::convert_jni::CloneIntoJni;
    use super::Repository;
 
    #[derive(Debug, PartialEq, Eq)]
    struct OneWayConversionData(String, i32);
 
-   impl CloneIntoJava for OneWayConversionData {
-      fn clone_into_java<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-         let first  = self.0.clone_into_java(env);
+   impl CloneIntoJni for OneWayConversionData {
+      fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+         let first  = self.0.clone_into_jni(env);
          let second = self.1;
 
          env.new_object(

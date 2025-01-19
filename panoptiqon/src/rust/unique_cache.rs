@@ -21,7 +21,7 @@ use {
    jni::objects::{GlobalRef, JMethodID, JObject},
    jni::sys::jlong,
    std::sync::{Arc, RwLock},
-   crate::convert_java::{CloneFromJava, CloneIntoJava, CloneIntoJavaHelper},
+   crate::convert_jni::{CloneFromJni, CloneIntoJni, CloneIntoJavaHelper},
 };
 
 #[cfg(feature = "jvm")]
@@ -58,7 +58,7 @@ impl<T> UniqueCache<T> {
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
    ) -> Arc<RwLock<Self>>
-      where T: CloneIntoJava + CloneIntoJavaHelper
+      where T: CloneIntoJni + CloneIntoJavaHelper
    {
       use std::mem::{self, MaybeUninit};
 
@@ -88,13 +88,13 @@ impl<T> UniqueCache<T> {
    }
 
    pub fn save(&mut self, value: T)
-      where T: CloneIntoJava
+      where T: CloneIntoJni
    {
       use jni::objects::JValueGen;
       use jni::signature::{Primitive, ReturnType};
 
       let mut env = self.jvm.get_env().unwrap();
-      let java_value = value.clone_into_java(&mut env);
+      let java_value = value.clone_into_jni(&mut env);
 
       unsafe {
          env.call_method_unchecked(
@@ -128,13 +128,13 @@ impl<T> UniqueCache<T> {
       initial_value: &T,
       arc: Arc<RwLock<UniqueCache<T>>>
    ) -> GlobalRef
-      where T: CloneIntoJava + CloneIntoJavaHelper
+      where T: CloneIntoJni + CloneIntoJavaHelper
    {
       use jni::objects::JValue;
 
       let mut env = jvm.get_env().unwrap();
 
-      let java_initial_value = initial_value.clone_into_java(&mut env);
+      let java_initial_value = initial_value.clone_into_jni(&mut env);
 
       let (unique_cache_address, unique_cache_vtable_address)
          = T::get_unique_cache_address(arc);
@@ -280,7 +280,7 @@ pub(crate) trait DynTwoWayUniqueCache {
 
 #[cfg(feature = "jvm")]
 impl<T> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
-   where T: CloneIntoJava
+   where T: CloneIntoJni
 {
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
@@ -290,10 +290,10 @@ impl<T> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
 
 #[cfg(feature = "jvm")]
 impl<T> DynTwoWayUniqueCache for RwLock<UniqueCache<T>>
-   where T: CloneFromJava
+   where T: CloneFromJni
 {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject) {
-      let value = T::clone_from_java(env, value);
+      let value = T::clone_from_jni(env, value);
       self.write().unwrap().value = value;
    }
 
