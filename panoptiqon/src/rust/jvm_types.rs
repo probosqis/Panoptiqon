@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#![cfg(feature = "jvm")]
+
 use jni::objects::JObject;
 use crate::jvm_type::{jvm_type, JvmType};
 

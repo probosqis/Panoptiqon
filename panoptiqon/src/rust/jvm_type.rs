@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#![cfg(feature = "jvm")]
+
 use jni::objects::JObject;
 
 pub trait JvmType {

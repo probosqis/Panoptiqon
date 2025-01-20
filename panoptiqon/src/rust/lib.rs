@@ -17,11 +17,13 @@
 #![feature(mapped_lock_guards, ptr_metadata, specialization)]
 
 pub mod cache;
-pub mod jvm_type;
-pub mod jvm_types;
 pub mod repository;
 mod unique_cache;
 mod pool;
 
 #[cfg(feature = "jvm")]
 pub mod convert_jni;
+#[cfg(feature = "jvm")]
+pub mod jvm_type;
+#[cfg(feature = "jvm")]
+pub mod jvm_types;
