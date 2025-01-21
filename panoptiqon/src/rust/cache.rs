@@ -97,3 +97,6 @@ impl<'de, T> Deserialize<'de> for Cache<T> {
       Err(serde::de::Error::custom("not implemented"))
    }
 }
+
+pub trait CacheContent {
+}
