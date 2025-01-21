@@ -101,4 +101,6 @@ impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
 
 pub trait CacheContent {
    type Key: Hash + Eq;
+
+   fn key(&self) -> Self::Key;
 }

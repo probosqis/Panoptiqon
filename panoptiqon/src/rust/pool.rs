@@ -124,10 +124,14 @@ mod jni_tests {
    use super::UniqueCachePool;
 
    #[derive(Debug, PartialEq, Eq)]
-   struct Content(pub i32);
+   struct Content(String, i32);
 
    impl CacheContent for Content {
       type Key = String;
+
+      fn key(&self) -> String {
+         self.0.clone()
+      }
    }
 
    impl CloneIntoJni for Content {
@@ -143,13 +147,13 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
 
-      let cache = pool.update("A".to_string(), Content(42));
+      let cache = pool.update("A".to_string(), Content("A".to_string(), 42));
       let unique_cache = cache.read().unwrap();
-      assert_eq!(Content(42), **unique_cache);
+      assert_eq!(Content("A".to_string(), 42), **unique_cache);
 
-      let cache = pool.update("B".to_string(), Content(43));
+      let cache = pool.update("B".to_string(), Content("B".to_string(), 43));
       let unique_cache = cache.read().unwrap();
-      assert_eq!(Content(43), **unique_cache);
+      assert_eq!(Content("B".to_string(), 43), **unique_cache);
    }
 
    #[no_mangle]
@@ -159,13 +163,13 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
 
-      let _ = pool.update("A".to_string(), Content(42));
+      let _ = pool.update("A".to_string(), Content("A".to_string(), 42));
 
       let cache = pool.get("A".to_string());
       assert!(cache.is_some());
       let unique_cache = cache.unwrap();
       let cache_lock = unique_cache.read().unwrap();
-      assert_eq!(Content(42), **cache_lock);
+      assert_eq!(Content("A".to_string(), 42), **cache_lock);
 
       let cache = pool.get("B".to_string());
       assert!(cache.is_none());
@@ -179,9 +183,9 @@ mod jni_tests {
       use std::sync::Arc;
 
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content(42))) as *const _;
-      let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content(42))) as *const _;
-      let cache3_ptr = Arc::as_ptr(&pool.update("B".to_string(), Content(42))) as *const _;
+      let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
+      let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
+      let cache3_ptr = Arc::as_ptr(&pool.update("B".to_string(), Content("B".to_string(), 42))) as *const _;
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);
@@ -193,18 +197,18 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache = pool.update("A".to_string(), Content(42));
+      let cache = pool.update("A".to_string(), Content("A".to_string(), 42));
 
       {
          let mut lock = cache.write().unwrap();
-         assert_eq!(Content(42), **lock);
-         lock.save(Content(43));
-         assert_eq!(Content(43), **lock);
+         assert_eq!(Content("A".to_string(), 42), **lock);
+         lock.save(Content("A".to_string(), 43));
+         assert_eq!(Content("A".to_string(), 43), **lock);
       }
 
       {
          let lock = cache.read().unwrap();
-         assert_eq!(Content(43), **lock);
+         assert_eq!(Content("A".to_string(), 43), **lock);
       }
    }
 }

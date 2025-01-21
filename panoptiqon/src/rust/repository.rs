@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::hash::Hash;
 use crate::cache::{Cache, CacheContent};
 use crate::pool::UniqueCachePool;
 
@@ -24,17 +23,11 @@ use {
    crate::convert_jni::CloneIntoJavaHelper,
 };
 
-pub struct Repository<T: CacheContent, S = fn(&T) -> <T as CacheContent>::Key>
-   where S: Fn(&T) -> T::Key
-{
-   pool: UniqueCachePool<T>,
-   key_selector: S
+pub struct Repository<T: CacheContent> {
+   pool: UniqueCachePool<T>
 }
 
-impl<T, S> Repository<T, S>
-   where T: CacheContent,
-         S: Fn(&T) -> T::Key
-{
+impl<T: CacheContent> Repository<T> {
    pub fn load(&mut self, key: T::Key) -> anyhow::Result<Cache<T>> {
       let Some(arc) = self.pool.get(key) else { anyhow::bail!("not yet implemented."); };
 
@@ -44,47 +37,36 @@ impl<T, S> Repository<T, S>
 }
 
 #[cfg(feature = "jvm")]
-impl<T, S> Repository<T, S>
-   where T: CacheContent + CloneIntoJni,
-         S: Fn(&T) -> T::Key
+impl<T> Repository<T>
+   where T: CacheContent + CloneIntoJni
 {
-   pub fn new(
-      env: &mut JNIEnv,
-      key: S
-   ) -> Self
+   pub fn new(env: &mut JNIEnv) -> Repository<T>
       where T: CloneIntoJavaHelper
    {
       Repository {
-         pool: UniqueCachePool::new(env),
-         key_selector: key
+         pool: UniqueCachePool::new(env)
       }
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
       where T: CloneIntoJavaHelper
    {
-      let key_selector = &self.key_selector;
-      let key = key_selector(&value);
+      let key = value.key();
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
 }
 
 #[cfg(not(feature = "jvm"))]
-impl<T, S> Repository<T, S>
-   where T: CacheContent,
-         S: Fn(&T) -> T::Key
-{
-   pub fn new(key: S) -> Self {
+impl<T: CacheContent> Repository<T> {
+   pub fn new() -> Repository<T> {
       Repository {
-         pool: UniqueCachePool::new(),
-         key_selector: key
+         pool: UniqueCachePool::new()
       }
    }
 
    pub fn save(&mut self, value: T) -> Cache<T> {
-      let key_selector = &self.key_selector;
-      let key = key_selector(&value);
+      let key = value.key();
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
@@ -104,6 +86,10 @@ mod jni_tests {
 
    impl CacheContent for OneWayConversionData {
       type Key = String;
+
+      fn key(&self) -> String {
+         self.0.clone()
+      }
    }
 
    impl CloneIntoJni for OneWayConversionData {
@@ -124,6 +110,10 @@ mod jni_tests {
 
    impl CacheContent for TwoWayConversionData {
       type Key = String;
+
+      fn key(&self) -> String {
+         self.0.clone()
+      }
    }
 
    impl CloneIntoJni for TwoWayConversionData {
@@ -160,9 +150,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<OneWayConversionData, _>::new(
-         &mut env, |OneWayConversionData(k, _)| k.clone()
-      );
+      let mut repository = Repository::<OneWayConversionData>::new(&mut env);
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -172,9 +160,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<TwoWayConversionData, _>::new(
-         &mut env, |TwoWayConversionData(k, _)| k.clone()
-      );
+      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -184,9 +170,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData, _>::new(
-         &mut env, |TwoWayConversionData(k, _)| k.clone()
-      );
+      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
@@ -213,9 +197,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData, _>::new(
-         &mut env, |TwoWayConversionData(k, _)| k.clone()
-      );
+      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
 
       let result = repository.load("A".to_string());
       assert!(result.is_err());
@@ -226,9 +208,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData, _>::new(
-         &mut env, |TwoWayConversionData(k, _)| k.clone()
-      );
+      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
@@ -250,9 +230,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData, _>::new(
-         &mut env, |TwoWayConversionData(k, _)| k.clone()
-      );
+      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       let cache1 = repository.load("A".to_string()).unwrap();
@@ -289,9 +267,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<OneWayConversionData, _>::new(
-         &mut env, |OneWayConversionData(k, _)| k.to_owned()
-      );
+      let mut repository = Repository::<OneWayConversionData>::new(&mut env);
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -301,9 +277,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<TwoWayConversionData, _>::new(
-         &mut env, |TwoWayConversionData(k, _)| k.to_owned()
-      );
+      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -317,7 +291,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = oneWay_valueChangeFromNative_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env, |OneWayConversionData(k, _)| k.to_owned()));
+      *repo_lock = Some(Repository::new(&mut env));
       let cache = repo_lock.as_mut().unwrap().save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -340,7 +314,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = twoWay_valueChangeFromNative_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env, |TwoWayConversionData(k, _)| k.to_owned()));
+      *repo_lock = Some(Repository::new(&mut env));
       let cache = repo_lock.as_mut().unwrap().save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -363,7 +337,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env, |TwoWayConversionData(k, _)| k.clone()));
+      *repo_lock = Some(Repository::new(&mut env));
       let cache = repo_lock.as_mut().unwrap().save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -390,7 +364,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = oneWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env, |OneWayConversionData(k, _)| k.clone()));
+      *repo_lock = Some(Repository::new(&mut env));
    }
 
    #[no_mangle]
@@ -441,7 +415,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = twoWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env, |TwoWayConversionData(k, _)| k.clone()));
+      *repo_lock = Some(Repository::new(&mut env));
    }
 
    #[no_mangle]
