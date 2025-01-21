@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 use std::ops::Deref;
+use crate::cache::CacheContent;
 
 #[cfg(feature = "jvm")]
 use {
@@ -34,7 +35,7 @@ pub(crate) struct JvmUniqueCacheRefs {
 }
 
 #[cfg(feature = "jvm")]
-pub struct UniqueCache<T> {
+pub struct UniqueCache<T: CacheContent> {
    jvm: JavaVM,
    jvm_refs: Arc<JvmUniqueCacheRefs>,
    // XXX: この構造体でJVM側のUniqueCacheの強参照を持ち、JVM側のUniqueCacheに
@@ -47,12 +48,12 @@ pub struct UniqueCache<T> {
 }
 
 #[cfg(not(feature = "jvm"))]
-pub struct UniqueCache<T> {
+pub struct UniqueCache<T: CacheContent> {
    value: T
 }
 
 #[cfg(feature = "jvm")]
-impl<T> UniqueCache<T> {
+impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new_arc(
       jvm: &JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
@@ -157,7 +158,7 @@ impl<T> UniqueCache<T> {
 }
 
 #[cfg(not(feature = "jvm"))]
-impl<T> UniqueCache<T> {
+impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new(initial_state: T) -> Self {
       UniqueCache {
          value: initial_state
@@ -173,7 +174,7 @@ impl<T> UniqueCache<T> {
    }
 }
 
-impl<T> Deref for UniqueCache<T> {
+impl<T: CacheContent> Deref for UniqueCache<T> {
    type Target = T;
 
    fn deref(&self) -> &T {
@@ -279,7 +280,7 @@ pub(crate) trait DynTwoWayUniqueCache {
 }
 
 #[cfg(feature = "jvm")]
-impl<T> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
+impl<T: CacheContent> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
    where T: CloneIntoJni
 {
    unsafe fn decrement_arc(&self) {
@@ -289,7 +290,7 @@ impl<T> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
 }
 
 #[cfg(feature = "jvm")]
-impl<T> DynTwoWayUniqueCache for RwLock<UniqueCache<T>>
+impl<T: CacheContent> DynTwoWayUniqueCache for RwLock<UniqueCache<T>>
    where T: CloneFromJni
 {
    fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject) {

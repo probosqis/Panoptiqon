@@ -19,7 +19,7 @@ use std::sync::{Arc, RwLock};
 use jni::JNIEnv;
 use jni::objects::JObject;
 use jni::sys::jvalue;
-use crate::cache::Cache;
+use crate::cache::{Cache, CacheContent};
 use crate::unique_cache::{
    DynOneWayUniqueCache, DynTwoWayUniqueCache, JvmUniqueCacheRefs, UniqueCache,
 };
@@ -29,7 +29,7 @@ type VTable = ();
 /// [CloneIntoJni]を実装すれば自動的に実装される。
 /// こちらを手で実装する必要はない
 pub trait CloneIntoJavaHelper
-   where Self: Sized
+   where Self: CacheContent + Sized
 {
    #[allow(private_interfaces)]
    fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs;
@@ -39,7 +39,7 @@ pub trait CloneIntoJavaHelper
    ) -> (*const RwLock<UniqueCache<Self>>, *const VTable);
 }
 
-impl<T> CloneIntoJavaHelper for T where T: CloneIntoJni
+impl<T> CloneIntoJavaHelper for T where T: CacheContent + CloneIntoJni
 {
    #[allow(private_interfaces)]
    default fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
@@ -80,7 +80,7 @@ impl<T> CloneIntoJavaHelper for T where T: CloneIntoJni
    }
 }
 
-impl<T> CloneIntoJavaHelper for T where T: CloneIntoJni + CloneFromJni
+impl<T> CloneIntoJavaHelper for T where T: CacheContent + CloneIntoJni + CloneFromJni
 {
    #[allow(private_interfaces)]
    fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
@@ -133,14 +133,16 @@ pub trait CloneFromJni
 
 /// RepositoryCache<T>
 impl<T> CloneIntoJni for Cache<T>
-   where T: CloneIntoJni
+   where T: CacheContent + CloneIntoJni
 {
    fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       self.create_jvm_instance(env)
    }
 }
 
-impl<T> CloneFromJni for Cache<T> {
+impl<T> CloneFromJni for Cache<T>
+   where T: CacheContent
+{
    fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> Cache<T> {
       unsafe {
          Cache::<T>::from_jvm_instance(env, &java_object)

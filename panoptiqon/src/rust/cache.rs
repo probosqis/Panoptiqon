@@ -26,9 +26,9 @@ use {
 };
 
 #[derive(Clone)]
-pub struct Cache<T>(Arc<RwLock<UniqueCache<T>>>);
+pub struct Cache<T: CacheContent>(Arc<RwLock<UniqueCache<T>>>);
 
-impl<T> Cache<T> {
+impl<T: CacheContent> Cache<T> {
    pub(crate) fn new(arc: Arc<RwLock<UniqueCache<T>>>) -> Self {
       Cache(arc)
    }
@@ -74,7 +74,7 @@ impl<T> Cache<T> {
    }
 }
 
-impl<T> Debug for Cache<T> where T: Debug {
+impl<T: CacheContent> Debug for Cache<T> where T: Debug {
    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
       let cache_lock = self.read().unwrap();
       let value = cache_lock.get();
@@ -82,15 +82,15 @@ impl<T> Debug for Cache<T> where T: Debug {
    }
 }
 
-impl<T> PartialEq for Cache<T> where T: PartialEq {
+impl<T: CacheContent> PartialEq for Cache<T> where T: PartialEq {
    fn eq(&self, other: &Self) -> bool {
       Arc::ptr_eq(&self.0, &other.0)
    }
 }
 
-impl<T> Eq for Cache<T> where T: Eq {}
+impl<T: CacheContent> Eq for Cache<T> where T: Eq {}
 
-impl<'de, T> Deserialize<'de> for Cache<T> {
+impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
       where D: Deserializer<'de>
    {
