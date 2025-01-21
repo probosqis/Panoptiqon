@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 use std::fmt::{Debug, Formatter};
+use std::hash::Hash;
 use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Deserializer};
 use crate::unique_cache::UniqueCache;
@@ -99,4 +100,5 @@ impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
 }
 
 pub trait CacheContent {
+   type Key: Hash + Eq;
 }

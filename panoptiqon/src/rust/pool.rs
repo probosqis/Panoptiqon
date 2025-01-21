@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::hash::Hash;
 use std::sync::{Arc, RwLock};
 use fnv::FnvHashMap;
 use crate::cache::CacheContent;
@@ -28,30 +27,26 @@ use {
 };
 
 #[cfg(feature="jvm")]
-pub(crate) struct UniqueCachePool<K, T: CacheContent> {
+pub(crate) struct UniqueCachePool<T: CacheContent> {
    jvm: JavaVM,
    jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
-   map: FnvHashMap<K, Arc<RwLock<UniqueCache<T>>>>
+   map: FnvHashMap<T::Key, Arc<RwLock<UniqueCache<T>>>>
 }
 
 #[cfg(not(feature="jvm"))]
-pub(crate) struct UniqueCachePool<K, T: CacheContent> {
-   map: FnvHashMap<K, Arc<RwLock<UniqueCache<T>>>>
+pub(crate) struct UniqueCachePool<T: CacheContent> {
+   map: FnvHashMap<T::Key, Arc<RwLock<UniqueCache<T>>>>
 }
 
-impl<K, T> UniqueCachePool<K, T>
-   where K: Hash + Eq,
-         T: CacheContent
-{
-   pub fn get(&self, key: K) -> Option<Arc<RwLock<UniqueCache<T>>>> {
+impl<T: CacheContent> UniqueCachePool<T> {
+   pub fn get(&self, key: T::Key) -> Option<Arc<RwLock<UniqueCache<T>>>> {
       self.map.get(&key).map(|arc| arc.clone())
    }
 }
 
 #[cfg(feature="jvm")]
-impl<K, T> UniqueCachePool<K, T>
-   where K: Hash + Eq,
-         T: CacheContent + CloneIntoJni
+impl<T> UniqueCachePool<T>
+   where T: CacheContent + CloneIntoJni
 {
    pub fn new(env: &mut JNIEnv) -> Self
       where T: CloneIntoJavaHelper
@@ -65,7 +60,7 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>>
+   pub fn update(&mut self, key: T::Key, value: T) -> Arc<RwLock<UniqueCache<T>>>
       where T: CloneIntoJavaHelper
    {
       use std::collections::hash_map::Entry;
@@ -91,17 +86,14 @@ impl<K, T> UniqueCachePool<K, T>
 }
 
 #[cfg(not(feature="jvm"))]
-impl<K, T> UniqueCachePool<K, T>
-   where K: Hash + Eq,
-         T: CacheContent
-{
+impl<T: CacheContent> UniqueCachePool<T> {
    pub fn new() -> Self {
       UniqueCachePool {
          map: FnvHashMap::default()
       }
    }
 
-   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>> {
+   pub fn update(&mut self, key: T::Key, value: T) -> Arc<RwLock<UniqueCache<T>>> {
       use std::collections::hash_map::Entry;
 
       let entry = self.map.entry(key);
@@ -135,6 +127,7 @@ mod jni_tests {
    struct Content(pub i32);
 
    impl CacheContent for Content {
+      type Key = String;
    }
 
    impl CloneIntoJni for Content {

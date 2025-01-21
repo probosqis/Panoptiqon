@@ -24,19 +24,18 @@ use {
    crate::convert_jni::CloneIntoJavaHelper,
 };
 
-pub struct Repository<K, T: CacheContent, S = fn(&T) -> K>
-   where S: Fn(&T) -> K
+pub struct Repository<T: CacheContent, S = fn(&T) -> <T as CacheContent>::Key>
+   where S: Fn(&T) -> T::Key
 {
-   pool: UniqueCachePool<K, T>,
+   pool: UniqueCachePool<T>,
    key_selector: S
 }
 
-impl<K, T, S> Repository<K, T, S>
-   where K: Hash + Eq,
-         T: CacheContent,
-         S: Fn(&T) -> K
+impl<T, S> Repository<T, S>
+   where T: CacheContent,
+         S: Fn(&T) -> T::Key
 {
-   pub fn load(&mut self, key: K) -> anyhow::Result<Cache<T>> {
+   pub fn load(&mut self, key: T::Key) -> anyhow::Result<Cache<T>> {
       let Some(arc) = self.pool.get(key) else { anyhow::bail!("not yet implemented."); };
 
       let cache = Cache::new(arc);
@@ -45,10 +44,9 @@ impl<K, T, S> Repository<K, T, S>
 }
 
 #[cfg(feature = "jvm")]
-impl<K, T, S> Repository<K, T, S>
-   where K: Hash + Eq,
-         T: CacheContent + CloneIntoJni,
-         S: Fn(&T) -> K
+impl<T, S> Repository<T, S>
+   where T: CacheContent + CloneIntoJni,
+         S: Fn(&T) -> T::Key
 {
    pub fn new(
       env: &mut JNIEnv,
@@ -73,10 +71,9 @@ impl<K, T, S> Repository<K, T, S>
 }
 
 #[cfg(not(feature = "jvm"))]
-impl<K, T, S> Repository<K, T, S>
-   where K: Hash + Eq,
-         T: CacheContent,
-         S: Fn(&T) -> K
+impl<T, S> Repository<T, S>
+   where T: CacheContent,
+         S: Fn(&T) -> T::Key
 {
    pub fn new(key: S) -> Self {
       Repository {
@@ -106,6 +103,7 @@ mod jni_tests {
    struct OneWayConversionData(String, i32);
 
    impl CacheContent for OneWayConversionData {
+      type Key = String;
    }
 
    impl CloneIntoJni for OneWayConversionData {
@@ -125,6 +123,7 @@ mod jni_tests {
    struct TwoWayConversionData(String, i32);
 
    impl CacheContent for TwoWayConversionData {
+      type Key = String;
    }
 
    impl CloneIntoJni for TwoWayConversionData {
@@ -161,7 +160,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<String, OneWayConversionData, _>::new(
+      let mut repository = Repository::<OneWayConversionData, _>::new(
          &mut env, |OneWayConversionData(k, _)| k.clone()
       );
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
@@ -173,7 +172,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<String, TwoWayConversionData, _>::new(
+      let mut repository = Repository::<TwoWayConversionData, _>::new(
          &mut env, |TwoWayConversionData(k, _)| k.clone()
       );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
@@ -185,7 +184,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<String, TwoWayConversionData, _>::new(
+      let mut repository = Repository::<TwoWayConversionData, _>::new(
          &mut env, |TwoWayConversionData(k, _)| k.clone()
       );
       repository.save(TwoWayConversionData("A".to_string(), 42));
@@ -214,7 +213,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<String, TwoWayConversionData, _>::new(
+      let mut repository = Repository::<TwoWayConversionData, _>::new(
          &mut env, |TwoWayConversionData(k, _)| k.clone()
       );
 
@@ -227,7 +226,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<String, TwoWayConversionData, _>::new(
+      let mut repository = Repository::<TwoWayConversionData, _>::new(
          &mut env, |TwoWayConversionData(k, _)| k.clone()
       );
       repository.save(TwoWayConversionData("A".to_string(), 42));
@@ -251,7 +250,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<String, TwoWayConversionData, _>::new(
+      let mut repository = Repository::<TwoWayConversionData, _>::new(
          &mut env, |TwoWayConversionData(k, _)| k.clone()
       );
       repository.save(TwoWayConversionData("A".to_string(), 42));
@@ -290,7 +289,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<String, OneWayConversionData, _>::new(
+      let mut repository = Repository::<OneWayConversionData, _>::new(
          &mut env, |OneWayConversionData(k, _)| k.to_owned()
       );
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
@@ -302,7 +301,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<String, TwoWayConversionData, _>::new(
+      let mut repository = Repository::<TwoWayConversionData, _>::new(
          &mut env, |TwoWayConversionData(k, _)| k.to_owned()
       );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
@@ -310,7 +309,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static oneWay_valueChangeFromNative_repository: Mutex<Option<Repository<String, OneWayConversionData>>> = Mutex::new(None);
+   static oneWay_valueChangeFromNative_repository: Mutex<Option<Repository<OneWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChangeFromNative_00024getCache<'local>(
@@ -333,7 +332,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static twoWay_valueChangeFromNative_repository: Mutex<Option<Repository<String, TwoWayConversionData>>> = Mutex::new(None);
+   static twoWay_valueChangeFromNative_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChangeFromNative_00024getCache<'local>(
@@ -356,7 +355,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChangeFromJvm_repository: Mutex<Option<Repository<String, TwoWayConversionData>>> = Mutex::new(None);
+   static valueChangeFromJvm_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChangeFromJvm_00024getCache<'local>(
@@ -383,7 +382,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static oneWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<String, OneWayConversionData>>> = Mutex::new(None);
+   static oneWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<OneWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
@@ -434,7 +433,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static twoWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<String, TwoWayConversionData>>> = Mutex::new(None);
+   static twoWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
