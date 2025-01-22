@@ -16,12 +16,25 @@
 
 #![cfg(feature = "jvm")]
 
+use std::marker::PhantomData;
 use jni::objects::JObject;
 use crate::jvm_type::{jvm_type, JvmType};
 
-pub struct JvmNullable<T: JvmType>(pub T);
+pub struct JvmNullable<'local, T>(
+   T,
+   PhantomData<&'local ()>
+) where T: JvmType<'local> + 'local;
 
-impl<T: JvmType> JvmType for JvmNullable<T> {
+impl<'local, T> JvmType<'local> for JvmNullable<'local, T>
+   where T: JvmType<'local>
+{
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmNullable<'local, T> {
+      JvmNullable(
+         T::from_j_object(j_object),
+         PhantomData
+      )
+   }
+
    fn j_object(&self) -> &JObject {
       self.0.j_object()
    }

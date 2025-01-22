@@ -18,7 +18,8 @@
 
 use jni::objects::JObject;
 
-pub trait JvmType {
+pub trait JvmType<'local> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> Self where Self: 'local;
    fn j_object(&self) -> &JObject;
 }
 
@@ -27,9 +28,13 @@ macro_rules! jvm_type {
    };
    ($($type_name:ident),+ $(,)?) => {
       $(
-         pub struct $type_name<'local>(pub JObject<'local>);
+         pub struct $type_name<'local>(JObject<'local>);
 
-         impl JvmType for $type_name<'_> {
+         impl<'local> JvmType<'local> for $type_name<'local> {
+            unsafe fn from_j_object(j_object: JObject) -> $type_name {
+               $type_name(j_object)
+            }
+
             fn j_object(&self) -> &JObject {
                &self.0
             }
