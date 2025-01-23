@@ -23,7 +23,7 @@ use crate::unique_cache::UniqueCache;
 use {
    jni::JNIEnv,
    jni::objects::JObject,
-   crate::convert_jni::CloneIntoJni,
+   crate::convert_jvm::CloneIntoJvm,
    crate::jvm_type::JvmType,
 };
 
@@ -45,7 +45,7 @@ impl<T: CacheContent> Cache<T> {
 
    #[cfg(feature="jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>
-      where T: CloneIntoJni
+      where T: CloneIntoJvm
    {
       let unique_cache_lock = self.0.read().unwrap();
       unique_cache_lock.create_jvm_cache(env)

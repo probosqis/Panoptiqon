@@ -19,8 +19,8 @@ use crate::pool::UniqueCachePool;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
-   crate::convert_jni::CloneIntoJni,
-   crate::convert_jni::CloneIntoJavaHelper,
+   crate::convert_jvm::CloneIntoJvm,
+   crate::convert_jvm::CloneIntoJvmHelper,
 };
 
 pub struct Repository<T: CacheContent> {
@@ -38,10 +38,10 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(feature = "jvm")]
 impl<T> Repository<T>
-   where T: CacheContent + CloneIntoJni
+   where T: CacheContent + CloneIntoJvm
 {
    pub fn new(env: &mut JNIEnv) -> Repository<T>
-      where T: CloneIntoJavaHelper
+      where T: CloneIntoJvmHelper
    {
       Repository {
          pool: UniqueCachePool::new(env)
@@ -49,7 +49,7 @@ impl<T> Repository<T>
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
-      where T: CloneIntoJavaHelper
+      where T: CloneIntoJvmHelper
    {
       let key = value.key();
       let arc = self.pool.update(key, value);
@@ -78,7 +78,7 @@ mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::JObject;
    use crate::cache::CacheContent;
-   use crate::convert_jni::{CloneFromJni, CloneIntoJni};
+   use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::jvm_type;
    use super::Repository;
 
@@ -99,9 +99,9 @@ mod jni_tests {
       }
    }
 
-   impl CloneIntoJni for OneWayConversionData {
-      fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-         let first  = self.0.clone_into_jni(env);
+   impl CloneIntoJvm for OneWayConversionData {
+      fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+         let first  = self.0.clone_into_jvm(env);
          let second = self.1;
 
          env.new_object(
@@ -124,9 +124,9 @@ mod jni_tests {
       }
    }
 
-   impl CloneIntoJni for TwoWayConversionData {
-      fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-         let first  = self.0.clone_into_jni(env);
+   impl CloneIntoJvm for TwoWayConversionData {
+      fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+         let first  = self.0.clone_into_jvm(env);
          let second = self.1;
 
          env.new_object(
@@ -137,8 +137,8 @@ mod jni_tests {
       }
    }
 
-   impl CloneFromJni for TwoWayConversionData {
-      fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> Self {
+   impl CloneFromJvm for TwoWayConversionData {
+      fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> Self {
          let first = env
             .call_method(java_object, "getFirst", "()Ljava/lang/String;", &[])
             .unwrap().l().unwrap();
@@ -147,7 +147,7 @@ mod jni_tests {
             .unwrap().i().unwrap();
 
          TwoWayConversionData(
-            String::clone_from_jni(env, &first),
+            String::clone_from_jvm(env, &first),
             second
          )
       }

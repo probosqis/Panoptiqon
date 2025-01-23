@@ -26,9 +26,9 @@ use crate::unique_cache::{
 
 type VTable = ();
 
-/// [CloneIntoJni]を実装すれば自動的に実装される。
+/// [CloneIntoJvm]を実装すれば自動的に実装される。
 /// こちらを手で実装する必要はない
-pub trait CloneIntoJavaHelper
+pub trait CloneIntoJvmHelper
    where Self: CacheContent + Sized
 {
    #[allow(private_interfaces)]
@@ -39,7 +39,7 @@ pub trait CloneIntoJavaHelper
    ) -> (*const RwLock<UniqueCache<Self>>, *const VTable);
 }
 
-impl<T> CloneIntoJavaHelper for T where T: CacheContent + CloneIntoJni
+impl<T> CloneIntoJvmHelper for T where T: CacheContent + CloneIntoJvm
 {
    #[allow(private_interfaces)]
    default fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
@@ -80,7 +80,7 @@ impl<T> CloneIntoJavaHelper for T where T: CacheContent + CloneIntoJni
    }
 }
 
-impl<T> CloneIntoJavaHelper for T where T: CacheContent + CloneIntoJni + CloneFromJni
+impl<T> CloneIntoJvmHelper for T where T: CacheContent + CloneIntoJvm + CloneFromJvm
 {
    #[allow(private_interfaces)]
    fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs {
@@ -121,29 +121,29 @@ impl<T> CloneIntoJavaHelper for T where T: CacheContent + CloneIntoJni + CloneFr
    }
 }
 
-pub trait CloneIntoJni {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>;
+pub trait CloneIntoJvm {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>;
 }
 
-pub trait CloneFromJni
+pub trait CloneFromJvm
    where Self: Sized
 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> Self;
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> Self;
 }
 
 /// RepositoryCache<T>
-impl<T> CloneIntoJni for Cache<T>
-   where T: CacheContent + CloneIntoJni
+impl<T> CloneIntoJvm for Cache<T>
+   where T: CacheContent + CloneIntoJvm
 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       self.create_jvm_instance(env)
    }
 }
 
-impl<T> CloneFromJni for Cache<T>
+impl<T> CloneFromJvm for Cache<T>
    where T: CacheContent
 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> Cache<T> {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> Cache<T> {
       unsafe {
          Cache::<T>::from_jvm_instance(env, &java_object)
       }
@@ -151,27 +151,27 @@ impl<T> CloneFromJni for Cache<T>
 }
 
 /// T
-impl<T> CloneIntoJni for Box<T>
-   where T: CloneIntoJni
+impl<T> CloneIntoJvm for Box<T>
+   where T: CloneIntoJvm
 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-      self.as_ref().clone_into_jni(env)
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      self.as_ref().clone_into_jvm(env)
    }
 }
 
-impl<T> CloneFromJni for Box<T>
-   where T: CloneFromJni
+impl<T> CloneFromJvm for Box<T>
+   where T: CloneFromJvm
 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> Box<T> {
-      Box::new(T::clone_from_jni(env, java_object))
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> Box<T> {
+      Box::new(T::clone_from_jvm(env, java_object))
    }
 }
 
 /// java.util.ArrayList (=kotlin.collections.ArrayList)
-impl<T> CloneIntoJni for Vec<T>
-   where T: CloneIntoJni
+impl<T> CloneIntoJvm for Vec<T>
+   where T: CloneIntoJvm
 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       use jni::signature::{Primitive, ReturnType};
 
       let list = env.new_object("Ljava/util/ArrayList;", "()V", &[]).unwrap();
@@ -181,7 +181,7 @@ impl<T> CloneIntoJni for Vec<T>
          .unwrap();
 
       for element in self {
-         let element = element.clone_into_jni(env);
+         let element = element.clone_into_jvm(env);
          unsafe {
             env.call_method_unchecked(
                   &list, add_method_id, ReturnType::Primitive(Primitive::Boolean),
@@ -195,10 +195,10 @@ impl<T> CloneIntoJni for Vec<T>
    }
 }
 
-impl<T> CloneFromJni for Vec<T>
-   where T: CloneFromJni
+impl<T> CloneFromJvm for Vec<T>
+   where T: CloneFromJvm
 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> Vec<T> {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> Vec<T> {
       use jni::signature::ReturnType;
 
       let mut vec = Vec::new();
@@ -218,7 +218,7 @@ impl<T> CloneFromJni for Vec<T>
                .unwrap().l().unwrap()
          };
 
-         vec.push(T::clone_from_jni(env, &element));
+         vec.push(T::clone_from_jvm(env, &element));
       }
 
       vec
@@ -226,168 +226,168 @@ impl<T> CloneFromJni for Vec<T>
 }
 
 /// T?
-impl<T> CloneIntoJni for Option<T>
-   where T: CloneIntoJni
+impl<T> CloneIntoJvm for Option<T>
+   where T: CloneIntoJvm
 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       match self {
-         Some(t) => t.clone_into_jni(env),
+         Some(t) => t.clone_into_jvm(env),
          None => JObject::null()
       }
    }
 }
 
-impl<T> CloneFromJni for Option<T>
-   where T: CloneFromJni
+impl<T> CloneFromJvm for Option<T>
+   where T: CloneFromJvm
 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> Option<T> {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> Option<T> {
       if java_object.is_null() {
          None
       } else {
-         Some(T::clone_from_jni(env, java_object))
+         Some(T::clone_from_jvm(env, java_object))
       }
    }
 }
 
 /// java.lang.Boolean
-impl CloneIntoJni for bool {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for bool {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.call_static_method(
          "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;", &[(*self).into()]
       ).unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for bool {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> bool {
+impl CloneFromJvm for bool {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> bool {
       env.call_method(&java_object, "booleanValue", "()Z", &[]).unwrap().z().unwrap()
    }
 }
 
 /// java.lang.Byte
-impl CloneIntoJni for i8 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for i8 {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.call_static_method(
          "java/lang/Byte", "valueOf", "(B)Ljava/lang/Byte;", &[(*self).into()]
       ).unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for i8 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> i8 {
+impl CloneFromJvm for i8 {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> i8 {
       env.call_method(&java_object, "byteValue", "()B", &[]).unwrap().b().unwrap()
    }
 }
 
 /// java.lang.Short
-impl CloneIntoJni for i16 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for i16 {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.call_static_method(
          "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;", &[(*self).into()]
       ).unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for i16 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> i16 {
+impl CloneFromJvm for i16 {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> i16 {
       env.call_method(&java_object, "shortValue", "()S", &[]).unwrap().s().unwrap()
    }
 }
 
 /// java.lang.Integer
-impl CloneIntoJni for i32 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for i32 {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.call_static_method(
          "java/lang/Integer", "valueOf", "(I)Ljava/lang/Integer;", &[(*self).into()]
       ).unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for i32 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> i32 {
+impl CloneFromJvm for i32 {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> i32 {
       env.call_method(&java_object, "intValue", "()I", &[]).unwrap().i().unwrap()
    }
 }
 
 /// java.lang.Long
-impl CloneIntoJni for i64 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for i64 {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.call_static_method(
          "java/lang/Long", "valueOf", "(J)Ljava/lang/Long;", &[(*self).into()]
       ).unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for i64 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> i64 {
+impl CloneFromJvm for i64 {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> i64 {
       env.call_method(&java_object, "longValue", "()J", &[]).unwrap().j().unwrap()
    }
 }
 
 /// java.lang.Float
-impl CloneIntoJni for f32 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for f32 {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.call_static_method(
          "java/lang/Float", "valueOf", "(F)Ljava/lang/Float;", &[(*self).into()]
       ).unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for f32 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> f32 {
+impl CloneFromJvm for f32 {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> f32 {
       env.call_method(&java_object, "floatValue", "()F", &[]).unwrap().f().unwrap()
    }
 }
 
 /// java.lang.Double
-impl CloneIntoJni for f64 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for f64 {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.call_static_method(
          "java/lang/Double", "valueOf", "(D)Ljava/lang/Double;", &[(*self).into()]
       ).unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for f64 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> f64 {
+impl CloneFromJvm for f64 {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> f64 {
       env.call_method(&java_object, "doubleValue", "()D", &[]).unwrap().d().unwrap()
    }
 }
 
 /// java.lang.String
-impl CloneIntoJni for String {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for String {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.new_string(&self).unwrap().into()
    }
 }
 
-impl CloneFromJni for String {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> String {
+impl CloneFromJvm for String {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> String {
       env.get_string(java_object.into()).unwrap().into()
    }
 }
 
 /// kotlin.Unit
-impl CloneIntoJni for () {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+impl CloneIntoJvm for () {
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       env.get_static_field("kotlin/Unit", "INSTANCE", "Lkotlin/Unit;")
          .unwrap().l().unwrap()
    }
 }
 
-impl CloneFromJni for () {
-   fn clone_from_jni(_env: &mut JNIEnv, _java_object: &JObject) -> () {
+impl CloneFromJvm for () {
+   fn clone_from_jvm(_env: &mut JNIEnv, _java_object: &JObject) -> () {
       ()
    }
 }
 
 /// kotlin.Pair
-impl<A, B> CloneIntoJni for (A, B)
-   where A: CloneIntoJni, B: CloneIntoJni
+impl<A, B> CloneIntoJvm for (A, B)
+   where A: CloneIntoJvm, B: CloneIntoJvm
 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-      let first  = self.0.clone_into_jni(env);
-      let second = self.1.clone_into_jni(env);
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      let first  = self.0.clone_into_jvm(env);
+      let second = self.1.clone_into_jvm(env);
 
       env.new_object(
          "kotlin/Pair", "(Ljava/lang/Object;Ljava/lang/Object;)V",
@@ -396,10 +396,10 @@ impl<A, B> CloneIntoJni for (A, B)
    }
 }
 
-impl<A, B> CloneFromJni for (A, B)
-   where A: CloneFromJni, B: CloneFromJni
+impl<A, B> CloneFromJvm for (A, B)
+   where A: CloneFromJvm, B: CloneFromJvm
 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> (A, B) {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> (A, B) {
       let first = env
          .call_method(java_object, "getFirst", "()Ljava/lang/Object;", &[])
          .unwrap().l().unwrap();
@@ -407,18 +407,18 @@ impl<A, B> CloneFromJni for (A, B)
          .call_method(java_object, "getSecond", "()Ljava/lang/Object;", &[])
          .unwrap().l().unwrap();
 
-      (A::clone_from_jni(env, &first), B::clone_from_jni(env, &second))
+      (A::clone_from_jvm(env, &first), B::clone_from_jvm(env, &second))
    }
 }
 
 /// kotlin.Triple
-impl<A, B, C> CloneIntoJni for (A, B, C)
-   where A: CloneIntoJni, B: CloneIntoJni, C: CloneIntoJni
+impl<A, B, C> CloneIntoJvm for (A, B, C)
+   where A: CloneIntoJvm, B: CloneIntoJvm, C: CloneIntoJvm
 {
-   fn clone_into_jni<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-      let first  = self.0.clone_into_jni(env);
-      let second = self.1.clone_into_jni(env);
-      let third  = self.2.clone_into_jni(env);
+   fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+      let first  = self.0.clone_into_jvm(env);
+      let second = self.1.clone_into_jvm(env);
+      let third  = self.2.clone_into_jvm(env);
 
       env.new_object(
          "kotlin/Triple", "(Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V",
@@ -427,10 +427,10 @@ impl<A, B, C> CloneIntoJni for (A, B, C)
    }
 }
 
-impl<A, B, C> CloneFromJni for (A, B, C)
-   where A: CloneFromJni, B: CloneFromJni, C: CloneFromJni
+impl<A, B, C> CloneFromJvm for (A, B, C)
+   where A: CloneFromJvm, B: CloneFromJvm, C: CloneFromJvm
 {
-   fn clone_from_jni(env: &mut JNIEnv, java_object: &JObject) -> (A, B, C) {
+   fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> (A, B, C) {
       let first = env
          .call_method(java_object, "getFirst", "()Ljava/lang/Object;", &[])
          .unwrap().l().unwrap();
@@ -442,9 +442,9 @@ impl<A, B, C> CloneFromJni for (A, B, C)
          .unwrap().l().unwrap();
 
       (
-         A::clone_from_jni(env, &first),
-         B::clone_from_jni(env, &second),
-         C::clone_from_jni(env, &third)
+         A::clone_from_jvm(env, &first),
+         B::clone_from_jvm(env, &second),
+         C::clone_from_jvm(env, &third)
       )
    }
 }
