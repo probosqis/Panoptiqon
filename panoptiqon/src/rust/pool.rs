@@ -121,13 +121,19 @@ mod jni_tests {
    use jni::objects::JObject;
    use crate::cache::CacheContent;
    use crate::convert_jni::CloneIntoJni;
+   use crate::jvm_type;
    use super::UniqueCachePool;
+
+   jvm_type! {
+      JvmContent,
+   }
 
    #[derive(Debug, PartialEq, Eq)]
    struct Content(String, i32);
 
    impl CacheContent for Content {
       type Key = String;
+      type JvmType<'local> = JvmContent<'local>;
 
       fn key(&self) -> String {
          self.0.clone()

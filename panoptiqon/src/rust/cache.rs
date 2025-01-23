@@ -21,9 +21,10 @@ use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 use {
-   crate::convert_jni::CloneIntoJni,
    jni::JNIEnv,
    jni::objects::JObject,
+   crate::convert_jni::CloneIntoJni,
+   crate::jvm_type::JvmType,
 };
 
 #[derive(Clone)]
@@ -101,6 +102,9 @@ impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
 
 pub trait CacheContent {
    type Key: Hash + Eq;
+
+   #[cfg(feature = "jvm")]
+   type JvmType<'local>: JvmType<'local>;
 
    fn key(&self) -> Self::Key;
 }

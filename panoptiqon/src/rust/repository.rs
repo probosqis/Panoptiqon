@@ -79,13 +79,20 @@ mod jni_tests {
    use jni::objects::JObject;
    use crate::cache::CacheContent;
    use crate::convert_jni::{CloneFromJni, CloneIntoJni};
+   use crate::jvm_type;
    use super::Repository;
+
+   jvm_type! {
+      JvmOneWayConversionData,
+      JvmTwoWayConversionData,
+   }
 
    #[derive(Debug, PartialEq, Eq)]
    struct OneWayConversionData(String, i32);
 
    impl CacheContent for OneWayConversionData {
       type Key = String;
+      type JvmType<'local> = JvmOneWayConversionData<'local>;
 
       fn key(&self) -> String {
          self.0.clone()
@@ -110,6 +117,7 @@ mod jni_tests {
 
    impl CacheContent for TwoWayConversionData {
       type Key = String;
+      type JvmType<'local> = JvmTwoWayConversionData<'local>;
 
       fn key(&self) -> String {
          self.0.clone()
