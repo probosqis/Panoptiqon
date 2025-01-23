@@ -18,7 +18,8 @@
 
 use std::marker::PhantomData;
 use jni::objects::JObject;
-use crate::jvm_type::{jvm_type, JvmType};
+use crate::jvm_type;
+use crate::jvm_type::JvmType;
 
 pub struct JvmNullable<'local, T>(
    T,

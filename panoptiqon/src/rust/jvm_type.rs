@@ -23,24 +23,27 @@ pub trait JvmType<'local> {
    fn j_object(&self) -> &JObject;
 }
 
+#[macro_export]
 macro_rules! jvm_type {
    () => {
    };
    ($($type_name:ident),+ $(,)?) => {
       $(
-         pub struct $type_name<'local>(JObject<'local>);
+         pub struct $type_name<'local>(
+            ::jni::objects::JObject<'local>
+         );
 
-         impl<'local> JvmType<'local> for $type_name<'local> {
-            unsafe fn from_j_object(j_object: JObject) -> $type_name {
+         impl<'local> $crate::jvm_type::JvmType<'local> for $type_name<'local> {
+            unsafe fn from_j_object(
+               j_object: ::jni::objects::JObject<'local>
+            ) -> $type_name<'local> {
                $type_name(j_object)
             }
 
-            fn j_object(&self) -> &JObject {
+            fn j_object(&self) -> &::jni::objects::JObject {
                &self.0
             }
          }
       )+
    };
 }
-
-pub(crate) use jvm_type;
