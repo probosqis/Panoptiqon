@@ -17,9 +17,71 @@
 #![cfg(feature = "jvm")]
 
 use std::marker::PhantomData;
-use jni::objects::JObject;
+use jni::objects::{JObject, JString, JThrowable};
 use crate::jvm_type;
 use crate::jvm_type::JvmType;
+
+#[repr(transparent)]
+pub struct JvmString<'local>(JString<'local>);
+
+impl<'local> JvmString<'local> {
+   pub fn from_j_string(j_string: JString<'local>) -> JvmString<'local> {
+      JvmString(j_string)
+   }
+
+   pub fn j_string(&self) -> &JString<'local> {
+      &self.0
+   }
+
+   pub fn into_j_string(self) -> JString<'local> {
+      self.0
+   }
+}
+
+impl<'local> JvmType<'local> for JvmString<'local> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmString<'local> {
+      JvmString(j_object.into())
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0.into()
+   }
+}
+
+#[repr(transparent)]
+pub struct JvmException<'local>(JThrowable<'local>);
+
+impl<'local> JvmException<'local> {
+   pub fn from_j_throwable(j_throwable: JThrowable<'local>) -> JvmException<'local> {
+      JvmException(j_throwable)
+   }
+
+   pub fn j_throwable(&self) -> &JThrowable<'local> {
+      &self.0
+   }
+
+   pub fn into_j_throwable(self) -> JThrowable<'local> {
+      self.0
+   }
+}
+
+impl<'local> JvmType<'local> for JvmException<'local> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmException<'local> {
+      JvmException(j_object.into())
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0.into()
+   }
+}
 
 #[repr(transparent)]
 pub struct JvmNullable<'local, T>(
@@ -46,8 +108,87 @@ impl<'local, T> JvmType<'local> for JvmNullable<'local, T>
    }
 }
 
+#[repr(transparent)]
+pub struct JvmList<'local, T: JvmType<'local>>(JObject<'local>, PhantomData<T>);
+
+impl<'local, T: JvmType<'local>> JvmType<'local> for JvmList<'local, T> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmList<'local, T> {
+      JvmList(j_object, PhantomData)
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0
+   }
+}
+
+#[repr(transparent)]
+pub struct JvmPair<'local, A, B>(JObject<'local>, PhantomData<(A, B)>)
+   where A: JvmType<'local>,
+         B: JvmType<'local>;
+
+impl<'local, A, B> JvmType<'local> for JvmPair<'local, A, B>
+   where A: JvmType<'local>,
+         B: JvmType<'local>
+{
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmPair<'local, A, B> {
+      JvmPair(j_object, PhantomData)
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0
+   }
+}
+
+#[repr(transparent)]
+pub struct JvmTriple<'local, A, B, C>(JObject<'local>, PhantomData<(A, B, C)>)
+   where A: JvmType<'local>,
+         B: JvmType<'local>,
+         C: JvmType<'local>;
+
+impl<'local, A, B, C> JvmType<'local> for JvmTriple<'local, A, B, C>
+   where A: JvmType<'local>,
+         B: JvmType<'local>,
+         C: JvmType<'local>
+{
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmTriple<'local, A, B, C> {
+      JvmTriple(j_object, PhantomData)
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0
+   }
+}
+
+#[repr(transparent)]
+pub struct JvmCache<'local, T: JvmType<'local>>(JObject<'local>, PhantomData<T>);
+
+impl<'local, T: JvmType<'local>> JvmType<'local> for JvmCache<'local, T> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmCache<'local, T> {
+      JvmCache(j_object, PhantomData)
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0
+   }
+}
+
 jvm_type! {
-   JvmCache,
    JvmBoolean,
    JvmByte,
    JvmShort,
@@ -55,9 +196,5 @@ jvm_type! {
    JvmLong,
    JvmFloat,
    JvmDouble,
-   JvmString,
    JvmUnit,
-   JvmPair,
-   JvmTriple,
-   JvmList,
 }
