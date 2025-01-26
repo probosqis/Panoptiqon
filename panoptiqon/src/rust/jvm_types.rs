@@ -36,8 +36,12 @@ impl<'local, T> JvmType<'local> for JvmNullable<'local, T>
       )
    }
 
-   fn j_object(&self) -> &JObject {
+   fn j_object(&self) -> &JObject<'local> {
       self.0.j_object()
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0.into_j_object()
    }
 }
 

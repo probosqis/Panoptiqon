@@ -20,7 +20,8 @@ use jni::objects::JObject;
 
 pub trait JvmType<'local> {
    unsafe fn from_j_object(j_object: JObject<'local>) -> Self where Self: 'local;
-   fn j_object(&self) -> &JObject;
+   fn j_object(&self) -> &JObject<'local>;
+   fn into_j_object(self) -> JObject<'local>;
 }
 
 #[macro_export]
@@ -40,8 +41,12 @@ macro_rules! jvm_type {
                $type_name(j_object)
             }
 
-            fn j_object(&self) -> &::jni::objects::JObject {
+            fn j_object(&self) -> &::jni::objects::JObject<'local> {
                &self.0
+            }
+
+            fn into_j_object(self) -> ::jni::objects::JObject<'local> {
+               self.0
             }
          }
       )+
