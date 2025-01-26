@@ -30,6 +30,7 @@ macro_rules! jvm_type {
    };
    ($($type_name:ident),+ $(,)?) => {
       $(
+         #[repr(transparent)]
          pub struct $type_name<'local>(
             ::jni::objects::JObject<'local>
          );

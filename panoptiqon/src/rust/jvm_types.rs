@@ -21,6 +21,7 @@ use jni::objects::JObject;
 use crate::jvm_type;
 use crate::jvm_type::JvmType;
 
+#[repr(transparent)]
 pub struct JvmNullable<'local, T>(
    T,
    PhantomData<&'local ()>
