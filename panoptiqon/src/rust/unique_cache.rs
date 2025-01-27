@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 use std::ops::Deref;
+use crate::cache::CacheContent;
 
 #[cfg(feature = "jvm")]
 use {
@@ -21,7 +22,7 @@ use {
    jni::objects::{GlobalRef, JMethodID, JObject},
    jni::sys::jlong,
    std::sync::{Arc, RwLock},
-   crate::convert_java::{CloneFromJava, CloneIntoJava, CloneIntoJavaHelper},
+   crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
 };
 
 #[cfg(feature = "jvm")]
@@ -34,7 +35,7 @@ pub(crate) struct JvmUniqueCacheRefs {
 }
 
 #[cfg(feature = "jvm")]
-pub struct UniqueCache<T> {
+pub struct UniqueCache<T: CacheContent> {
    jvm: JavaVM,
    jvm_refs: Arc<JvmUniqueCacheRefs>,
    // XXX: この構造体でJVM側のUniqueCacheの強参照を持ち、JVM側のUniqueCacheに
@@ -47,18 +48,18 @@ pub struct UniqueCache<T> {
 }
 
 #[cfg(not(feature = "jvm"))]
-pub struct UniqueCache<T> {
+pub struct UniqueCache<T: CacheContent> {
    value: T
 }
 
 #[cfg(feature = "jvm")]
-impl<T> UniqueCache<T> {
-   pub(crate) fn new_arc(
-      jvm: &JavaVM,
+impl<T: CacheContent> UniqueCache<T> {
+   pub(crate) fn new_arc<'local>(
+      jvm: &'local JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       initial_value: T
    ) -> Arc<RwLock<Self>>
-      where T: CloneIntoJava + CloneIntoJavaHelper
+      where T: CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
    {
       use std::mem::{self, MaybeUninit};
 
@@ -87,21 +88,22 @@ impl<T> UniqueCache<T> {
       &self.value
    }
 
-   pub fn save(&mut self, value: T)
-      where T: CloneIntoJava
+   pub fn save<'local>(&'local mut self, value: T)
+      where T: CloneIntoJvm<'local, T::JvmType<'local>>
    {
       use jni::objects::JValueGen;
       use jni::signature::{Primitive, ReturnType};
+      use crate::jvm_type::JvmType;
 
       let mut env = self.jvm.get_env().unwrap();
-      let java_value = value.clone_into_java(&mut env);
+      let java_value = value.clone_into_jvm(&mut env);
 
       unsafe {
          env.call_method_unchecked(
             &self.jvm_state,
             self.jvm_refs.update_method_id,
             ReturnType::Primitive(Primitive::Void),
-            &[JValueGen::Object(java_value).as_jni()]
+            &[JValueGen::Object(java_value.j_object()).as_jni()]
          ).unwrap();
       }
 
@@ -122,19 +124,20 @@ impl<T> UniqueCache<T> {
       }
    }
 
-   fn create_jvm_state(
-      jvm: &JavaVM,
+   fn create_jvm_state<'local>(
+      jvm: &'local JavaVM,
       jvm_unique_cache_refs: &JvmUniqueCacheRefs,
       initial_value: &T,
       arc: Arc<RwLock<UniqueCache<T>>>
    ) -> GlobalRef
-      where T: CloneIntoJava + CloneIntoJavaHelper
+      where T: CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
    {
       use jni::objects::JValue;
+      use crate::jvm_type::JvmType;
 
       let mut env = jvm.get_env().unwrap();
 
-      let java_initial_value = initial_value.clone_into_java(&mut env);
+      let java_initial_value = initial_value.clone_into_jvm(&mut env);
 
       let (unique_cache_address, unique_cache_vtable_address)
          = T::get_unique_cache_address(arc);
@@ -144,7 +147,7 @@ impl<T> UniqueCache<T> {
                &jvm_unique_cache_refs.class,
                jvm_unique_cache_refs.constructor_id,
                &[
-                  JValue::Object(&java_initial_value).as_jni(),
+                  JValue::Object(java_initial_value.j_object()).as_jni(),
                   JValue::Long(unique_cache_address as jlong).as_jni(),
                   JValue::Long(unique_cache_vtable_address as jlong).as_jni()
                ]
@@ -157,7 +160,7 @@ impl<T> UniqueCache<T> {
 }
 
 #[cfg(not(feature = "jvm"))]
-impl<T> UniqueCache<T> {
+impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new(initial_state: T) -> Self {
       UniqueCache {
          value: initial_state
@@ -173,7 +176,7 @@ impl<T> UniqueCache<T> {
    }
 }
 
-impl<T> Deref for UniqueCache<T> {
+impl<T: CacheContent> Deref for UniqueCache<T> {
    type Target = T;
 
    fn deref(&self) -> &T {
@@ -183,27 +186,27 @@ impl<T> Deref for UniqueCache<T> {
 
 #[cfg(feature = "jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_updateNativeState(
-   mut env: JNIEnv,
-   _obj: JObject,
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_updateNativeState<'local>(
+   mut env: JNIEnv<'local>,
+   _obj: JObject<'local>,
    unique_cache_address: jlong,
    unique_cache_vtable_address: jlong,
-   value: JObject
+   value: JObject<'local>
 ) {
    let dyn_unique_cache = get_dyn_two_way_unique_cache(
       unique_cache_address, unique_cache_vtable_address
    );
 
    unsafe {
-      (&*dyn_unique_cache).update_unique_cache(&mut env, &value);
+      (&*dyn_unique_cache).update_unique_cache(&mut env, value);
    }
 }
 
 #[cfg(feature = "jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNativeReferenceCount(
-   _env: JNIEnv,
-   _obj: JObject,
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNativeReferenceCount<'local>(
+   _env: JNIEnv<'local>,
+   _obj: JObject<'local>,
    unique_cache_address: jlong,
    unique_cache_vtable_address: jlong
 ) {
@@ -218,9 +221,9 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNative
 
 #[cfg(feature="jvm")]
 #[no_mangle]
-extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decrementNativeReferenceCount(
-   _env: JNIEnv,
-   _obj: JObject,
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decrementNativeReferenceCount<'local>(
+   _env: JNIEnv<'local>,
+   _obj: JObject<'local>,
    unique_cache_address: jlong,
    unique_cache_vtable_address: jlong
 ) {
@@ -250,10 +253,10 @@ fn get_dyn_one_way_unique_cache(
 }
 
 #[cfg(feature="jvm")]
-fn get_dyn_two_way_unique_cache(
+fn get_dyn_two_way_unique_cache<'local>(
    address: jlong,
    vtable_address: jlong
-) -> *const dyn DynTwoWayUniqueCache {
+) -> *const dyn DynTwoWayUniqueCache<'local> {
    use std::mem;
    use std::ptr;
 
@@ -273,14 +276,19 @@ pub(crate) trait DynOneWayUniqueCache {
 }
 
 #[cfg(feature = "jvm")]
-pub(crate) trait DynTwoWayUniqueCache {
-   fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject);
+pub(crate) trait DynTwoWayUniqueCache<'local> {
+   fn update_unique_cache(
+      &self,
+      env: &mut JNIEnv<'local>,
+      value: JObject<'local>
+   );
+
    unsafe fn decrement_arc(&self);
 }
 
 #[cfg(feature = "jvm")]
 impl<T> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
-   where T: CloneIntoJava
+   where T: CacheContent
 {
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
@@ -289,11 +297,18 @@ impl<T> DynOneWayUniqueCache for RwLock<UniqueCache<T>>
 }
 
 #[cfg(feature = "jvm")]
-impl<T> DynTwoWayUniqueCache for RwLock<UniqueCache<T>>
-   where T: CloneFromJava
+impl<'local, T> DynTwoWayUniqueCache<'local> for RwLock<UniqueCache<T>>
+   where T: CacheContent + CloneFromJvm<'local, T::JvmType<'local>> + 'local
 {
-   fn update_unique_cache(&self, env: &mut JNIEnv, value: &JObject) {
-      let value = T::clone_from_java(env, value);
+   fn update_unique_cache(
+      &self,
+      env: &mut JNIEnv<'local>,
+      value: JObject<'local>
+   ) {
+      use crate::jvm_type::JvmType;
+
+      let value = unsafe { T::JvmType::from_j_object(value) };
+      let value = T::clone_from_jvm(env, &value);
       self.write().unwrap().value = value;
    }
 

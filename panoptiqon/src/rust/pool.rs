@@ -13,46 +13,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::hash::Hash;
 use std::sync::{Arc, RwLock};
 use fnv::FnvHashMap;
+use crate::cache::CacheContent;
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 use {
    jni::JavaVM,
    jni::JNIEnv,
-   crate::convert_java::{CloneIntoJava, CloneIntoJavaHelper},
+   crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
    crate::unique_cache::JvmUniqueCacheRefs,
 };
 
 #[cfg(feature="jvm")]
-pub(crate) struct UniqueCachePool<K, T> {
+pub(crate) struct UniqueCachePool<T: CacheContent> {
    jvm: JavaVM,
    jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
-   map: FnvHashMap<K, Arc<RwLock<UniqueCache<T>>>>
+   map: FnvHashMap<T::Key, Arc<RwLock<UniqueCache<T>>>>
 }
 
 #[cfg(not(feature="jvm"))]
-pub(crate) struct UniqueCachePool<K, T> {
-   map: FnvHashMap<K, Arc<RwLock<UniqueCache<T>>>>
+pub(crate) struct UniqueCachePool<T: CacheContent> {
+   map: FnvHashMap<T::Key, Arc<RwLock<UniqueCache<T>>>>
 }
 
-impl<K, T> UniqueCachePool<K, T>
-   where K: Hash + Eq
-{
-   pub fn get(&self, key: K) -> Option<Arc<RwLock<UniqueCache<T>>>> {
+impl<T: CacheContent> UniqueCachePool<T> {
+   pub fn get(&self, key: T::Key) -> Option<Arc<RwLock<UniqueCache<T>>>> {
       self.map.get(&key).map(|arc| arc.clone())
    }
 }
 
 #[cfg(feature="jvm")]
-impl<K, T> UniqueCachePool<K, T>
-   where K: Hash + Eq,
-         T: CloneIntoJava
-{
+impl<T: CacheContent> UniqueCachePool<T> {
    pub fn new(env: &mut JNIEnv) -> Self
-      where T: CloneIntoJavaHelper
+      where T: CloneIntoJvmHelper
    {
       let jvm = env.get_java_vm().unwrap();
 
@@ -63,8 +58,8 @@ impl<K, T> UniqueCachePool<K, T>
       }
    }
 
-   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>>
-      where T: CloneIntoJavaHelper
+   pub fn update(&mut self, key: T::Key, value: T) -> Arc<RwLock<UniqueCache<T>>>
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
    {
       use std::collections::hash_map::Entry;
 
@@ -89,16 +84,14 @@ impl<K, T> UniqueCachePool<K, T>
 }
 
 #[cfg(not(feature="jvm"))]
-impl<K, T> UniqueCachePool<K, T>
-   where K: Hash + Eq
-{
+impl<T: CacheContent> UniqueCachePool<T> {
    pub fn new() -> Self {
       UniqueCachePool {
          map: FnvHashMap::default()
       }
    }
 
-   pub fn update(&mut self, key: K, value: T) -> Arc<RwLock<UniqueCache<T>>> {
+   pub fn update(&mut self, key: T::Key, value: T) -> Arc<RwLock<UniqueCache<T>>> {
       use std::collections::hash_map::Entry;
 
       let entry = self.map.entry(key);
@@ -124,7 +117,35 @@ impl<K, T> UniqueCachePool<K, T>
 mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::JObject;
+   use crate::cache::CacheContent;
+   use crate::convert_jvm::CloneIntoJvm;
+   use crate::jvm_type;
    use super::UniqueCachePool;
+
+   jvm_type! {
+      JvmContent,
+   }
+
+   #[derive(Debug, PartialEq, Eq)]
+   struct Content(String, i32);
+
+   impl CacheContent for Content {
+      type Key = String;
+      type JvmType<'local> = JvmContent<'local>;
+
+      fn key(&self) -> String {
+         self.0.clone()
+      }
+   }
+
+   impl<'local> CloneIntoJvm<'local, JvmContent<'local>> for Content {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmContent<'local> {
+         use crate::jvm_type::JvmType;
+
+         let j_object = self.0.clone_into_jvm(env);
+         JvmContent(j_object.into_j_object())
+      }
+   }
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_createCache(
@@ -133,13 +154,13 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
 
-      let cache = pool.update("A".to_string(), 42);
+      let cache = pool.update("A".to_string(), Content("A".to_string(), 42));
       let unique_cache = cache.read().unwrap();
-      assert_eq!(42, **unique_cache);
+      assert_eq!(Content("A".to_string(), 42), **unique_cache);
 
-      let cache = pool.update("B".to_string(), 43);
+      let cache = pool.update("B".to_string(), Content("B".to_string(), 43));
       let unique_cache = cache.read().unwrap();
-      assert_eq!(43, **unique_cache);
+      assert_eq!(Content("B".to_string(), 43), **unique_cache);
    }
 
    #[no_mangle]
@@ -149,13 +170,13 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
 
-      let _ = pool.update("A".to_string(), 42);
+      let _ = pool.update("A".to_string(), Content("A".to_string(), 42));
 
       let cache = pool.get("A".to_string());
       assert!(cache.is_some());
       let unique_cache = cache.unwrap();
       let cache_lock = unique_cache.read().unwrap();
-      assert_eq!(42, **cache_lock);
+      assert_eq!(Content("A".to_string(), 42), **cache_lock);
 
       let cache = pool.get("B".to_string());
       assert!(cache.is_none());
@@ -169,9 +190,9 @@ mod jni_tests {
       use std::sync::Arc;
 
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), 42)) as *const _;
-      let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), 42)) as *const _;
-      let cache3_ptr = Arc::as_ptr(&pool.update("B".to_string(), 42)) as *const _;
+      let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
+      let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
+      let cache3_ptr = Arc::as_ptr(&pool.update("B".to_string(), Content("B".to_string(), 42))) as *const _;
 
       assert_eq!(cache1_ptr, cache2_ptr);
       assert_ne!(cache1_ptr, cache3_ptr);
@@ -183,18 +204,18 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut pool = UniqueCachePool::new(&mut env);
-      let cache = pool.update("A".to_string(), 42);
+      let cache = pool.update("A".to_string(), Content("A".to_string(), 42));
 
       {
          let mut lock = cache.write().unwrap();
-         assert_eq!(42, **lock);
-         lock.save(43);
-         assert_eq!(43, **lock);
+         assert_eq!(Content("A".to_string(), 42), **lock);
+         lock.save(Content("A".to_string(), 43));
+         assert_eq!(Content("A".to_string(), 43), **lock);
       }
 
       {
          let lock = cache.read().unwrap();
-         assert_eq!(43, **lock);
+         assert_eq!(Content("A".to_string(), 43), **lock);
       }
    }
 }

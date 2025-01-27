@@ -22,4 +22,8 @@ mod unique_cache;
 mod pool;
 
 #[cfg(feature = "jvm")]
-pub mod convert_java;
+pub mod convert_jvm;
+#[cfg(feature = "jvm")]
+pub mod jvm_type;
+#[cfg(feature = "jvm")]
+pub mod jvm_types;

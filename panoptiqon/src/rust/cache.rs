@@ -14,21 +14,22 @@
  * limitations under the License.
  */
 use std::fmt::{Debug, Formatter};
+use std::hash::Hash;
 use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use serde::{Deserialize, Deserializer};
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
 use {
-   crate::convert_java::CloneIntoJava,
    jni::JNIEnv,
    jni::objects::JObject,
+   crate::jvm_type::JvmType,
 };
 
 #[derive(Clone)]
-pub struct Cache<T>(Arc<RwLock<UniqueCache<T>>>);
+pub struct Cache<T: CacheContent>(Arc<RwLock<UniqueCache<T>>>);
 
-impl<T> Cache<T> {
+impl<T: CacheContent> Cache<T> {
    pub(crate) fn new(arc: Arc<RwLock<UniqueCache<T>>>) -> Self {
       Cache(arc)
    }
@@ -42,9 +43,7 @@ impl<T> Cache<T> {
    }
 
    #[cfg(feature="jvm")]
-   pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local>
-      where T: CloneIntoJava
-   {
+   pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       let unique_cache_lock = self.0.read().unwrap();
       unique_cache_lock.create_jvm_cache(env)
    }
@@ -74,7 +73,7 @@ impl<T> Cache<T> {
    }
 }
 
-impl<T> Debug for Cache<T> where T: Debug {
+impl<T: CacheContent> Debug for Cache<T> where T: Debug {
    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
       let cache_lock = self.read().unwrap();
       let value = cache_lock.get();
@@ -82,18 +81,27 @@ impl<T> Debug for Cache<T> where T: Debug {
    }
 }
 
-impl<T> PartialEq for Cache<T> where T: PartialEq {
+impl<T: CacheContent> PartialEq for Cache<T> where T: PartialEq {
    fn eq(&self, other: &Self) -> bool {
       Arc::ptr_eq(&self.0, &other.0)
    }
 }
 
-impl<T> Eq for Cache<T> where T: Eq {}
+impl<T: CacheContent> Eq for Cache<T> where T: Eq {}
 
-impl<'de, T> Deserialize<'de> for Cache<T> {
+impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
       where D: Deserializer<'de>
    {
       Err(serde::de::Error::custom("not implemented"))
    }
+}
+
+pub trait CacheContent {
+   type Key: Hash + Eq;
+
+   #[cfg(feature = "jvm")]
+   type JvmType<'local>: JvmType<'local>;
+
+   fn key(&self) -> Self::Key;
 }
