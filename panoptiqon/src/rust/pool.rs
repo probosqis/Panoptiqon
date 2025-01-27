@@ -45,9 +45,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
 }
 
 #[cfg(feature="jvm")]
-impl<T> UniqueCachePool<T>
-   where T: CacheContent + CloneIntoJvm
-{
+impl<T: CacheContent> UniqueCachePool<T> {
    pub fn new(env: &mut JNIEnv) -> Self
       where T: CloneIntoJvmHelper
    {
@@ -61,7 +59,7 @@ impl<T> UniqueCachePool<T>
    }
 
    pub fn update(&mut self, key: T::Key, value: T) -> Arc<RwLock<UniqueCache<T>>>
-      where T: CloneIntoJvmHelper
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
    {
       use std::collections::hash_map::Entry;
 
@@ -140,9 +138,12 @@ mod jni_tests {
       }
    }
 
-   impl CloneIntoJvm for Content {
-      fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-         self.0.clone_into_jvm(env)
+   impl<'local> CloneIntoJvm<'local, JvmContent<'local>> for Content {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmContent<'local> {
+         use crate::jvm_type::JvmType;
+
+         let j_object = self.0.clone_into_jvm(env);
+         JvmContent(j_object.into_j_object())
       }
    }
 

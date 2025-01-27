@@ -37,9 +37,7 @@ impl<T: CacheContent> Repository<T> {
 }
 
 #[cfg(feature = "jvm")]
-impl<T> Repository<T>
-   where T: CacheContent + CloneIntoJvm
-{
+impl<T: CacheContent> Repository<T> {
    pub fn new(env: &mut JNIEnv) -> Repository<T>
       where T: CloneIntoJvmHelper
    {
@@ -49,7 +47,7 @@ impl<T> Repository<T>
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
-      where T: CloneIntoJvmHelper
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
    {
       let key = value.key();
       let arc = self.pool.update(key, value);
@@ -99,16 +97,20 @@ mod jni_tests {
       }
    }
 
-   impl CloneIntoJvm for OneWayConversionData {
-      fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+   impl<'local> CloneIntoJvm<'local, JvmOneWayConversionData<'local>> for OneWayConversionData {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmOneWayConversionData<'local> {
+         use crate::jvm_type::JvmType;
+
          let first  = self.0.clone_into_jvm(env);
          let second = self.1;
 
-         env.new_object(
+         let j_object = env.new_object(
             "Lcom/wcaokaze/probosqis/panoptiqon/RepositoryTest$OneWayConversionData;",
             "(Ljava/lang/String;I)V",
-            &[(&first).into(), second.into()]
-         ).unwrap()
+            &[first.j_string().into(), second.into()]
+         ).unwrap();
+
+         unsafe { JvmOneWayConversionData::from_j_object(j_object) }
       }
    }
 
@@ -124,30 +126,40 @@ mod jni_tests {
       }
    }
 
-   impl CloneIntoJvm for TwoWayConversionData {
-      fn clone_into_jvm<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
+   impl<'local> CloneIntoJvm<'local, JvmTwoWayConversionData<'local>> for TwoWayConversionData {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmTwoWayConversionData<'local> {
+         use crate::jvm_type::JvmType;
+
          let first  = self.0.clone_into_jvm(env);
          let second = self.1;
 
-         env.new_object(
+         let j_object = env.new_object(
             "Lcom/wcaokaze/probosqis/panoptiqon/RepositoryTest$TwoWayConversionData;",
             "(Ljava/lang/String;I)V",
-            &[(&first).into(), second.into()]
-         ).unwrap()
+            &[first.j_string().into(), second.into()]
+         ).unwrap();
+
+         unsafe { JvmTwoWayConversionData::from_j_object(j_object) }
       }
    }
 
-   impl CloneFromJvm for TwoWayConversionData {
-      fn clone_from_jvm(env: &mut JNIEnv, java_object: &JObject) -> Self {
+   impl<'local> CloneFromJvm<'local, JvmTwoWayConversionData<'local>> for TwoWayConversionData {
+      fn clone_from_jvm(
+         env: &mut JNIEnv,
+         java_instance: &JvmTwoWayConversionData<'local>
+      ) -> TwoWayConversionData {
+         use crate::jvm_type::JvmType;
+         use crate::jvm_types::JvmString;
+
          let first = env
-            .call_method(java_object, "getFirst", "()Ljava/lang/String;", &[])
+            .call_method(java_instance.j_object(), "getFirst", "()Ljava/lang/String;", &[])
             .unwrap().l().unwrap();
          let second = env
-            .call_method(java_object, "getSecond", "()I", &[])
+            .call_method(java_instance.j_object(), "getSecond", "()I", &[])
             .unwrap().i().unwrap();
 
          TwoWayConversionData(
-            String::clone_from_jvm(env, &first),
+            String::clone_from_jvm(env, unsafe { &JvmString::from_j_object(first) }),
             second
          )
       }
