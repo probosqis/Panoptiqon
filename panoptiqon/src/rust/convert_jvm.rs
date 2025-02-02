@@ -175,6 +175,16 @@ impl<'local, T, J> CloneFromJvm<'local, JvmCache<'local, J>> for Cache<T>
 }
 
 /// T
+impl<'local, T, J> CloneIntoJvm<'local, J> for &T
+   where T: CloneIntoJvm<'local, J> + ?Sized,
+         J: JvmType<'local>
+{
+   fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> J {
+      (*self).clone_into_jvm(env)
+   }
+}
+
+/// T
 impl<'local, T, J> CloneIntoJvm<'local, J> for Box<T>
    where T: CloneIntoJvm<'local, J>,
          J: JvmType<'local>
