@@ -211,10 +211,10 @@ impl<'local, T, J> CloneIntoJvm<'local, JvmList<'local, J>> for Vec<T>
    fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmList<'local, J> {
       use jni::signature::{Primitive, ReturnType};
 
-      let list = env.new_object("Ljava/util/ArrayList;", "()V", &[]).unwrap();
+      let list = env.new_object("java/util/ArrayList", "()V", &[]).unwrap();
 
       let add_method_id = env
-         .get_method_id("Ljava/util/ArrayList;", "add", "(Ljava/lang/Object;)Z")
+         .get_method_id("java/util/ArrayList", "add", "(Ljava/lang/Object;)Z")
          .unwrap();
 
       for element in self {
@@ -249,7 +249,7 @@ impl<'local, T, J> CloneFromJvm<'local, JvmList<'local, J>> for Vec<T>
          .i().unwrap();
 
       let get_method_id = env
-         .get_method_id("Ljava/util/ArrayList;", "get", "(I)Ljava/lang/Object;")
+         .get_method_id("java/util/ArrayList", "get", "(I)Ljava/lang/Object;")
          .unwrap();
 
       for index in 0..len {
