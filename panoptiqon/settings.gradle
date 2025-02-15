@@ -1,5 +1,5 @@
 /*
- * Copyright 2023-2024 wcaokaze
+ * Copyright 2023-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,13 +28,13 @@ dependencyResolutionManagement {
 
    versionCatalogs {
       libs {
-         version('kotlin', '2.0.20')
-         version('compose-jb', '1.6.11')
+         version('kotlin', '2.1.10')
+         version('compose-jb', '1.7.3')
 
          plugin('kotlin-multiplatform', 'org.jetbrains.kotlin.multiplatform').versionRef('kotlin')
          plugin('kotlinx-serialization', 'org.jetbrains.kotlin.plugin.serialization').versionRef('kotlin')
 
-         library('kotlinx-serialization', 'org.jetbrains.kotlinx', 'kotlinx-serialization-json').version('1.6.2')
+         library('kotlinx-serialization', 'org.jetbrains.kotlinx', 'kotlinx-serialization-json').version('1.8.0')
 
          library('kotlin-test-junit', 'org.jetbrains.kotlin', 'kotlin-test-junit').versionRef('kotlin')
       }
