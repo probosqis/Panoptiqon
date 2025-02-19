@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#![allow(incomplete_features)]
 #![feature(mapped_lock_guards, ptr_metadata, specialization)]
 
 pub mod cache;
