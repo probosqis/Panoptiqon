@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-use std::ops::Deref;
+
 use crate::cache::CacheContent;
 
 #[cfg(feature = "jvm")]
@@ -173,14 +173,6 @@ impl<T: CacheContent> UniqueCache<T> {
 
    pub fn save(&mut self, value: T) {
       self.value = value;
-   }
-}
-
-impl<T: CacheContent> Deref for UniqueCache<T> {
-   type Target = T;
-
-   fn deref(&self) -> &T {
-      &self.value
    }
 }
 

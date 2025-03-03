@@ -156,11 +156,11 @@ mod jni_tests {
 
       let cache = pool.update("A".to_string(), Content("A".to_string(), 42));
       let unique_cache = cache.read().unwrap();
-      assert_eq!(Content("A".to_string(), 42), **unique_cache);
+      assert_eq!(Content("A".to_string(), 42), *unique_cache.get());
 
       let cache = pool.update("B".to_string(), Content("B".to_string(), 43));
       let unique_cache = cache.read().unwrap();
-      assert_eq!(Content("B".to_string(), 43), **unique_cache);
+      assert_eq!(Content("B".to_string(), 43), *unique_cache.get());
    }
 
    #[no_mangle]
@@ -176,7 +176,7 @@ mod jni_tests {
       assert!(cache.is_some());
       let unique_cache = cache.unwrap();
       let cache_lock = unique_cache.read().unwrap();
-      assert_eq!(Content("A".to_string(), 42), **cache_lock);
+      assert_eq!(Content("A".to_string(), 42), *cache_lock.get());
 
       let cache = pool.get("B".to_string());
       assert!(cache.is_none());
@@ -208,14 +208,14 @@ mod jni_tests {
 
       {
          let mut lock = cache.write().unwrap();
-         assert_eq!(Content("A".to_string(), 42), **lock);
+         assert_eq!(Content("A".to_string(), 42), *lock.get());
          lock.save(Content("A".to_string(), 43));
-         assert_eq!(Content("A".to_string(), 43), **lock);
+         assert_eq!(Content("A".to_string(), 43), *lock.get());
       }
 
       {
          let lock = cache.read().unwrap();
-         assert_eq!(Content("A".to_string(), 43), **lock);
+         assert_eq!(Content("A".to_string(), 43), *lock.get());
       }
    }
 }
