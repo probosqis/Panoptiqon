@@ -84,7 +84,7 @@ impl<T: CacheContent> UniqueCache<T> {
       unsafe { mem::transmute(arc) }
    }
 
-   pub fn get(&self) -> Arc<T> {
+   pub(crate) fn get(&self) -> Arc<T> {
       let read_lock = self.value.read().unwrap();
       Arc::clone(&*read_lock)
    }
@@ -170,7 +170,7 @@ impl<T: CacheContent> UniqueCache<T> {
       }
    }
 
-   pub fn get(&self) -> Arc<T> {
+   pub(crate) fn get(&self) -> Arc<T> {
       let read_lock = self.value.read().unwrap();
       Arc::clone(&*read_lock)
    }

@@ -15,14 +15,15 @@
  */
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::{Arc, RwLock};
 use serde::{Deserialize, Deserializer};
 use crate::unique_cache::UniqueCache;
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
    jni::objects::JObject,
+   crate::convert_jvm::CloneIntoJvm,
    crate::jvm_type::JvmType,
 };
 
@@ -34,15 +35,25 @@ impl<T: CacheContent> Cache<T> {
       Cache(arc)
    }
 
-   pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, UniqueCache<T>>> {
-      self.0.write()
+   pub fn get(&self) -> Arc<T> {
+      self.0.read().unwrap().get()
    }
 
-   pub fn read(&self) -> LockResult<RwLockReadGuard<'_, UniqueCache<T>>> {
-      self.0.read()
+   #[cfg(feature = "jvm")]
+   pub fn save(&mut self, value: T)
+      where for<'local> T: CloneIntoJvm<'local, T::JvmType<'local>>
+   {
+      let mut unique_cache = self.0.write().unwrap();
+      unique_cache.save(value);
    }
 
-   #[cfg(feature="jvm")]
+   #[cfg(not(feature = "jvm"))]
+   pub fn save(&mut self, value: T) {
+      let mut unique_cache = self.0.write().unwrap();
+      unique_cache.save(value);
+   }
+
+   #[cfg(feature = "jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       let unique_cache_lock = self.0.read().unwrap();
       unique_cache_lock.create_jvm_cache(env)
@@ -54,7 +65,7 @@ impl<T: CacheContent> Cache<T> {
    /// 指定したJVMインスタンスに対応するネイティブ側の[UniqueCache]のメモリ領域が
    /// Tと違う型を格納している場合、この関数の返り値のCacheに対するすべての動作は
    /// 未定義となる。
-   #[cfg(feature="jvm")]
+   #[cfg(feature = "jvm")]
    pub unsafe fn from_jvm_instance<'local>(
       env: &mut JNIEnv<'local>,
       java_instance: &JObject
@@ -67,7 +78,7 @@ impl<T: CacheContent> Cache<T> {
       Cache::new(unique_cache.clone())
    }
 
-   #[cfg(any(test, feature="jni-test"))]
+   #[cfg(any(test, feature = "jni-test"))]
    pub fn unique_cache_ptr(&self) -> *const RwLock<UniqueCache<T>> {
       Arc::as_ptr(&self.0)
    }
@@ -75,8 +86,7 @@ impl<T: CacheContent> Cache<T> {
 
 impl<T: CacheContent> Debug for Cache<T> where T: Debug {
    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-      let cache_lock = self.read().unwrap();
-      let value = cache_lock.get();
+      let value = self.get();
       write!(f, "Cache({:?})", *value)
    }
 }

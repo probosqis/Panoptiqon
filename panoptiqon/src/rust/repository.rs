@@ -197,8 +197,7 @@ mod jni_tests {
          let result = repository.load("A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
-         let cache_lock = cache.read().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache_lock.get());
+         assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache.get());
       }
 
       repository.save(TwoWayConversionData("A".to_string(), 13));
@@ -207,8 +206,7 @@ mod jni_tests {
          let result = repository.load("A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
-         let cache_lock = cache.read().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache_lock.get());
+         assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache.get());
       }
    }
 
@@ -232,16 +230,14 @@ mod jni_tests {
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
-         let cache = repository.load("A".to_string()).unwrap();
-         let mut cache_lock = cache.write().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache_lock.get());
-         cache_lock.save(TwoWayConversionData("A".to_string(), 13));
+         let mut cache = repository.load("A".to_string()).unwrap();
+         assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache.get());
+         cache.save(TwoWayConversionData("A".to_string(), 13));
       }
 
       {
          let cache = repository.load("A".to_string()).unwrap();
-         let cache_lock = cache.read().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache_lock.get());
+         assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache.get());
       }
    }
 
@@ -254,32 +250,17 @@ mod jni_tests {
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       let cache1 = repository.load("A".to_string()).unwrap();
-      {
-         let cache1_lock = cache1.read().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache1_lock.get());
-      }
+      assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache1.get());
 
       repository.save(TwoWayConversionData("A".to_string(), 13));
 
-      let cache2 = repository.load("A".to_string()).unwrap();
-      {
-         let cache1_lock = cache1.read().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache1_lock.get());
-      }
-      {
-         let mut cache2_lock = cache2.write().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache2_lock.get());
-         cache2_lock.save(TwoWayConversionData("A".to_string(), 0));
-      }
+      let mut cache2 = repository.load("A".to_string()).unwrap();
+      assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache1.get());
+      assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache2.get());
 
-      {
-         let cache1_lock = cache1.read().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 0), *cache1_lock.get());
-      }
-      {
-         let cache2_lock = cache2.read().unwrap();
-         assert_eq!(TwoWayConversionData("A".to_string(), 0), *cache2_lock.get());
-      }
+      cache2.save(TwoWayConversionData("A".to_string(), 0));
+      assert_eq!(TwoWayConversionData("A".to_string(), 0), *cache1.get());
+      assert_eq!(TwoWayConversionData("A".to_string(), 0), *cache2.get());
    }
 
    #[no_mangle]
@@ -371,8 +352,7 @@ mod jni_tests {
       let cache = repo_lock.as_mut().unwrap().load("A".to_string());
       assert!(cache.is_ok());
       let cache = cache.unwrap();
-      let cache_lock = cache.read().unwrap();
-      assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache_lock.get());
+      assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache.get());
    }
 
    #[allow(non_upper_case_globals)]
@@ -486,7 +466,6 @@ mod jni_tests {
       let cache = repo_lock.as_mut().unwrap().load("B".to_string());
       assert!(cache.is_ok());
       let cache = cache.unwrap();
-      let cache_lock = cache.read().unwrap();
-      assert_eq!(TwoWayConversionData("B".to_string(), 4), *cache_lock.get());
+      assert_eq!(TwoWayConversionData("B".to_string(), 4), *cache.get());
    }
 }
