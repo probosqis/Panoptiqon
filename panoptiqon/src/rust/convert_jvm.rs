@@ -15,7 +15,7 @@
  */
 #![cfg(feature = "jvm")]
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use jni::JNIEnv;
 use jni::objects::JObject;
 use jni::sys::jvalue;
@@ -40,8 +40,8 @@ pub trait CloneIntoJvmHelper
    fn get_jvm_refs(env: &mut JNIEnv) -> JvmUniqueCacheRefs;
 
    fn get_unique_cache_address(
-      unique_cache: Arc<RwLock<UniqueCache<Self>>>
-   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable);
+      unique_cache: Arc<UniqueCache<Self>>
+   ) -> (*const UniqueCache<Self>, *const VTable);
 }
 
 impl<T> CloneIntoJvmHelper for T
@@ -69,13 +69,13 @@ impl<T> CloneIntoJvmHelper for T
    }
 
    default fn get_unique_cache_address(
-      unique_cache: Arc<RwLock<UniqueCache<Self>>>
-   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable) {
+      unique_cache: Arc<UniqueCache<Self>>
+   ) -> (*const UniqueCache<Self>, *const VTable) {
       use std::mem;
       use std::ptr;
 
       let trait_obj: *const dyn DynOneWayUniqueCache = Arc::into_raw(unique_cache);
-      let unique_cache_address = trait_obj as *const RwLock<UniqueCache<Self>>;
+      let unique_cache_address = trait_obj as *const UniqueCache<Self>;
 
       let trait_object_metadata = ptr::metadata(trait_obj);
       let vtable_address = unsafe {
@@ -114,13 +114,13 @@ where for<'local>
    }
 
    fn get_unique_cache_address(
-      unique_cache: Arc<RwLock<UniqueCache<Self>>>
-   ) -> (*const RwLock<UniqueCache<Self>>, *const VTable) {
+      unique_cache: Arc<UniqueCache<Self>>
+   ) -> (*const UniqueCache<Self>, *const VTable) {
       use std::mem;
       use std::ptr;
 
       let trait_obj: *const dyn DynTwoWayUniqueCache = Arc::into_raw(unique_cache);
-      let unique_cache_address = trait_obj as *const RwLock<UniqueCache<Self>>;
+      let unique_cache_address = trait_obj as *const UniqueCache<Self>;
 
       let trait_object_metadata = ptr::metadata(trait_obj);
       let vtable_address = unsafe {

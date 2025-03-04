@@ -13,9 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use serde::{Deserialize, Deserializer};
 use crate::unique_cache::UniqueCache;
 
@@ -28,35 +29,32 @@ use {
 };
 
 #[derive(Clone)]
-pub struct Cache<T: CacheContent>(Arc<RwLock<UniqueCache<T>>>);
+pub struct Cache<T: CacheContent>(Arc<UniqueCache<T>>);
 
 impl<T: CacheContent> Cache<T> {
-   pub(crate) fn new(arc: Arc<RwLock<UniqueCache<T>>>) -> Self {
+   pub(crate) fn new(arc: Arc<UniqueCache<T>>) -> Self {
       Cache(arc)
    }
 
    pub fn get(&self) -> Arc<T> {
-      self.0.read().unwrap().get()
+      self.0.get()
    }
 
    #[cfg(feature = "jvm")]
-   pub fn save(&mut self, value: T)
+   pub fn save(&self, value: T)
       where for<'local> T: CloneIntoJvm<'local, T::JvmType<'local>>
    {
-      let mut unique_cache = self.0.write().unwrap();
-      unique_cache.save(value);
+      self.0.save(value);
    }
 
    #[cfg(not(feature = "jvm"))]
-   pub fn save(&mut self, value: T) {
-      let mut unique_cache = self.0.write().unwrap();
-      unique_cache.save(value);
+   pub fn save(&self, value: T) {
+      self.0.save(value);
    }
 
    #[cfg(feature = "jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-      let unique_cache_lock = self.0.read().unwrap();
-      unique_cache_lock.create_jvm_cache(env)
+      self.0.create_jvm_cache(env)
    }
 
    /// RepositoryCacheのインスタンスからCacheを生成する。
@@ -72,14 +70,14 @@ impl<T: CacheContent> Cache<T> {
    ) -> Self {
       let address = env.call_method(
          &java_instance, "getUniqueCacheRustStateAddress", "()J", &[]
-      ).unwrap().j().unwrap() as *const _;
+      ).unwrap().j().unwrap() as *const UniqueCache<T>;
 
-      let unique_cache = unsafe { Arc::<RwLock<_>>::from_raw(address) };
+      let unique_cache = unsafe { Arc::<_>::from_raw(address) };
       Cache::new(unique_cache.clone())
    }
 
    #[cfg(any(test, feature = "jni-test"))]
-   pub fn unique_cache_ptr(&self) -> *const RwLock<UniqueCache<T>> {
+   pub fn unique_cache_ptr(&self) -> *const UniqueCache<T> {
       Arc::as_ptr(&self.0)
    }
 }

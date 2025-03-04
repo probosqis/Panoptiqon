@@ -230,7 +230,7 @@ mod jni_tests {
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
-         let mut cache = repository.load("A".to_string()).unwrap();
+         let cache = repository.load("A".to_string()).unwrap();
          assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache.get());
          cache.save(TwoWayConversionData("A".to_string(), 13));
       }
@@ -254,7 +254,7 @@ mod jni_tests {
 
       repository.save(TwoWayConversionData("A".to_string(), 13));
 
-      let mut cache2 = repository.load("A".to_string()).unwrap();
+      let cache2 = repository.load("A".to_string()).unwrap();
       assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache1.get());
       assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache2.get());
 
