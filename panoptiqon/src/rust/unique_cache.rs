@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use std::sync::{Arc, RwLock};
 use crate::cache::CacheContent;
 
 #[cfg(feature = "jvm")]
@@ -21,7 +22,6 @@ use {
    jni::{JavaVM, JNIEnv},
    jni::objects::{GlobalRef, JMethodID, JObject},
    jni::sys::jlong,
-   std::sync::{Arc, RwLock},
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
 };
 
@@ -44,12 +44,12 @@ pub struct UniqueCache<T: CacheContent> {
    // jvm_stateと同一インスタンスを指す弱参照も別途持っておき、Arcの強参照が
    // 1(JVMからのものだけ)になったとき強参照のjvm_stateは解放するなどの対応が必要か
    jvm_state: GlobalRef,
-   value: T
+   value: RwLock<Arc<T>>
 }
 
 #[cfg(not(feature = "jvm"))]
 pub struct UniqueCache<T: CacheContent> {
-   value: T
+   value: RwLock<Arc<T>>
 }
 
 #[cfg(feature = "jvm")]
@@ -76,7 +76,7 @@ impl<T: CacheContent> UniqueCache<T> {
          jvm,
          jvm_refs,
          jvm_state,
-         value: initial_value
+         value: RwLock::new(Arc::new(initial_value))
       };
 
       arc.write().unwrap().write(unique_cache);
@@ -84,8 +84,9 @@ impl<T: CacheContent> UniqueCache<T> {
       unsafe { mem::transmute(arc) }
    }
 
-   pub fn get(&self) -> &T {
-      &self.value
+   pub fn get(&self) -> Arc<T> {
+      let read_lock = self.value.read().unwrap();
+      Arc::clone(&*read_lock)
    }
 
    pub fn save<'local>(&'local mut self, value: T)
@@ -94,6 +95,8 @@ impl<T: CacheContent> UniqueCache<T> {
       use jni::objects::JValueGen;
       use jni::signature::{Primitive, ReturnType};
       use crate::jvm_type::JvmType;
+
+      let mut write_lock = self.value.write().unwrap();
 
       let mut env = self.jvm.get_env().unwrap();
       let java_value = value.clone_into_jvm(&mut env);
@@ -107,7 +110,7 @@ impl<T: CacheContent> UniqueCache<T> {
          ).unwrap();
       }
 
-      self.value = value;
+      *write_lock = Arc::new(value);
    }
 
    pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
@@ -163,16 +166,18 @@ impl<T: CacheContent> UniqueCache<T> {
 impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new(initial_state: T) -> Self {
       UniqueCache {
-         value: initial_state
+         value: RwLock::new(Arc::new(initial_state))
       }
    }
 
-   pub fn get(&self) -> &T {
-      &self.value
+   pub fn get(&self) -> Arc<T> {
+      let read_lock = self.value.read().unwrap();
+      Arc::clone(&*read_lock)
    }
 
    pub fn save(&mut self, value: T) {
-      self.value = value;
+      let mut write_lock = self.value.write().unwrap();
+      *write_lock = Arc::new(value);
    }
 }
 
@@ -301,7 +306,10 @@ impl<'local, T> DynTwoWayUniqueCache<'local> for RwLock<UniqueCache<T>>
 
       let value = unsafe { T::JvmType::from_j_object(value) };
       let value = T::clone_from_jvm(env, &value);
-      self.write().unwrap().value = value;
+
+      let cache_lock = self.write().unwrap();
+      let mut cache_content_lock = cache_lock.value.write().unwrap();
+      *cache_content_lock = Arc::new(value);
    }
 
    unsafe fn decrement_arc(&self) {

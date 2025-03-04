@@ -77,7 +77,7 @@ impl<T: CacheContent> Debug for Cache<T> where T: Debug {
    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
       let cache_lock = self.read().unwrap();
       let value = cache_lock.get();
-      write!(f, "Cache({:?})", value)
+      write!(f, "Cache({:?})", *value)
    }
 }
 
