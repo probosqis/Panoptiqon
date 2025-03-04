@@ -13,39 +13,48 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
-use std::sync::{Arc, LockResult, RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::sync::Arc;
 use serde::{Deserialize, Deserializer};
 use crate::unique_cache::UniqueCache;
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
    jni::objects::JObject,
+   crate::convert_jvm::CloneIntoJvm,
    crate::jvm_type::JvmType,
 };
 
 #[derive(Clone)]
-pub struct Cache<T: CacheContent>(Arc<RwLock<UniqueCache<T>>>);
+pub struct Cache<T: CacheContent>(Arc<UniqueCache<T>>);
 
 impl<T: CacheContent> Cache<T> {
-   pub(crate) fn new(arc: Arc<RwLock<UniqueCache<T>>>) -> Self {
+   pub(crate) fn new(arc: Arc<UniqueCache<T>>) -> Self {
       Cache(arc)
    }
 
-   pub fn write(&self) -> LockResult<RwLockWriteGuard<'_, UniqueCache<T>>> {
-      self.0.write()
+   pub fn get(&self) -> Arc<T> {
+      self.0.get()
    }
 
-   pub fn read(&self) -> LockResult<RwLockReadGuard<'_, UniqueCache<T>>> {
-      self.0.read()
+   #[cfg(feature = "jvm")]
+   pub fn save(&self, value: T)
+      where for<'local> T: CloneIntoJvm<'local, T::JvmType<'local>>
+   {
+      self.0.save(value);
    }
 
-   #[cfg(feature="jvm")]
+   #[cfg(not(feature = "jvm"))]
+   pub fn save(&self, value: T) {
+      self.0.save(value);
+   }
+
+   #[cfg(feature = "jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
-      let unique_cache_lock = self.0.read().unwrap();
-      unique_cache_lock.create_jvm_cache(env)
+      self.0.create_jvm_cache(env)
    }
 
    /// RepositoryCacheのインスタンスからCacheを生成する。
@@ -54,30 +63,29 @@ impl<T: CacheContent> Cache<T> {
    /// 指定したJVMインスタンスに対応するネイティブ側の[UniqueCache]のメモリ領域が
    /// Tと違う型を格納している場合、この関数の返り値のCacheに対するすべての動作は
    /// 未定義となる。
-   #[cfg(feature="jvm")]
+   #[cfg(feature = "jvm")]
    pub unsafe fn from_jvm_instance<'local>(
       env: &mut JNIEnv<'local>,
       java_instance: &JObject
    ) -> Self {
       let address = env.call_method(
          &java_instance, "getUniqueCacheRustStateAddress", "()J", &[]
-      ).unwrap().j().unwrap() as *const _;
+      ).unwrap().j().unwrap() as *const UniqueCache<T>;
 
-      let unique_cache = unsafe { Arc::<RwLock<_>>::from_raw(address) };
+      let unique_cache = unsafe { Arc::<_>::from_raw(address) };
       Cache::new(unique_cache.clone())
    }
 
-   #[cfg(any(test, feature="jni-test"))]
-   pub fn unique_cache_ptr(&self) -> *const RwLock<UniqueCache<T>> {
+   #[cfg(any(test, feature = "jni-test"))]
+   pub fn unique_cache_ptr(&self) -> *const UniqueCache<T> {
       Arc::as_ptr(&self.0)
    }
 }
 
 impl<T: CacheContent> Debug for Cache<T> where T: Debug {
    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-      let cache_lock = self.read().unwrap();
-      let value = cache_lock.get();
-      write!(f, "Cache({:?})", value)
+      let value = self.get();
+      write!(f, "Cache({:?})", *value)
    }
 }
 
