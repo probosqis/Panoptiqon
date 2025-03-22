@@ -28,7 +28,7 @@ pub struct Repository<T: CacheContent> {
 }
 
 impl<T: CacheContent> Repository<T> {
-   pub fn load(&mut self, key: T::Key) -> anyhow::Result<Cache<T>> {
+   pub fn load(&self, key: T::Key) -> anyhow::Result<Cache<T>> {
       let Some(arc) = self.pool.get(key) else { anyhow::bail!("not yet implemented."); };
 
       let cache = Cache::new(arc);
@@ -215,7 +215,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
+      let repository = Repository::<TwoWayConversionData>::new(&mut env);
 
       let result = repository.load("A".to_string());
       assert!(result.is_err());
