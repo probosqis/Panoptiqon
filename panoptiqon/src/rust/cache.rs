@@ -113,3 +113,72 @@ pub trait CacheContent {
 
    fn key(&self) -> Self::Key;
 }
+
+#[cfg(feature = "jni-test")]
+mod jni_tests {
+   use jni::JNIEnv;
+   use jni::objects::JObject;
+   use crate::cache::CacheContent;
+   use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
+   use crate::jvm_type;
+
+   jvm_type! {
+      JvmCacheContentImpl,
+   }
+
+   #[derive(Debug, PartialEq, Eq)]
+   struct CacheContentImpl(i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = i32;
+      type JvmType<'local> = JvmCacheContentImpl<'local>;
+
+      fn key(&self) -> i32 {
+         self.0
+      }
+   }
+
+   impl<'local> CloneIntoJvm<'local, JvmCacheContentImpl<'local>> for CacheContentImpl {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmCacheContentImpl<'local> {
+         use crate::jvm_type::JvmType;
+
+         let j_object = env.new_object(
+            "Lcom/wcaokaze/probosqis/panoptiqon/CacheTest$CacheContentImpl;",
+            "(I)V",
+            &[self.0.into()]
+         ).unwrap();
+
+         unsafe { JvmCacheContentImpl::from_j_object(j_object) }
+      }
+   }
+
+   impl<'local> CloneFromJvm<'local, JvmCacheContentImpl<'local>> for CacheContentImpl {
+      fn clone_from_jvm(
+         env: &mut JNIEnv<'local>,
+         jvm_instance: &JvmCacheContentImpl<'local>
+      ) -> CacheContentImpl {
+         use crate::jvm_type::JvmType;
+
+         let value = env
+            .call_method(jvm_instance.j_object(), "getValue", "()I", &[]).unwrap()
+            .i().unwrap();
+
+         CacheContentImpl(value)
+      }
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1withoutJvmCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::sync::Arc;
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let cache = repository.save(CacheContentImpl(42));
+
+      // pool内、JVM、cache
+      assert_eq!(3, Arc::strong_count(&cache.0));
+   }
+}
