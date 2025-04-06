@@ -28,7 +28,6 @@ use {
    crate::jvm_type::JvmType,
 };
 
-#[derive(Clone)]
 pub struct Cache<T: CacheContent>(Arc<UniqueCache<T>>);
 
 impl<T: CacheContent> Cache<T> {
@@ -89,13 +88,19 @@ impl<T: CacheContent> Debug for Cache<T> where T: Debug {
    }
 }
 
-impl<T: CacheContent> PartialEq for Cache<T> where T: PartialEq {
+impl<T: CacheContent> PartialEq for Cache<T> {
    fn eq(&self, other: &Self) -> bool {
       Arc::ptr_eq(&self.0, &other.0)
    }
 }
 
-impl<T: CacheContent> Eq for Cache<T> where T: Eq {}
+impl<T: CacheContent> Eq for Cache<T> {}
+
+impl<T: CacheContent> Clone for Cache<T> {
+   fn clone(&self) -> Self {
+      Cache(self.0.clone())
+   }
+}
 
 impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
