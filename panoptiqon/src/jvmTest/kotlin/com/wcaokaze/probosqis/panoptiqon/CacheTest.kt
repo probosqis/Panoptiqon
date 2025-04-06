@@ -63,4 +63,16 @@ class CacheTest {
 
    @Test
    external fun referenceCount_withoutJvmCache()
+
+   @Test
+   external fun referenceCount_withJvmCache()
+
+   @Test
+   external fun referenceCount_clone()
+
+   @Test
+   external fun referenceCount_cloneIntoJvm()
+
+   @Test
+   external fun referenceCount_cloneIntoJvm_cloneFromJvm()
 }

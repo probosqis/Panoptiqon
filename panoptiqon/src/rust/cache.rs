@@ -126,6 +126,7 @@ mod jni_tests {
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::jvm_type;
+   use super::Cache;
 
    jvm_type! {
       JvmCacheContentImpl,
@@ -185,5 +186,79 @@ mod jni_tests {
 
       // pool内、JVM、cache
       assert_eq!(3, Arc::strong_count(&cache.0));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1withJvmCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::sync::Arc;
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let cache = repository.save(CacheContentImpl(42));
+
+      let _jvm_cache = cache.create_jvm_instance(&mut env);
+
+      // pool内、JVM、cache
+      assert_eq!(3, Arc::strong_count(&cache.0));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1clone<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::sync::Arc;
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let cache = repository.save(CacheContentImpl(42));
+
+      let _clone = cache.clone();
+
+      // pool内、JVM、cache, _clone
+      assert_eq!(4, Arc::strong_count(&cache.0));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1cloneIntoJvm<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::sync::Arc;
+      use crate::jvm_types::JvmCache;
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let cache = repository.save(CacheContentImpl(42));
+
+      let _jvm_cache: JvmCache<JvmCacheContentImpl>
+         = cache.clone_into_jvm(&mut env);
+
+      // pool内、JVM、cache
+      assert_eq!(3, Arc::strong_count(&cache.0));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1cloneIntoJvm_1cloneFromJvm<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::sync::Arc;
+      use crate::jvm_types::JvmCache;
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let cache = repository.save(CacheContentImpl(42));
+
+      let jvm_cache: JvmCache<JvmCacheContentImpl>
+         = cache.clone_into_jvm(&mut env);
+
+      let _clone = Cache::<CacheContentImpl>::clone_from_jvm(&mut env, &jvm_cache);
+
+      // pool内、JVM、cache, _clone
+      assert_eq!(4, Arc::strong_count(&cache.0));
    }
 }
