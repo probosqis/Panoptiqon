@@ -71,8 +71,11 @@ impl<T: CacheContent> Cache<T> {
          &java_instance, "getUniqueCacheRustStateAddress", "()J", &[]
       ).unwrap().j().unwrap() as *const UniqueCache<T>;
 
-      let unique_cache = unsafe { Arc::<_>::from_raw(address) };
-      Cache::new(unique_cache.clone())
+      let unique_cache = unsafe {
+         Arc::increment_strong_count(address);
+         Arc::<_>::from_raw(address)
+      };
+      Cache::new(unique_cache)
    }
 
    #[cfg(any(test, feature = "jni-test"))]
