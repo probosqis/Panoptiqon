@@ -59,7 +59,31 @@ class CacheTest {
       loadNativeLib()
    }
 
-   data class CacheContentImpl(val value: Int)
+   data class CacheContentImpl(val key: Int, val value: Int)
+
+   @Test
+   external fun saveGet()
+
+   @Test
+   fun saveGet_viaJni() {
+      `saveGet_viaJni$createRepo`()
+
+      val cache = `saveGet_viaJni$save42`()
+      assertEquals(42, cache.value.value)
+
+      cache.value = CacheContentImpl(0, 0)
+      `saveGet_viaJni$assert0`()
+      assertEquals(0, cache.value.value)
+
+      `saveGet_viaJni$save42`()
+      assertEquals(42, cache.value.value)
+   }
+
+   private external fun `saveGet_viaJni$createRepo`()
+
+   private external fun `saveGet_viaJni$save42`(): WritableCache<CacheContentImpl>
+
+   private external fun `saveGet_viaJni$assert0`()
 
    @Test
    external fun referenceCount_withoutJvmCache()
@@ -75,4 +99,7 @@ class CacheTest {
 
    @Test
    external fun referenceCount_cloneIntoJvm_cloneFromJvm()
+
+   @Test
+   external fun referenceCount_save()
 }

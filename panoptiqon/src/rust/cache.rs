@@ -124,11 +124,14 @@ pub trait CacheContent {
 
 #[cfg(feature = "jni-test")]
 mod jni_tests {
+   use std::sync::Mutex;
    use jni::JNIEnv;
    use jni::objects::JObject;
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::jvm_type;
+   use crate::jvm_types::JvmCache;
+   use crate::repository::Repository;
    use super::Cache;
 
    jvm_type! {
@@ -136,7 +139,7 @@ mod jni_tests {
    }
 
    #[derive(Debug, PartialEq, Eq)]
-   struct CacheContentImpl(i32);
+   struct CacheContentImpl(i32, i32);
 
    impl CacheContent for CacheContentImpl {
       type Key = i32;
@@ -153,8 +156,8 @@ mod jni_tests {
 
          let j_object = env.new_object(
             "Lcom/wcaokaze/probosqis/panoptiqon/CacheTest$CacheContentImpl;",
-            "(I)V",
-            &[self.0.into()]
+            "(II)V",
+            &[self.0.into(), self.1.into()]
          ).unwrap();
 
          unsafe { JvmCacheContentImpl::from_j_object(j_object) }
@@ -168,12 +171,72 @@ mod jni_tests {
       ) -> CacheContentImpl {
          use crate::jvm_type::JvmType;
 
+         let key = env
+            .call_method(jvm_instance.j_object(), "getKey", "()I", &[]).unwrap()
+            .i().unwrap();
+
          let value = env
             .call_method(jvm_instance.j_object(), "getValue", "()I", &[]).unwrap()
             .i().unwrap();
 
-         CacheContentImpl(value)
+         CacheContentImpl(key, value)
       }
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveGet<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let cache = repository.save(CacheContentImpl(0, 42));
+
+      assert_eq!(42, cache.get().1);
+
+      cache.save(CacheContentImpl(0, 0));
+      assert_eq!(0, cache.get().1);
+
+      let content = cache.get();
+      cache.save(CacheContentImpl(0, 42));
+      assert_eq!(42, cache.get().1);
+      assert_eq!(0, content.1);
+   }
+
+   #[allow(non_upper_case_globals)]
+   static saveGet_viaJni_repository: Mutex<Option<Repository<CacheContentImpl>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveGet_1viaJni_00024createRepo<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use crate::repository::Repository;
+
+      let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
+      *repo_lock = Some(Repository::new(&mut env));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveGet_1viaJni_00024save42<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmCache<'local, JvmCacheContentImpl<'local>> {
+      let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
+      let cache = repo_lock.as_mut().unwrap().save(CacheContentImpl(0, 42));
+
+      cache.clone_into_jvm(&mut env)
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveGet_1viaJni_00024assert0<'local>(
+      _env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      let repo_lock = saveGet_viaJni_repository.lock().unwrap();
+      let cache = repo_lock.as_ref().unwrap().load(0);
+      assert_eq!(0, cache.unwrap().get().1);
    }
 
    #[no_mangle]
@@ -185,7 +248,7 @@ mod jni_tests {
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new(&mut env);
-      let cache = repository.save(CacheContentImpl(42));
+      let cache = repository.save(CacheContentImpl(0, 42));
 
       // pool内、JVM、cache
       assert_eq!(3, Arc::strong_count(&cache.0));
@@ -200,7 +263,7 @@ mod jni_tests {
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new(&mut env);
-      let cache = repository.save(CacheContentImpl(42));
+      let cache = repository.save(CacheContentImpl(0, 42));
 
       let _jvm_cache = cache.create_jvm_instance(&mut env);
 
@@ -217,7 +280,7 @@ mod jni_tests {
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new(&mut env);
-      let cache = repository.save(CacheContentImpl(42));
+      let cache = repository.save(CacheContentImpl(0, 42));
 
       let _clone = cache.clone();
 
@@ -235,7 +298,7 @@ mod jni_tests {
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new(&mut env);
-      let cache = repository.save(CacheContentImpl(42));
+      let cache = repository.save(CacheContentImpl(0, 42));
 
       let _jvm_cache: JvmCache<JvmCacheContentImpl>
          = cache.clone_into_jvm(&mut env);
@@ -254,7 +317,7 @@ mod jni_tests {
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new(&mut env);
-      let cache = repository.save(CacheContentImpl(42));
+      let cache = repository.save(CacheContentImpl(0, 42));
 
       let jvm_cache: JvmCache<JvmCacheContentImpl>
          = cache.clone_into_jvm(&mut env);
@@ -263,5 +326,22 @@ mod jni_tests {
 
       // pool内、JVM、cache, _clone
       assert_eq!(4, Arc::strong_count(&cache.0));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1save<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::sync::Arc;
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let cache = repository.save(CacheContentImpl(0, 42));
+
+      cache.save(CacheContentImpl(0, 0));
+
+      // pool内、JVM、cache
+      assert_eq!(3, Arc::strong_count(&cache.0));
    }
 }
