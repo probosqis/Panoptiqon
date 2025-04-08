@@ -16,14 +16,28 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
-internal class RepositoryCache<T>(
-   private val uniqueCache: UniqueCache<T>
-) : Cache<T> {
+import androidx.compose.runtime.State
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.builtins.NothingSerializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+
+@Serializable(with = RepositoryCacheSerializer::class)
+actual class RepositoryCache<T>
+   internal constructor(
+      private val uniqueCache: UniqueCache<T>
+   )
+   : Cache<T>
+{
    val uniqueCacheRustStateAddress: Long
       get() = uniqueCache.nativeStateAddress
 
    @InternalCacheApi
-   override val state get() = uniqueCache.state
+   override val state: State<T> get() = uniqueCache.state
 
    override val value: T by uniqueCache::value
 
@@ -32,14 +46,18 @@ internal class RepositoryCache<T>(
        = other is RepositoryCache<*> && uniqueCache === other.uniqueCache
 }
 
-internal class WritableRepositoryCache<T>(
-   private val uniqueCache: WritableUniqueCache<T>
-) : Cache<T>, WritableCache<T> {
+@Serializable(with = WritableRepositoryCacheSerializer::class)
+actual class WritableRepositoryCache<T>
+   internal constructor(
+      private val uniqueCache: WritableUniqueCache<T>
+   )
+   : Cache<T>, WritableCache<T>
+{
    val uniqueCacheRustStateAddress: Long
       get() = uniqueCache.nativeStateAddress
 
    @InternalCacheApi
-   override val state get() = uniqueCache.state
+   override val state: State<T> get() = uniqueCache.state
 
    @InternalCacheApi
    override val mutableState get() = uniqueCache.state
@@ -51,4 +69,34 @@ internal class WritableRepositoryCache<T>(
    override fun hashCode() = uniqueCache.hashCode()
    override fun equals(other: Any?)
        = other is WritableRepositoryCache<*> && uniqueCache === other.uniqueCache
+}
+
+actual object RepositoryCacheSerializer : KSerializer<RepositoryCache<*>> {
+   override val descriptor = SerialDescriptor(
+      "RepositoryCache",
+      @OptIn(ExperimentalSerializationApi::class)
+      NothingSerializer().descriptor
+   )
+
+   override fun serialize(encoder: Encoder, value: RepositoryCache<*>) {
+   }
+
+   override fun deserialize(decoder: Decoder): RepositoryCache<*> {
+      throw SerializationException()
+   }
+}
+
+actual object WritableRepositoryCacheSerializer : KSerializer<WritableRepositoryCache<*>> {
+   override val descriptor = SerialDescriptor(
+      "WritableRepositoryCache",
+      @OptIn(ExperimentalSerializationApi::class)
+      NothingSerializer().descriptor
+   )
+
+   override fun serialize(encoder: Encoder, value: WritableRepositoryCache<*>) {
+   }
+
+   override fun deserialize(decoder: Decoder): WritableRepositoryCache<*> {
+      throw SerializationException()
+   }
 }
