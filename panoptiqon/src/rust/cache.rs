@@ -190,7 +190,10 @@ mod jni_tests {
    ) {
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/saveGet"
+      );
       let cache = repository.save(CacheContentImpl(0, 42));
 
       assert_eq!(42, cache.get().1);
@@ -215,7 +218,10 @@ mod jni_tests {
       use crate::repository::Repository;
 
       let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
+      *repo_lock = Some(Repository::new(
+         &mut env,
+         "test/CacheTest/saveGet_viaJni_createRepo"
+      ));
    }
 
    #[no_mangle]
@@ -247,7 +253,10 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/referenceCount_withoutJvmCache"
+      );
       let cache = repository.save(CacheContentImpl(0, 42));
 
       // pool内、JVM、cache
@@ -262,7 +271,10 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/referenceCount_withJvmCache"
+      );
       let cache = repository.save(CacheContentImpl(0, 42));
 
       let _jvm_cache = cache.create_jvm_instance(&mut env);
@@ -279,7 +291,10 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/referenceCount_clone"
+      );
       let cache = repository.save(CacheContentImpl(0, 42));
 
       let _clone = cache.clone();
@@ -297,7 +312,10 @@ mod jni_tests {
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/referenceCount_cloneIntoJvm"
+      );
       let cache = repository.save(CacheContentImpl(0, 42));
 
       let _jvm_cache: JvmCache<JvmCacheContentImpl>
@@ -316,7 +334,10 @@ mod jni_tests {
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/referenceCount_cloneIntoJvm_cloneFromJvm"
+      );
       let cache = repository.save(CacheContentImpl(0, 42));
 
       let jvm_cache: JvmCache<JvmCacheContentImpl>
@@ -336,7 +357,10 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new(&mut env);
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/referenceCount_save"
+      );
       let cache = repository.save(CacheContentImpl(0, 42));
 
       cache.save(CacheContentImpl(0, 0));

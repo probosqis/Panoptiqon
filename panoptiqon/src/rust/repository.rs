@@ -24,7 +24,8 @@ use {
 };
 
 pub struct Repository<T: CacheContent> {
-   pool: UniqueCachePool<T>
+   pool: UniqueCachePool<T>,
+   _dir_name: String
 }
 
 impl<T: CacheContent> Repository<T> {
@@ -38,11 +39,12 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(feature = "jvm")]
 impl<T: CacheContent> Repository<T> {
-   pub fn new(env: &mut JNIEnv) -> Repository<T>
+   pub fn new(env: &mut JNIEnv, dir_name: &str) -> Repository<T>
       where T: CloneIntoJvmHelper
    {
       Repository {
-         pool: UniqueCachePool::new(env)
+         pool: UniqueCachePool::new(env),
+         _dir_name: dir_name.to_string()
       }
    }
 
@@ -57,9 +59,10 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(not(feature = "jvm"))]
 impl<T: CacheContent> Repository<T> {
-   pub fn new() -> Repository<T> {
+   pub fn new(dir_name: &str) -> Repository<T> {
       Repository {
-         pool: UniqueCachePool::new()
+         pool: UniqueCachePool::new(),
+         _dir_name: dir_name.to_string()
       }
    }
 
@@ -170,7 +173,10 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<OneWayConversionData>::new(&mut env);
+      let mut repository = Repository::<OneWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/switchCacheClass_saveOneWayData"
+      );
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -180,7 +186,10 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
+      let mut repository = Repository::<TwoWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/switchCacheClass_saveTwoWayData"
+      );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -190,7 +199,10 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
+      let mut repository = Repository::<TwoWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/saveLoad"
+      );
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
@@ -215,7 +227,10 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let repository = Repository::<TwoWayConversionData>::new(&mut env);
+      let repository = Repository::<TwoWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/load_noSuchCache"
+      );
 
       let result = repository.load("A".to_string());
       assert!(result.is_err());
@@ -226,7 +241,10 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
+      let mut repository = Repository::<TwoWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/save_viaCache"
+      );
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
@@ -246,7 +264,10 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
+      let mut repository = Repository::<TwoWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/save_affectAnotherCache"
+      );
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       let cache1 = repository.load("A".to_string()).unwrap();
@@ -268,7 +289,10 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<OneWayConversionData>::new(&mut env);
+      let mut repository = Repository::<OneWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/oneWay_jvmCache_getCache"
+      );
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -278,7 +302,10 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<TwoWayConversionData>::new(&mut env);
+      let mut repository = Repository::<TwoWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/twoWay_jvmCache_getCache"
+      );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -292,7 +319,10 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = oneWay_valueChangeFromNative_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
+      *repo_lock = Some(Repository::new(
+         &mut env,
+         "test/RepositoryTest/oneWay_jvmCache_valueChangeFromNative_getCache"
+      ));
       let cache = repo_lock.as_mut().unwrap().save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -315,7 +345,10 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = twoWay_valueChangeFromNative_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
+      *repo_lock = Some(Repository::new(
+         &mut env,
+         "test/RepositoryTest/twoWay_jvmCache_valueChangeFromNative_getCache"
+      ));
       let cache = repo_lock.as_mut().unwrap().save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -338,7 +371,10 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
+      *repo_lock = Some(Repository::new(
+         &mut env,
+         "test/RepositoryTest/jvmCache_valueChangeFromJvm_getCache"
+      ));
       let cache = repo_lock.as_mut().unwrap().save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
@@ -364,7 +400,10 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = oneWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
+      *repo_lock = Some(Repository::new(
+         &mut env,
+         "test/RepositoryTest/jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository"
+      ));
    }
 
    #[no_mangle]
@@ -415,7 +454,10 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = twoWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      *repo_lock = Some(Repository::new(&mut env));
+      *repo_lock = Some(Repository::new(
+         &mut env,
+         "test/RepositoryTest/twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository"
+      ));
    }
 
    #[no_mangle]
