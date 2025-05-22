@@ -1,5 +1,5 @@
 /*
- * Copyright 2024-2025 wcaokaze
+ * Copyright 2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,4 @@
  * limitations under the License.
  */
 
-#![allow(incomplete_features)]
-#![feature(get_mut_unchecked, mapped_lock_guards, ptr_metadata, specialization)]
-
-pub mod cache;
-pub mod repository;
-mod unique_cache;
-mod pool;
-
-#[cfg(feature = "jvm")]
-pub mod convert_jvm;
-#[cfg(feature = "jvm")]
-pub mod jvm_type;
-#[cfg(feature = "jvm")]
-pub mod jvm_types;
-
-pub(crate) mod db;
+pub(crate) struct DbScheduler;
