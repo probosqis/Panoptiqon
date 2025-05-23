@@ -14,4 +14,20 @@
  * limitations under the License.
  */
 
-pub(crate) struct DbScheduler;
+use std::collections::VecDeque;
+use std::sync::Mutex;
+use crate::db::save_task::SaveTask;
+
+static SINGLETON: DbScheduler = DbScheduler {
+   tasks: Mutex::new(VecDeque::new())
+};
+
+pub(crate) struct DbScheduler {
+   tasks: Mutex<VecDeque<SaveTask<'static>>>
+}
+
+impl DbScheduler {
+   pub(crate) fn push(task: SaveTask<'static>) {
+      SINGLETON.tasks.lock().unwrap().push_front(task);
+   }
+}
