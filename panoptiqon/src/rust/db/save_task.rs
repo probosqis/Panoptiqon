@@ -14,5 +14,14 @@
  * limitations under the License.
  */
 
-pub(crate) mod save_task;
-pub(crate) mod scheduler;
+pub(crate) struct SaveTask<'dir_name> {
+   _dir_name: &'dir_name str
+}
+
+impl<'dir_name> SaveTask<'dir_name> {
+   pub(crate) fn new(dir_name: &'dir_name str) -> Self {
+      Self {
+         _dir_name: dir_name
+      }
+   }
+}
