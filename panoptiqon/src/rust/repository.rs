@@ -23,12 +23,12 @@ use {
    crate::convert_jvm::CloneIntoJvmHelper,
 };
 
-pub struct Repository<'dir_name, T: CacheContent> {
+pub struct Repository<T: CacheContent> {
    pool: UniqueCachePool<T>,
-   _dir_name: &'dir_name str
+   _dir_name: &'static str
 }
 
-impl<'dir_name, T: CacheContent> Repository<'dir_name, T> {
+impl<T: CacheContent> Repository<T> {
    pub fn load(&self, key: T::Key) -> anyhow::Result<Cache<T>> {
       let Some(arc) = self.pool.get(key) else { anyhow::bail!("not yet implemented."); };
 
@@ -38,8 +38,8 @@ impl<'dir_name, T: CacheContent> Repository<'dir_name, T> {
 }
 
 #[cfg(feature = "jvm")]
-impl<'dir_name, T: CacheContent> Repository<'dir_name, T> {
-   pub fn new(env: &mut JNIEnv, dir_name: &'dir_name str) -> Self
+impl<T: CacheContent> Repository<T> {
+   pub fn new(env: &mut JNIEnv, dir_name: &'static str) -> Self
       where T: CloneIntoJvmHelper
    {
       Repository {
@@ -58,8 +58,8 @@ impl<'dir_name, T: CacheContent> Repository<'dir_name, T> {
 }
 
 #[cfg(not(feature = "jvm"))]
-impl<'dir_name, T: CacheContent> Repository<'dir_name, T> {
-   pub fn new(dir_name: &'dir_name str) -> Self {
+impl<T: CacheContent> Repository<T> {
+   pub fn new(dir_name: &'static str) -> Self {
       Repository {
          pool: UniqueCachePool::new(),
          _dir_name: dir_name

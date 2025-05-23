@@ -23,11 +23,11 @@ static SINGLETON: DbScheduler = DbScheduler {
 };
 
 pub(crate) struct DbScheduler {
-   tasks: Mutex<VecDeque<SaveTask<'static>>>
+   tasks: Mutex<VecDeque<SaveTask>>
 }
 
 impl DbScheduler {
-   pub(crate) fn push(task: SaveTask<'static>) {
+   pub(crate) fn push(task: SaveTask) {
       SINGLETON.tasks.lock().unwrap().push_front(task);
    }
 }

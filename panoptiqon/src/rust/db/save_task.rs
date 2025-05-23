@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-pub(crate) struct SaveTask<'dir_name> {
-   _dir_name: &'dir_name str
+pub(crate) struct SaveTask {
+   _dir_name: &'static str
 }
 
-impl<'dir_name> SaveTask<'dir_name> {
-   pub(crate) fn new(dir_name: &'dir_name str) -> Self {
+impl SaveTask {
+   pub(crate) fn new(dir_name: &'static str) -> Self {
       Self {
          _dir_name: dir_name
       }
