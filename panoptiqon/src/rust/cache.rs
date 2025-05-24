@@ -160,21 +160,40 @@ mod tests {
 
    #[allow(non_snake_case)]
    #[test]
-   fn save_saveScheduled() {
+   fn saveViaRepository_saveScheduled() {
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
 
+      let mut repository = Repository::<CacheContentImpl>::new(
+         "test/CacheTest/saveViaRepository_saveScheduled"
+      );
+
       DbScheduler::clear_all_tasks();
+      repository.save(CacheContentImpl(0, 42));
+
+      assert_eq!(
+         vec!["test/CacheTest/saveViaRepository_saveScheduled"],
+         DbScheduler::tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+      );
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn saveViaCache_saveScheduled() {
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new(
-         "test/CacheTest/save_saveScheduled"
+         "test/CacheTest/saveViaCache_saveScheduled"
       );
 
       let cache = repository.save(CacheContentImpl(0, 42));
+
+      DbScheduler::clear_all_tasks();
       cache.save(CacheContentImpl(0, 0));
 
       assert_eq!(
-         vec!["test/CacheTest/save_saveScheduled"],
+         vec!["test/CacheTest/saveViaCache_saveScheduled"],
          DbScheduler::tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );
    }
@@ -304,25 +323,47 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_save_1saveScheduled<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaRepository_1saveScheduled<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
 
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/saveViaRepository_saveScheduled"
+      );
+
       DbScheduler::clear_all_tasks();
+      repository.save(CacheContentImpl(0, 42));
+
+      assert_eq!(
+         vec!["test/CacheTest/saveViaRepository_saveScheduled"],
+         DbScheduler::tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+      );
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaCache_1saveScheduled<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new(
          &mut env,
-         "test/CacheTest/save_saveScheduled"
+         "test/CacheTest/saveViaCache_saveScheduled"
       );
 
       let cache = repository.save(CacheContentImpl(0, 42));
+
+      DbScheduler::clear_all_tasks();
       cache.save(CacheContentImpl(0, 0));
 
       assert_eq!(
-         vec!["test/CacheTest/save_saveScheduled"],
+         vec!["test/CacheTest/saveViaCache_saveScheduled"],
          DbScheduler::tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );
    }

@@ -86,7 +86,10 @@ class CacheTest {
    private external fun `saveGet_viaJni$assert0`()
 
    @Test
-   external fun save_saveScheduled()
+   external fun saveViaRepository_saveScheduled()
+
+   @Test
+   external fun saveViaCache_saveScheduled()
 
    @Test
    external fun referenceCount_withoutJvmCache()

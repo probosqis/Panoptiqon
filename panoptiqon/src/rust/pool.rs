@@ -76,7 +76,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
             Arc::clone(arc)
          }
          Entry::Vacant(entry) => {
-            let arc = UniqueCache::new_arc(
+            let arc = UniqueCache::new_saved(
                &self.jvm, self.jvm_unique_cache_refs.clone(), self.dir_name, value
             );
             entry.insert(arc.clone());
@@ -107,7 +107,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
             Arc::clone(arc)
          }
          Entry::Vacant(entry) => {
-            let unique_cache = UniqueCache::new(self.dir_name, value);
+            let unique_cache = UniqueCache::new_saved(self.dir_name, value);
             let arc = Arc::new(unique_cache);
             entry.insert(arc.clone());
             arc
