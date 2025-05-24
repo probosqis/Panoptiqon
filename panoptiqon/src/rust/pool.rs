@@ -31,11 +31,13 @@ use {
 pub(crate) struct UniqueCachePool<T: CacheContent> {
    jvm: JavaVM,
    jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
+   dir_name: &'static str,
    map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct UniqueCachePool<T: CacheContent> {
+   dir_name: &'static str,
    map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
 }
 
@@ -47,7 +49,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
 
 #[cfg(feature="jvm")]
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn new(env: &mut JNIEnv) -> Self
+   pub fn new(env: &mut JNIEnv, dir_name: &'static str) -> Self
       where T: CloneIntoJvmHelper
    {
       let jvm = env.get_java_vm().unwrap();
@@ -55,6 +57,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
       UniqueCachePool {
          jvm,
          jvm_unique_cache_refs: Arc::new(T::get_jvm_refs(env)),
+         dir_name,
          map: FnvHashMap::default()
       }
    }
@@ -74,7 +77,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
          }
          Entry::Vacant(entry) => {
             let arc = UniqueCache::new_arc(
-               &self.jvm, self.jvm_unique_cache_refs.clone(), value
+               &self.jvm, self.jvm_unique_cache_refs.clone(), self.dir_name, value
             );
             entry.insert(arc.clone());
             arc
@@ -85,8 +88,9 @@ impl<T: CacheContent> UniqueCachePool<T> {
 
 #[cfg(not(feature="jvm"))]
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn new() -> Self {
+   pub fn new(dir_name: &'static str) -> Self {
       UniqueCachePool {
+         dir_name,
          map: FnvHashMap::default()
       }
    }
@@ -103,7 +107,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
             Arc::clone(arc)
          }
          Entry::Vacant(entry) => {
-            let unique_cache = UniqueCache::new(value);
+            let unique_cache = UniqueCache::new(self.dir_name, value);
             let arc = Arc::new(unique_cache);
             entry.insert(arc.clone());
             arc
@@ -151,7 +155,10 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = UniqueCachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         "test/CachePoolTest/createCache"
+      );
 
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));
       assert_eq!(Content("A".to_string(), 42), *unique_cache.get());
@@ -165,7 +172,10 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = UniqueCachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         "test/CachePoolTest/getCache"
+      );
 
       let _ = pool.update("A".to_string(), Content("A".to_string(), 42));
 
@@ -185,7 +195,10 @@ mod jni_tests {
    ) {
       use std::sync::Arc;
 
-      let mut pool = UniqueCachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         "test/CachePoolTest/pooling"
+      );
       let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
       let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
       let cache3_ptr = Arc::as_ptr(&pool.update("B".to_string(), Content("B".to_string(), 42))) as *const _;
@@ -199,7 +212,10 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = UniqueCachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         "test/CachePoolTest/save"
+      );
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));
 
       assert_eq!(Content("A".to_string(), 42), *unique_cache.get());

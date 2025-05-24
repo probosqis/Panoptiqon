@@ -44,11 +44,13 @@ pub struct UniqueCache<T: CacheContent> {
    // jvm_stateと同一インスタンスを指す弱参照も別途持っておき、Arcの強参照が
    // 1(JVMからのものだけ)になったとき強参照のjvm_stateは解放するなどの対応が必要か
    jvm_state: GlobalRef,
+   dir_name: &'static str,
    value: RwLock<Arc<T>>
 }
 
 #[cfg(not(feature = "jvm"))]
 pub struct UniqueCache<T: CacheContent> {
+   dir_name: &'static str,
    value: RwLock<Arc<T>>
 }
 
@@ -57,6 +59,7 @@ impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new_arc<'local>(
       jvm: &'local JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
+      dir_name: &'static str,
       initial_value: T
    ) -> Arc<Self>
       where T: CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
@@ -76,6 +79,7 @@ impl<T: CacheContent> UniqueCache<T> {
          jvm,
          jvm_refs,
          jvm_state,
+         dir_name,
          value: RwLock::new(Arc::new(initial_value))
       };
 
@@ -166,8 +170,12 @@ impl<T: CacheContent> UniqueCache<T> {
 
 #[cfg(not(feature = "jvm"))]
 impl<T: CacheContent> UniqueCache<T> {
-   pub(crate) fn new(initial_state: T) -> Self {
+   pub(crate) fn new(
+      dir_name: &'static str,
+      initial_state: T
+   ) -> Self {
       UniqueCache {
+         dir_name,
          value: RwLock::new(Arc::new(initial_state))
       }
    }

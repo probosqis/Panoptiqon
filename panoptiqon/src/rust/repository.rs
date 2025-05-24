@@ -24,8 +24,7 @@ use {
 };
 
 pub struct Repository<T: CacheContent> {
-   pool: UniqueCachePool<T>,
-   _dir_name: &'static str
+   pool: UniqueCachePool<T>
 }
 
 impl<T: CacheContent> Repository<T> {
@@ -43,8 +42,7 @@ impl<T: CacheContent> Repository<T> {
       where T: CloneIntoJvmHelper
    {
       Repository {
-         pool: UniqueCachePool::new(env),
-         _dir_name: dir_name
+         pool: UniqueCachePool::new(env, dir_name)
       }
    }
 
@@ -61,8 +59,7 @@ impl<T: CacheContent> Repository<T> {
 impl<T: CacheContent> Repository<T> {
    pub fn new(dir_name: &'static str) -> Self {
       Repository {
-         pool: UniqueCachePool::new(),
-         _dir_name: dir_name
+         pool: UniqueCachePool::new(dir_name)
       }
    }
 
