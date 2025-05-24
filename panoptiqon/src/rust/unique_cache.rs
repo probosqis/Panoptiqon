@@ -192,8 +192,15 @@ impl<T: CacheContent> UniqueCache<T> {
    }
 
    pub(crate) fn save(&self, value: T) {
+      use crate::db::save_task::SaveTask;
+      use crate::db::scheduler::DbScheduler;
+
       let mut write_lock = self.value.write().unwrap();
       *write_lock = Arc::new(value);
+
+      DbScheduler::push(
+         SaveTask::new(self.dir_name)
+      );
    }
 }
 

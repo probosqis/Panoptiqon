@@ -122,6 +122,64 @@ pub trait CacheContent {
    fn key(&self) -> Self::Key;
 }
 
+#[cfg(all(test, not(feature = "jvm")))]
+mod tests {
+   use crate::cache::CacheContent;
+
+   #[derive(Debug, PartialEq, Eq)]
+   struct CacheContentImpl(i32, i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = i32;
+
+      fn key(&self) -> i32 {
+         self.0
+      }
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn saveGet() {
+      use crate::repository::Repository;
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         "test/CacheTest/saveGet"
+      );
+      let cache = repository.save(CacheContentImpl(0, 42));
+
+      assert_eq!(42, cache.get().1);
+
+      cache.save(CacheContentImpl(0, 0));
+      assert_eq!(0, cache.get().1);
+
+      let content = cache.get();
+      cache.save(CacheContentImpl(0, 42));
+      assert_eq!(42, cache.get().1);
+      assert_eq!(0, content.1);
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn save_saveScheduled() {
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
+
+      DbScheduler::clear_all_tasks();
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         "test/CacheTest/save_saveScheduled"
+      );
+
+      let cache = repository.save(CacheContentImpl(0, 42));
+      cache.save(CacheContentImpl(0, 0));
+
+      assert_eq!(
+         vec!["test/CacheTest/save_saveScheduled"],
+         DbScheduler::tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+      );
+   }
+}
+
 #[cfg(feature = "jni-test")]
 mod jni_tests {
    use std::sync::Mutex;
