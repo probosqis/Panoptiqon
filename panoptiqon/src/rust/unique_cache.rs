@@ -100,6 +100,8 @@ impl<T: CacheContent> UniqueCache<T> {
    {
       use jni::objects::JValueGen;
       use jni::signature::{Primitive, ReturnType};
+      use crate::db::save_task::SaveTask;
+      use crate::db::scheduler::DbScheduler;
       use crate::jvm_type::JvmType;
 
       let mut write_lock = self.value.write().unwrap();
@@ -117,6 +119,10 @@ impl<T: CacheContent> UniqueCache<T> {
       }
 
       *write_lock = Arc::new(value);
+
+      DbScheduler::push(
+         SaveTask::new(self.dir_name)
+      );
    }
 
    pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {

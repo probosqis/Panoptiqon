@@ -18,12 +18,12 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use crate::db::save_task::SaveTask;
 
-#[cfg(not(test))]
+#[cfg(not(any(test, feature = "jni-test")))]
 static SINGLETON: DbScheduler = DbScheduler {
    tasks: Mutex::new(VecDeque::new())
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "jni-test"))]
 thread_local! {
    static SINGLETON: DbScheduler = DbScheduler {
       tasks: Mutex::new(VecDeque::new())
@@ -36,12 +36,12 @@ pub(crate) struct DbScheduler {
 
 impl DbScheduler {
    fn with_singleton<R>(f: impl FnOnce(&DbScheduler) -> R) -> R {
-      #[cfg(not(test))]
+      #[cfg(not(any(test, feature = "jni-test")))]
       {
          f(&SINGLETON)
       }
 
-      #[cfg(test)]
+      #[cfg(any(test, feature = "jni-test"))]
       {
          SINGLETON.with(f)
       }
@@ -51,5 +51,19 @@ impl DbScheduler {
       Self::with_singleton(|singleton| {
          singleton.tasks.lock().unwrap().push_front(task);
       });
+   }
+
+   #[cfg(any(test, feature = "jni-test"))]
+   pub(crate) fn clear_all_tasks() {
+      Self::with_singleton(|singleton| {
+         singleton.tasks.lock().unwrap().clear();
+      });
+   }
+
+   #[cfg(any(test, feature = "jni-test"))]
+   pub(crate) fn tasks() -> VecDeque<SaveTask> {
+      Self::with_singleton(|singleton| {
+         singleton.tasks.lock().unwrap().clone()
+      })
    }
 }

@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#[derive(Clone)]
 pub(crate) struct SaveTask {
-   _dir_name: &'static str
+   pub(crate) dir_name: &'static str
 }
 
 impl SaveTask {
    pub(crate) fn new(dir_name: &'static str) -> Self {
       Self {
-         _dir_name: dir_name
+         dir_name
       }
    }
 }

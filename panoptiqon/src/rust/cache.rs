@@ -246,6 +246,30 @@ mod jni_tests {
    }
 
    #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_save_1saveScheduled<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
+
+      DbScheduler::clear_all_tasks();
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         &mut env,
+         "test/CacheTest/save_saveScheduled"
+      );
+
+      let cache = repository.save(CacheContentImpl(0, 42));
+      cache.save(CacheContentImpl(0, 0));
+
+      assert_eq!(
+         vec!["test/CacheTest/save_saveScheduled"],
+         DbScheduler::tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+      );
+   }
+
+   #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1withoutJvmCache<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
