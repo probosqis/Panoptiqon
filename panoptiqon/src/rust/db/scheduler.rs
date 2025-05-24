@@ -19,15 +19,11 @@ use std::sync::Mutex;
 use crate::db::save_task::SaveTask;
 
 #[cfg(not(any(test, feature = "jni-test")))]
-static SINGLETON: DbScheduler = DbScheduler {
-   tasks: Mutex::new(VecDeque::new())
-};
+static SINGLETON: DbScheduler = DbScheduler::new();
 
 #[cfg(any(test, feature = "jni-test"))]
 thread_local! {
-   static SINGLETON: DbScheduler = DbScheduler {
-      tasks: Mutex::new(VecDeque::new())
-   };
+   static SINGLETON: DbScheduler = DbScheduler::new();
 }
 
 pub(crate) struct DbScheduler {
@@ -35,6 +31,12 @@ pub(crate) struct DbScheduler {
 }
 
 impl DbScheduler {
+   const fn new() -> Self {
+      Self {
+         tasks: Mutex::new(VecDeque::new())
+      }
+   }
+
    fn with_singleton<R>(f: impl FnOnce(&DbScheduler) -> R) -> R {
       #[cfg(not(any(test, feature = "jni-test")))]
       {
