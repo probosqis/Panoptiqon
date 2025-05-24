@@ -18,16 +18,38 @@ use std::collections::VecDeque;
 use std::sync::Mutex;
 use crate::db::save_task::SaveTask;
 
+#[cfg(not(test))]
 static SINGLETON: DbScheduler = DbScheduler {
    tasks: Mutex::new(VecDeque::new())
 };
+
+#[cfg(test)]
+thread_local! {
+   static SINGLETON: DbScheduler = DbScheduler {
+      tasks: Mutex::new(VecDeque::new())
+   };
+}
 
 pub(crate) struct DbScheduler {
    tasks: Mutex<VecDeque<SaveTask>>
 }
 
 impl DbScheduler {
+   fn with_singleton<R>(f: impl FnOnce(&DbScheduler) -> R) -> R {
+      #[cfg(not(test))]
+      {
+         f(&SINGLETON)
+      }
+
+      #[cfg(test)]
+      {
+         SINGLETON.with(f)
+      }
+   }
+
    pub(crate) fn push(task: SaveTask) {
-      SINGLETON.tasks.lock().unwrap().push_front(task);
+      Self::with_singleton(|singleton| {
+         singleton.tasks.lock().unwrap().push_front(task);
+      });
    }
 }
