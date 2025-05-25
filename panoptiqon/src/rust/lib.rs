@@ -15,7 +15,10 @@
  */
 
 #![allow(incomplete_features)]
-#![feature(get_mut_unchecked, mapped_lock_guards, ptr_metadata, specialization)]
+#![feature(
+   get_mut_unchecked, mapped_lock_guards, never_type, ptr_metadata,
+   specialization
+)]
 
 pub mod cache;
 pub mod repository;

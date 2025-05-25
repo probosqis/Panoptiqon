@@ -15,7 +15,9 @@
  */
 
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
+use std::thread::JoinHandle;
 use crate::db::save_task::SaveTask;
 
 #[cfg(not(any(test, feature = "jni-test")))]
@@ -27,13 +29,17 @@ thread_local! {
 }
 
 pub(crate) struct DbScheduler {
-   tasks: Mutex<VecDeque<SaveTask>>
+   tasks: Mutex<VecDeque<SaveTask>>,
+   is_running: AtomicBool,
+   worker_thread_handler: Mutex<Option<JoinHandle<!>>>
 }
 
 impl DbScheduler {
    const fn new() -> Self {
       Self {
-         tasks: Mutex::new(VecDeque::new())
+         tasks: Mutex::new(VecDeque::new()),
+         is_running: AtomicBool::new(false),
+         worker_thread_handler: Mutex::new(None)
       }
    }
 
@@ -49,8 +55,25 @@ impl DbScheduler {
       }
    }
 
+   fn start_worker_thread(&self) {
+      use std::thread;
+      use std::sync::atomic::Ordering;
+
+      if self.is_running
+         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+         .is_ok()
+      {
+         let mut lock = self.worker_thread_handler.lock().unwrap();
+         if let Some(_) = *lock { return; }
+
+         *lock = Some(thread::spawn(|| loop {
+         }));
+      }
+   }
+
    pub(crate) fn push(task: SaveTask) {
       Self::with_singleton(|singleton| {
+         singleton.start_worker_thread();
          singleton.tasks.lock().unwrap().push_front(task);
       });
    }
