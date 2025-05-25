@@ -31,7 +31,7 @@ thread_local! {
 pub(crate) struct DbScheduler {
    tasks: Mutex<VecDeque<SaveTask>>,
    is_running: AtomicBool,
-   worker_thread_handler: Mutex<Option<JoinHandle<!>>>
+   worker_thread: Mutex<Option<WorkerThread>>
 }
 
 impl DbScheduler {
@@ -39,7 +39,7 @@ impl DbScheduler {
       Self {
          tasks: Mutex::new(VecDeque::new()),
          is_running: AtomicBool::new(false),
-         worker_thread_handler: Mutex::new(None)
+         worker_thread: Mutex::new(None)
       }
    }
 
@@ -56,18 +56,16 @@ impl DbScheduler {
    }
 
    fn start_worker_thread(&self) {
-      use std::thread;
       use std::sync::atomic::Ordering;
 
       if self.is_running
          .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
          .is_ok()
       {
-         let mut lock = self.worker_thread_handler.lock().unwrap();
+         let mut lock = self.worker_thread.lock().unwrap();
          if let Some(_) = *lock { return; }
 
-         *lock = Some(thread::spawn(|| loop {
-         }));
+         *lock = Some(WorkerThread::start());
       }
    }
 
@@ -90,5 +88,22 @@ impl DbScheduler {
       Self::with_singleton(|singleton| {
          singleton.tasks.lock().unwrap().clone()
       })
+   }
+}
+
+struct WorkerThread {
+   handle: JoinHandle<!>
+}
+
+impl WorkerThread {
+   fn start() -> Self {
+      use std::thread;
+
+      let handle = thread::spawn(|| loop {
+      });
+
+      Self {
+         handle
+      }
    }
 }
