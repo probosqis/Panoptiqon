@@ -15,7 +15,8 @@
  */
 
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicBool;
+use std::ptr;
+use std::sync::atomic::AtomicPtr;
 use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 use std::thread::JoinHandle;
@@ -31,16 +32,16 @@ thread_local! {
 
 pub(crate) struct DbScheduler {
    tasks: Mutex<VecDeque<SaveTask>>,
-   is_running: AtomicBool,
-   worker_thread: Mutex<Option<WorkerThread>>
+   worker_thread: Mutex<Option<WorkerThread>>,
+   worker_thread_message_sender: AtomicPtr<Sender<WorkerThreadMessage>>
 }
 
 impl DbScheduler {
    const fn new() -> Self {
       Self {
          tasks: Mutex::new(VecDeque::new()),
-         is_running: AtomicBool::new(false),
-         worker_thread: Mutex::new(None)
+         worker_thread: Mutex::new(None),
+         worker_thread_message_sender: AtomicPtr::new(ptr::null_mut())
       }
    }
 
@@ -56,23 +57,57 @@ impl DbScheduler {
       }
    }
 
-   fn start_worker_thread(&self) {
+   /// WorkerThreadにメッセージを送信するためのSenderを取得する。
+   ///
+   /// WorkerThreadが起動されていない場合、**WorkerThreadを起動して**
+   /// そのSenderを返却する。
+   fn message_sender(&self) -> &Sender<WorkerThreadMessage> {
       use std::sync::atomic::Ordering;
 
-      if self.is_running
-         .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
-         .is_ok()
-      {
-         let mut lock = self.worker_thread.lock().unwrap();
-         if let Some(_) = *lock { return; }
+      let sender = unsafe {
+         self.worker_thread_message_sender.load(Ordering::Relaxed).as_ref()
+      };
 
-         *lock = Some(WorkerThread::start());
-      }
+      // worker_thread_message_senderが非nullの場合。
+      // ロックなしで返却可能
+      if let Some(sender) = sender { return sender; }
+
+      // worker_thread_message_senderがnullの場合。
+      // ロックを取得
+      let mut lock = self.worker_thread.lock().unwrap();
+
+      let message_sender_ptr = match *lock {
+         Some(ref mut worker_thread) => {
+            // WorkerThreadが存在している。
+            // worker_thread_message_senderがnullでも
+            // 同時に別スレッドがWorkerThreadを起動していた場合は
+            // ロックが取れたあとにWorkerThreadが存在することはありうる
+            &mut worker_thread.message as *mut _
+         }
+         None => {
+            // WorkerThreadが存在しない。起動する
+            let mut worker_thread = WorkerThread::start();
+
+            // worker_threadとworker_thread_message_senderに
+            // 起動したインスタンスを格納
+            let message_sender_ptr = &mut worker_thread.message as *mut _;
+            *lock = Some(worker_thread);
+            self.worker_thread_message_sender
+               .store(message_sender_ptr, Ordering::Relaxed);
+
+            message_sender_ptr
+         }
+      };
+
+      // ロックを解除（タイミングを明確にするため明示）
+      drop(lock);
+
+      unsafe { &*message_sender_ptr }
    }
 
    pub(crate) fn push(task: SaveTask) {
       Self::with_singleton(|singleton| {
-         singleton.start_worker_thread();
+         singleton.message_sender();
          singleton.tasks.lock().unwrap().push_front(task);
       });
    }
@@ -98,7 +133,8 @@ impl DbScheduler {
       Self::with_singleton(|singleton| {
          if let Some(worker_thread) = singleton.worker_thread.lock().unwrap().take() {
             worker_thread.stop();
-            singleton.is_running.store(false, Ordering::Relaxed);
+            singleton.worker_thread_message_sender
+               .store(ptr::null_mut(), Ordering::Relaxed);
          }
       });
    }
@@ -153,15 +189,27 @@ mod test {
       DbScheduler::kill_worker_thread();
 
       DbScheduler::with_singleton(|singleton| {
-         assert!(!singleton.is_running.load(Ordering::Relaxed));
-         assert!(singleton.worker_thread.lock().unwrap().is_none());
+         assert!(
+            singleton.worker_thread.lock().unwrap()
+               .is_none()
+         );
+         assert!(
+            singleton.worker_thread_message_sender.load(Ordering::Relaxed)
+               .is_null()
+         );
       });
 
       DbScheduler::push(SaveTask::new("DbSchedulerTest/push_startWorkerThread"));
 
       DbScheduler::with_singleton(|singleton| {
-         assert!(singleton.is_running.load(Ordering::Relaxed));
-         assert!(singleton.worker_thread.lock().unwrap().is_some());
+         assert!(
+            singleton.worker_thread.lock().unwrap()
+               .is_some()
+         );
+         assert!(
+            !singleton.worker_thread_message_sender.load(Ordering::Relaxed)
+               .is_null()
+         );
       });
    }
 }
