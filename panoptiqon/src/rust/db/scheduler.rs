@@ -106,7 +106,11 @@ impl DbScheduler {
 
 struct WorkerThread {
    handle: JoinHandle<()>,
-   stop_request: Sender<()>
+   message: Sender<WorkerThreadMessage>
+}
+
+enum WorkerThreadMessage {
+   Stop,
 }
 
 impl WorkerThread {
@@ -117,18 +121,21 @@ impl WorkerThread {
       let (tx, rx) = mpsc::channel();
 
       let handle = thread::spawn(move || loop {
-         let Ok(()) = rx.recv() else { break; };
+         let Ok(message) = rx.recv() else { break; };
 
+         match message {
+            WorkerThreadMessage::Stop => break
+         }
       });
 
       Self {
          handle,
-         stop_request: tx
+         message: tx
       }
    }
 
    fn stop(self) {
-      self.stop_request.send(()).unwrap();
+      self.message.send(WorkerThreadMessage::Stop).unwrap();
       self.handle.join().unwrap();
    }
 }
