@@ -132,3 +132,29 @@ impl WorkerThread {
       self.handle.join().unwrap();
    }
 }
+
+#[cfg(test)]
+mod test {
+   use crate::db::save_task::SaveTask;
+   use super::DbScheduler;
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn push_startWorkerThread() {
+      use std::sync::atomic::Ordering;
+
+      DbScheduler::kill_worker_thread();
+
+      DbScheduler::with_singleton(|singleton| {
+         assert!(!singleton.is_running.load(Ordering::Relaxed));
+         assert!(singleton.worker_thread.lock().unwrap().is_none());
+      });
+
+      DbScheduler::push(SaveTask::new("DbSchedulerTest/push_startWorkerThread"));
+
+      DbScheduler::with_singleton(|singleton| {
+         assert!(singleton.is_running.load(Ordering::Relaxed));
+         assert!(singleton.worker_thread.lock().unwrap().is_some());
+      });
+   }
+}
