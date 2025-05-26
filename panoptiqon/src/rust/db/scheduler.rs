@@ -16,6 +16,7 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
+use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 use std::thread::JoinHandle;
 use crate::db::save_task::SaveTask;
@@ -89,21 +90,45 @@ impl DbScheduler {
          singleton.tasks.lock().unwrap().clone()
       })
    }
+
+   #[cfg(any(test, feature = "jni-test"))]
+   pub(crate) fn kill_worker_thread() {
+      use std::sync::atomic::Ordering;
+
+      Self::with_singleton(|singleton| {
+         if let Some(worker_thread) = singleton.worker_thread.lock().unwrap().take() {
+            worker_thread.stop();
+            singleton.is_running.store(false, Ordering::Relaxed);
+         }
+      });
+   }
 }
 
 struct WorkerThread {
-   handle: JoinHandle<!>
+   handle: JoinHandle<()>,
+   stop_request: Sender<()>
 }
 
 impl WorkerThread {
    fn start() -> Self {
+      use std::sync::mpsc;
       use std::thread;
 
-      let handle = thread::spawn(|| loop {
+      let (tx, rx) = mpsc::channel();
+
+      let handle = thread::spawn(move || loop {
+         let Ok(()) = rx.recv() else { break; };
+
       });
 
       Self {
-         handle
+         handle,
+         stop_request: tx
       }
+   }
+
+   fn stop(self) {
+      self.stop_request.send(()).unwrap();
+      self.handle.join().unwrap();
    }
 }
