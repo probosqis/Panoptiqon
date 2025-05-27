@@ -142,6 +142,21 @@ impl DbScheduler {
    }
 }
 
+impl Drop for DbScheduler {
+   fn drop(&mut self) {
+      use std::sync::atomic::Ordering;
+
+      if let Ok(mut worker_thread) = self.worker_thread.lock() {
+         if let Some(worker_thread) = worker_thread.take() {
+            worker_thread.stop();
+
+            self.worker_thread_message_sender
+               .store(ptr::null_mut(), Ordering::Relaxed);
+         }
+      }
+   }
+}
+
 struct WorkerThread {
    handle: JoinHandle<()>,
    message: Sender<WorkerThreadMessage>
