@@ -188,32 +188,26 @@ mod test {
    fn push_startWorkerThread() {
       use std::sync::atomic::Ordering;
 
-      DbScheduler::kill_worker_thread();
+      let db_scheduler = DbScheduler::new();
 
-      DbScheduler::with_singleton(|singleton| {
-         assert!(
-            singleton.worker_thread.lock().unwrap()
-               .is_none()
-         );
-         assert!(
-            singleton.worker_thread_message_sender.load(Ordering::Relaxed)
-               .is_null()
-         );
-      });
-
-      DbScheduler::push_singleton(
-         SaveTask::new("DbSchedulerTest/push_startWorkerThread")
+      assert!(
+         db_scheduler.worker_thread.lock().unwrap()
+            .is_none()
+      );
+      assert!(
+         db_scheduler.worker_thread_message_sender.load(Ordering::Relaxed)
+            .is_null()
       );
 
-      DbScheduler::with_singleton(|singleton| {
-         assert!(
-            singleton.worker_thread.lock().unwrap()
-               .is_some()
-         );
-         assert!(
-            !singleton.worker_thread_message_sender.load(Ordering::Relaxed)
-               .is_null()
-         );
-      });
+      db_scheduler.push(SaveTask::new("DbSchedulerTest/push_startWorkerThread"));
+
+      assert!(
+         db_scheduler.worker_thread.lock().unwrap()
+            .is_some()
+      );
+      assert!(
+         !db_scheduler.worker_thread_message_sender.load(Ordering::Relaxed)
+            .is_null()
+      );
    }
 }
