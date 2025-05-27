@@ -105,11 +105,13 @@ impl DbScheduler {
       unsafe { &*message_sender_ptr }
    }
 
-   pub(crate) fn push(task: SaveTask) {
-      Self::with_singleton(|singleton| {
-         singleton.message_sender();
-         singleton.tasks.lock().unwrap().push_front(task);
-      });
+   pub(crate) fn push(&self, task: SaveTask) {
+      self.message_sender();
+      self.tasks.lock().unwrap().push_front(task);
+   }
+
+   pub(crate) fn push_singleton(task: SaveTask) {
+      Self::with_singleton(|singleton| singleton.push(task));
    }
 
    #[cfg(any(test, feature = "jni-test"))]
@@ -199,7 +201,9 @@ mod test {
          );
       });
 
-      DbScheduler::push(SaveTask::new("DbSchedulerTest/push_startWorkerThread"));
+      DbScheduler::push_singleton(
+         SaveTask::new("DbSchedulerTest/push_startWorkerThread")
+      );
 
       DbScheduler::with_singleton(|singleton| {
          assert!(

@@ -69,7 +69,7 @@ impl<T: CacheContent> UniqueCache<T> {
 
       let arc = Self::new_arc(jvm, jvm_refs, dir_name, initial_value);
 
-      DbScheduler::push(
+      DbScheduler::push_singleton(
          SaveTask::new(dir_name)
       );
 
@@ -140,7 +140,7 @@ impl<T: CacheContent> UniqueCache<T> {
 
       *write_lock = Arc::new(value);
 
-      DbScheduler::push(
+      DbScheduler::push_singleton(
          SaveTask::new(self.dir_name)
       );
    }
@@ -208,7 +208,7 @@ impl<T: CacheContent> UniqueCache<T> {
          value: RwLock::new(Arc::new(initial_state))
       };
 
-      DbScheduler::push(
+      DbScheduler::push_singleton(
          SaveTask::new(dir_name)
       );
 
@@ -227,7 +227,7 @@ impl<T: CacheContent> UniqueCache<T> {
       let mut write_lock = self.value.write().unwrap();
       *write_lock = Arc::new(value);
 
-      DbScheduler::push(
+      DbScheduler::push_singleton(
          SaveTask::new(self.dir_name)
       );
    }
