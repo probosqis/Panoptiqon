@@ -176,7 +176,6 @@ mod tests {
          "test/CacheTest/saveViaRepository_saveScheduled"
       );
 
-      saveViaRepository_saveScheduled_dbScheduler.clear_all_tasks();
       repository.save(CacheContentImpl(0, 42));
 
       assert_eq!(
@@ -201,11 +200,13 @@ mod tests {
 
       let cache = repository.save(CacheContentImpl(0, 42));
 
-      saveViaCache_saveScheduled_dbScheduler.clear_all_tasks();
       cache.save(CacheContentImpl(0, 0));
 
       assert_eq!(
-         vec!["test/CacheTest/saveViaCache_saveScheduled"],
+         vec![
+            "test/CacheTest/saveViaCache_saveScheduled",
+            "test/CacheTest/saveViaCache_saveScheduled",
+         ],
          saveViaCache_saveScheduled_dbScheduler
             .tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );
@@ -359,7 +360,6 @@ mod jni_tests {
          "test/CacheTest/saveViaRepository_saveScheduled"
       );
 
-      saveViaRepository_saveScheduled_dbScheduler.clear_all_tasks();
       repository.save(CacheContentImpl(0, 42));
 
       assert_eq!(
@@ -387,11 +387,13 @@ mod jni_tests {
 
       let cache = repository.save(CacheContentImpl(0, 42));
 
-      saveViaCache_saveScheduled_dbScheduler.clear_all_tasks();
       cache.save(CacheContentImpl(0, 0));
 
       assert_eq!(
-         vec!["test/CacheTest/saveViaCache_saveScheduled"],
+         vec![
+            "test/CacheTest/saveViaCache_saveScheduled",
+            "test/CacheTest/saveViaCache_saveScheduled",
+         ],
          saveViaCache_saveScheduled_dbScheduler
             .tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );

@@ -101,24 +101,8 @@ impl DbScheduler {
    }
 
    #[cfg(any(test, feature = "jni-test"))]
-   pub(crate) fn clear_all_tasks(&self) {
-      self.tasks.lock().unwrap().clear();
-   }
-
-   #[cfg(any(test, feature = "jni-test"))]
    pub(crate) fn tasks(&self) -> VecDeque<SaveTask> {
       self.tasks.lock().unwrap().clone()
-   }
-
-   #[cfg(any(test, feature = "jni-test"))]
-   pub(crate) fn kill_worker_thread(&self) {
-      use std::sync::atomic::Ordering;
-
-      if let Some(worker_thread) = self.worker_thread.lock().unwrap().take() {
-         worker_thread.stop();
-         self.worker_thread_message_sender
-            .store(ptr::null_mut(), Ordering::Relaxed);
-      }
    }
 }
 
