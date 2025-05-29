@@ -17,6 +17,7 @@
 use std::sync::Arc;
 use fnv::FnvHashMap;
 use crate::cache::CacheContent;
+use crate::db::scheduler::DbScheduler;
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
@@ -31,12 +32,14 @@ use {
 pub(crate) struct UniqueCachePool<T: CacheContent> {
    jvm: JavaVM,
    jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
+   db_scheduler: &'static DbScheduler,
    dir_name: &'static str,
    map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct UniqueCachePool<T: CacheContent> {
+   db_scheduler: &'static DbScheduler,
    dir_name: &'static str,
    map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
 }
@@ -49,7 +52,11 @@ impl<T: CacheContent> UniqueCachePool<T> {
 
 #[cfg(feature="jvm")]
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn new(env: &mut JNIEnv, dir_name: &'static str) -> Self
+   pub fn new(
+      env: &mut JNIEnv,
+      db_scheduler: &'static DbScheduler,
+      dir_name: &'static str
+   ) -> Self
       where T: CloneIntoJvmHelper
    {
       let jvm = env.get_java_vm().unwrap();
@@ -57,6 +64,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
       UniqueCachePool {
          jvm,
          jvm_unique_cache_refs: Arc::new(T::get_jvm_refs(env)),
+         db_scheduler,
          dir_name,
          map: FnvHashMap::default()
       }
@@ -77,7 +85,11 @@ impl<T: CacheContent> UniqueCachePool<T> {
          }
          Entry::Vacant(entry) => {
             let arc = UniqueCache::new_saved(
-               &self.jvm, self.jvm_unique_cache_refs.clone(), self.dir_name, value
+               &self.jvm,
+               self.jvm_unique_cache_refs.clone(),
+               self.db_scheduler,
+               self.dir_name,
+               value
             );
             entry.insert(arc.clone());
             arc
@@ -88,8 +100,9 @@ impl<T: CacheContent> UniqueCachePool<T> {
 
 #[cfg(not(feature="jvm"))]
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn new(dir_name: &'static str) -> Self {
+   pub fn new(db_scheduler: &'static DbScheduler, dir_name: &'static str) -> Self {
       UniqueCachePool {
+         db_scheduler,
          dir_name,
          map: FnvHashMap::default()
       }
@@ -107,7 +120,11 @@ impl<T: CacheContent> UniqueCachePool<T> {
             Arc::clone(arc)
          }
          Entry::Vacant(entry) => {
-            let unique_cache = UniqueCache::new_saved(self.dir_name, value);
+            let unique_cache = UniqueCache::new_saved(
+               self.db_scheduler,
+               self.dir_name,
+               value
+            );
             let arc = Arc::new(unique_cache);
             entry.insert(arc.clone());
             arc
@@ -122,6 +139,7 @@ mod jni_tests {
    use jni::objects::JObject;
    use crate::cache::CacheContent;
    use crate::convert_jvm::CloneIntoJvm;
+   use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
    use super::UniqueCachePool;
 
@@ -150,6 +168,9 @@ mod jni_tests {
       }
    }
 
+   #[allow(non_upper_case_globals)]
+   static createCache_dbScheduler: DbScheduler = DbScheduler::new();
+
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_createCache(
       mut env: JNIEnv,
@@ -157,6 +178,7 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(
          &mut env,
+         &createCache_dbScheduler,
          "test/CachePoolTest/createCache"
       );
 
@@ -167,6 +189,9 @@ mod jni_tests {
       assert_eq!(Content("B".to_string(), 43), *unique_cache.get());
    }
 
+   #[allow(non_upper_case_globals)]
+   static getCache_dbScheduler: DbScheduler = DbScheduler::new();
+
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_getCache(
       mut env: JNIEnv,
@@ -174,6 +199,7 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(
          &mut env,
+         &getCache_dbScheduler,
          "test/CachePoolTest/getCache"
       );
 
@@ -188,6 +214,9 @@ mod jni_tests {
       assert!(unique_cache.is_none());
    }
 
+   #[allow(non_upper_case_globals)]
+   static pooling_dbScheduler: DbScheduler = DbScheduler::new();
+
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_pooling(
       mut env: JNIEnv,
@@ -197,6 +226,7 @@ mod jni_tests {
 
       let mut pool = UniqueCachePool::new(
          &mut env,
+         &pooling_dbScheduler,
          "test/CachePoolTest/pooling"
       );
       let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
@@ -207,6 +237,9 @@ mod jni_tests {
       assert_ne!(cache1_ptr, cache3_ptr);
    }
 
+   #[allow(non_upper_case_globals)]
+   static save_dbScheduler: DbScheduler = DbScheduler::new();
+
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CachePoolTest_save(
       mut env: JNIEnv,
@@ -214,6 +247,7 @@ mod jni_tests {
    ) {
       let mut pool = UniqueCachePool::new(
          &mut env,
+         &save_dbScheduler,
          "test/CachePoolTest/save"
       );
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));

@@ -22,13 +22,7 @@ use std::sync::Mutex;
 use std::thread::JoinHandle;
 use crate::db::save_task::SaveTask;
 
-#[cfg(not(any(test, feature = "jni-test")))]
 static SINGLETON: DbScheduler = DbScheduler::new();
-
-#[cfg(any(test, feature = "jni-test"))]
-thread_local! {
-   static SINGLETON: DbScheduler = DbScheduler::new();
-}
 
 pub(crate) struct DbScheduler {
    tasks: Mutex<VecDeque<SaveTask>>,
@@ -37,23 +31,15 @@ pub(crate) struct DbScheduler {
 }
 
 impl DbScheduler {
-   const fn new() -> Self {
+   pub(crate) fn singleton() -> &'static Self {
+      &SINGLETON
+   }
+
+   pub(crate) const fn new() -> Self {
       Self {
          tasks: Mutex::new(VecDeque::new()),
          worker_thread: Mutex::new(None),
          worker_thread_message_sender: AtomicPtr::new(ptr::null_mut())
-      }
-   }
-
-   fn with_singleton<R>(f: impl FnOnce(&DbScheduler) -> R) -> R {
-      #[cfg(not(any(test, feature = "jni-test")))]
-      {
-         f(&SINGLETON)
-      }
-
-      #[cfg(any(test, feature = "jni-test"))]
-      {
-         SINGLETON.with(f)
       }
    }
 
@@ -111,34 +97,28 @@ impl DbScheduler {
    }
 
    pub(crate) fn push_singleton(task: SaveTask) {
-      Self::with_singleton(|singleton| singleton.push(task));
+      SINGLETON.push(task);
    }
 
    #[cfg(any(test, feature = "jni-test"))]
-   pub(crate) fn clear_all_tasks() {
-      Self::with_singleton(|singleton| {
-         singleton.tasks.lock().unwrap().clear();
-      });
+   pub(crate) fn clear_all_tasks(&self) {
+      self.tasks.lock().unwrap().clear();
    }
 
    #[cfg(any(test, feature = "jni-test"))]
-   pub(crate) fn tasks() -> VecDeque<SaveTask> {
-      Self::with_singleton(|singleton| {
-         singleton.tasks.lock().unwrap().clone()
-      })
+   pub(crate) fn tasks(&self) -> VecDeque<SaveTask> {
+      self.tasks.lock().unwrap().clone()
    }
 
    #[cfg(any(test, feature = "jni-test"))]
-   pub(crate) fn kill_worker_thread() {
+   pub(crate) fn kill_worker_thread(&self) {
       use std::sync::atomic::Ordering;
 
-      Self::with_singleton(|singleton| {
-         if let Some(worker_thread) = singleton.worker_thread.lock().unwrap().take() {
-            worker_thread.stop();
-            singleton.worker_thread_message_sender
-               .store(ptr::null_mut(), Ordering::Relaxed);
-         }
-      });
+      if let Some(worker_thread) = self.worker_thread.lock().unwrap().take() {
+         worker_thread.stop();
+         self.worker_thread_message_sender
+            .store(ptr::null_mut(), Ordering::Relaxed);
+      }
    }
 }
 
