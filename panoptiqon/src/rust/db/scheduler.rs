@@ -96,10 +96,6 @@ impl DbScheduler {
       self.tasks.lock().unwrap().push_front(task);
    }
 
-   pub(crate) fn push_singleton(task: SaveTask) {
-      SINGLETON.push(task);
-   }
-
    #[cfg(any(test, feature = "jni-test"))]
    pub(crate) fn tasks(&self) -> VecDeque<SaveTask> {
       self.tasks.lock().unwrap().clone()
