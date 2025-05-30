@@ -92,7 +92,8 @@ impl DbScheduler {
    }
 
    pub(crate) fn push(&self, task: SaveTask) {
-      self.message_sender();
+      let sender = self.message_sender();
+      sender.send(WorkerThreadMessage::SaveTask(task)).unwrap();
       self.tasks.lock().unwrap().push_front(task);
    }
 
@@ -124,6 +125,7 @@ struct WorkerThread {
 
 enum WorkerThreadMessage {
    Stop,
+   SaveTask(SaveTask),
 }
 
 impl WorkerThread {
@@ -137,7 +139,9 @@ impl WorkerThread {
          let Ok(message) = rx.recv() else { break; };
 
          match message {
-            WorkerThreadMessage::Stop => break
+            WorkerThreadMessage::Stop => break,
+            WorkerThreadMessage::SaveTask(task) => {
+            }
          }
       });
 
