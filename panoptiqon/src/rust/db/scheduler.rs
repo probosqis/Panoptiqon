@@ -62,28 +62,31 @@ impl DbScheduler {
       // ロックを取得
       let mut lock = self.worker_thread.lock().unwrap();
 
-      let message_sender_ptr = match *lock {
+      let message_sender = match *lock {
          Some(ref mut worker_thread) => {
             // WorkerThreadが存在している。
             // worker_thread_message_senderがnullでも
             // 同時に別スレッドがWorkerThreadを起動していた場合は
             // ロックが取れたあとにWorkerThreadが存在することはありうる
-            &mut worker_thread.message as *mut _
+            &mut worker_thread.message
          }
          None => {
             // WorkerThreadが存在しない。起動する
-            let mut worker_thread = WorkerThread::start();
+            let worker_thread = WorkerThread::start();
 
             // worker_threadとworker_thread_message_senderに
             // 起動したインスタンスを格納
-            let message_sender_ptr = &mut worker_thread.message as *mut _;
             *lock = Some(worker_thread);
-            self.worker_thread_message_sender
-               .store(message_sender_ptr, Ordering::Relaxed);
 
-            message_sender_ptr
+            let message = &mut lock.as_mut().unwrap().message;
+            self.worker_thread_message_sender
+               .store(message as *mut _, Ordering::Relaxed);
+
+            message
          }
       };
+
+      let message_sender_ptr = message_sender as *mut _;
 
       // ロックを解除（タイミングを明確にするため明示）
       drop(lock);
@@ -109,10 +112,10 @@ impl Drop for DbScheduler {
 
       if let Ok(mut worker_thread) = self.worker_thread.lock() {
          if let Some(worker_thread) = worker_thread.take() {
-            worker_thread.stop();
-
             self.worker_thread_message_sender
                .store(ptr::null_mut(), Ordering::Relaxed);
+
+            worker_thread.stop();
          }
       }
    }
