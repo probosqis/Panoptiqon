@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-use std::collections::VecDeque;
 use std::ptr;
 use std::sync::atomic::AtomicPtr;
 use std::sync::mpsc::Sender;
@@ -25,7 +24,6 @@ use crate::db::save_task::SaveTask;
 static SINGLETON: DbScheduler = DbScheduler::new();
 
 pub(crate) struct DbScheduler {
-   tasks: Mutex<VecDeque<SaveTask>>,
    worker_thread: Mutex<Option<WorkerThread>>,
    worker_thread_message_sender: AtomicPtr<Sender<WorkerThreadMessage>>
 }
@@ -37,7 +35,6 @@ impl DbScheduler {
 
    pub(crate) const fn new() -> Self {
       Self {
-         tasks: Mutex::new(VecDeque::new()),
          worker_thread: Mutex::new(None),
          worker_thread_message_sender: AtomicPtr::new(ptr::null_mut())
       }
@@ -97,12 +94,21 @@ impl DbScheduler {
    pub(crate) fn push(&self, task: SaveTask) {
       let sender = self.message_sender();
       sender.send(WorkerThreadMessage::SaveTask(task)).unwrap();
-      self.tasks.lock().unwrap().push_front(task);
    }
 
    #[cfg(any(test, feature = "jni-test"))]
-   pub(crate) fn tasks(&self) -> VecDeque<SaveTask> {
-      self.tasks.lock().unwrap().clone()
+   pub(crate) fn stop(&self) -> Vec<SaveTask> {
+      use std::sync::atomic::Ordering;
+
+      let mut lock = self.worker_thread.lock().unwrap();
+      if let Some(worker_thread) = lock.take() {
+         self.worker_thread_message_sender
+            .store(ptr::null_mut(), Ordering::Relaxed);
+
+         worker_thread.stop()
+      } else {
+         vec![]
+      }
    }
 }
 
@@ -122,7 +128,10 @@ impl Drop for DbScheduler {
 }
 
 struct WorkerThread {
+   #[cfg(not(any(test, feature = "jni-test")))]
    handle: JoinHandle<()>,
+   #[cfg(any(test, feature = "jni-test"))]
+   handle: JoinHandle<Vec<SaveTask>>,
    message: Sender<WorkerThreadMessage>
 }
 
@@ -138,6 +147,7 @@ impl WorkerThread {
 
       let (tx, rx) = mpsc::channel();
 
+      #[cfg(not(any(test, feature = "jni-test")))]
       let handle = thread::spawn(move || loop {
          let Ok(message) = rx.recv() else { break; };
 
@@ -148,15 +158,38 @@ impl WorkerThread {
          }
       });
 
+      #[cfg(any(test, feature = "jni-test"))]
+      let handle = thread::spawn(move || {
+         let mut received_tasks = Vec::new();
+
+         loop {
+            let Ok(message) = rx.recv() else { break received_tasks; };
+
+            match message {
+               WorkerThreadMessage::Stop => break received_tasks,
+               WorkerThreadMessage::SaveTask(task) => {
+                  received_tasks.push(task);
+               }
+            }
+         }
+      });
+
       Self {
          handle,
          message: tx
       }
    }
 
+   #[cfg(not(any(test, feature = "jni-test")))]
    fn stop(self) {
       self.message.send(WorkerThreadMessage::Stop).unwrap();
       self.handle.join().unwrap();
+   }
+
+   #[cfg(any(test, feature = "jni-test"))]
+   fn stop(self) -> Vec<SaveTask> {
+      self.message.send(WorkerThreadMessage::Stop).unwrap();
+      self.handle.join().unwrap()
    }
 }
 

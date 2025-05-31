@@ -181,7 +181,7 @@ mod tests {
       assert_eq!(
          vec!["test/CacheTest/saveViaRepository_saveScheduled"],
          saveViaRepository_saveScheduled_dbScheduler
-            .tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+            .stop().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );
    }
 
@@ -208,7 +208,7 @@ mod tests {
             "test/CacheTest/saveViaCache_saveScheduled",
          ],
          saveViaCache_saveScheduled_dbScheduler
-            .tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+            .stop().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );
    }
 }
@@ -365,7 +365,7 @@ mod jni_tests {
       assert_eq!(
          vec!["test/CacheTest/saveViaRepository_saveScheduled"],
          saveViaRepository_saveScheduled_dbScheduler
-            .tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+            .stop().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );
    }
 
@@ -395,7 +395,7 @@ mod jni_tests {
             "test/CacheTest/saveViaCache_saveScheduled",
          ],
          saveViaCache_saveScheduled_dbScheduler
-            .tasks().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
+            .stop().into_iter().map(|t| t.dir_name).collect::<Vec<_>>()
       );
    }
 
