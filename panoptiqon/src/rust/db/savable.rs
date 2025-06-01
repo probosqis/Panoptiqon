@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
-pub(crate) mod save_task;
-pub(crate) mod savable;
-pub(crate) mod scheduler;
+use crate::cache::CacheContent;
+use crate::unique_cache::UniqueCache;
+
+pub(crate) trait Savable {
+}
+
+impl<T: CacheContent> Savable for UniqueCache<T> {
+}
