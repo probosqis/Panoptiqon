@@ -14,15 +14,22 @@
  * limitations under the License.
  */
 
-#[derive(Clone)]
+use std::sync::Arc;
+use crate::db::savable::Savable;
+
 pub(crate) struct SaveTask {
-   pub(crate) dir_name: &'static str
+   pub(crate) dir_name: &'static str,
+   pub(crate) cache: Arc<dyn Savable + Send + Sync>
 }
 
 impl SaveTask {
-   pub(crate) fn new(dir_name: &'static str) -> Self {
+   pub(crate) fn new(
+      dir_name: &'static str,
+      cache: Arc<dyn Savable + Send + Sync>
+   ) -> Self {
       Self {
-         dir_name
+         dir_name,
+         cache
       }
    }
 }

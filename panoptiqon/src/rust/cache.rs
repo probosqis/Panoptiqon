@@ -42,12 +42,16 @@ impl<T: CacheContent> Cache<T> {
    #[cfg(feature = "jvm")]
    pub fn save(&self, value: T)
       where for<'local> T: CloneIntoJvm<'local, T::JvmType<'local>>
+               + Send + Sync
+               + 'static
    {
       self.0.save(value);
    }
 
    #[cfg(not(feature = "jvm"))]
-   pub fn save(&self, value: T) {
+   pub fn save(&self, value: T)
+      where T: Send + Sync + 'static
+   {
       self.0.save(value);
    }
 
@@ -417,8 +421,8 @@ mod jni_tests {
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
-      // pool内、JVM、cache
-      assert_eq!(3, Arc::strong_count(&cache.0));
+      // pool内、JVM、cache、SaveTask
+      assert_eq!(4, Arc::strong_count(&cache.0));
    }
 
    #[allow(non_upper_case_globals)]
@@ -441,8 +445,8 @@ mod jni_tests {
 
       let _jvm_cache = cache.create_jvm_instance(&mut env);
 
-      // pool内、JVM、cache
-      assert_eq!(3, Arc::strong_count(&cache.0));
+      // pool内、JVM、cache、SaveTask
+      assert_eq!(4, Arc::strong_count(&cache.0));
    }
 
    #[allow(non_upper_case_globals)]
@@ -465,8 +469,8 @@ mod jni_tests {
 
       let _clone = cache.clone();
 
-      // pool内、JVM、cache, _clone
-      assert_eq!(4, Arc::strong_count(&cache.0));
+      // pool内、JVM、cache、SaveTask、_clone
+      assert_eq!(5, Arc::strong_count(&cache.0));
    }
 
    #[allow(non_upper_case_globals)]
@@ -491,8 +495,8 @@ mod jni_tests {
       let _jvm_cache: JvmCache<JvmCacheContentImpl>
          = cache.clone_into_jvm(&mut env);
 
-      // pool内、JVM、cache
-      assert_eq!(3, Arc::strong_count(&cache.0));
+      // pool内、JVM、cache、SaveTask
+      assert_eq!(4, Arc::strong_count(&cache.0));
    }
 
    #[allow(non_upper_case_globals)]
@@ -519,8 +523,8 @@ mod jni_tests {
 
       let _clone = Cache::<CacheContentImpl>::clone_from_jvm(&mut env, &jvm_cache);
 
-      // pool内、JVM、cache, _clone
-      assert_eq!(4, Arc::strong_count(&cache.0));
+      // pool内、JVM、cache、SaveTask、_clone
+      assert_eq!(5, Arc::strong_count(&cache.0));
    }
 
    #[allow(non_upper_case_globals)]
@@ -543,7 +547,7 @@ mod jni_tests {
 
       cache.save(CacheContentImpl(0, 0));
 
-      // pool内、JVM、cache
-      assert_eq!(3, Arc::strong_count(&cache.0));
+      // pool内、JVM、cache、SaveTask、SaveTask
+      assert_eq!(5, Arc::strong_count(&cache.0));
    }
 }

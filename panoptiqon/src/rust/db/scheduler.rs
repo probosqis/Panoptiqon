@@ -195,12 +195,17 @@ impl WorkerThread {
 
 #[cfg(test)]
 mod test {
+   use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
    use super::DbScheduler;
+
+   struct SavableImpl;
+   impl Savable for SavableImpl {}
 
    #[allow(non_snake_case)]
    #[test]
    fn push_startWorkerThread() {
+      use std::sync::Arc;
       use std::sync::atomic::Ordering;
 
       let db_scheduler = DbScheduler::new();
@@ -214,7 +219,12 @@ mod test {
             .is_null()
       );
 
-      db_scheduler.push(SaveTask::new("DbSchedulerTest/push_startWorkerThread"));
+      db_scheduler.push(
+         SaveTask::new(
+            "DbSchedulerTest/push_startWorkerThread",
+            Arc::new(SavableImpl)
+         )
+      );
 
       assert!(
          db_scheduler.worker_thread.lock().unwrap()

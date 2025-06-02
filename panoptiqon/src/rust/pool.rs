@@ -71,7 +71,10 @@ impl<T: CacheContent> UniqueCachePool<T> {
    }
 
    pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
-      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+               + CloneIntoJvmHelper
+               + Send + Sync
+               + 'static
    {
       use std::collections::hash_map::Entry;
 
@@ -108,7 +111,9 @@ impl<T: CacheContent> UniqueCachePool<T> {
       }
    }
 
-   pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>> {
+   pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
+      where T: Send + Sync + 'static
+   {
       use std::collections::hash_map::Entry;
 
       let entry = self.map.entry(key);
@@ -120,12 +125,11 @@ impl<T: CacheContent> UniqueCachePool<T> {
             Arc::clone(arc)
          }
          Entry::Vacant(entry) => {
-            let unique_cache = UniqueCache::new_saved(
+            let arc = UniqueCache::new_saved(
                self.db_scheduler,
                self.dir_name,
                value
             );
-            let arc = Arc::new(unique_cache);
             entry.insert(arc.clone());
             arc
          }

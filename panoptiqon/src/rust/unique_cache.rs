@@ -66,13 +66,17 @@ impl<T: CacheContent> UniqueCache<T> {
       dir_name: &'static str,
       initial_value: T
    ) -> Arc<Self>
-      where T: CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
+      where T: CloneIntoJvm<'local, T::JvmType<'local>>
+               + CloneIntoJvmHelper
+               + Send + Sync
+               + 'static
    {
       use crate::db::save_task::SaveTask;
 
       let arc = Self::new_arc(jvm, jvm_refs, db_scheduler, dir_name, initial_value);
 
-      db_scheduler.push(SaveTask::new(dir_name));
+      let task_cache = Arc::clone(&arc);
+      db_scheduler.push(SaveTask::new(dir_name, task_cache));
 
       arc
    }
@@ -118,8 +122,10 @@ impl<T: CacheContent> UniqueCache<T> {
       Arc::clone(&*read_lock)
    }
 
-   pub(crate) fn save<'local>(&'local self, value: T)
+   pub(crate) fn save<'local>(self: &'local Arc<Self>, value: T)
       where T: CloneIntoJvm<'local, T::JvmType<'local>>
+               + Send + Sync
+               + 'static
    {
       use jni::objects::JValueGen;
       use jni::signature::{Primitive, ReturnType};
@@ -142,7 +148,8 @@ impl<T: CacheContent> UniqueCache<T> {
 
       *write_lock = Arc::new(value);
 
-      self.db_scheduler.push(SaveTask::new(self.dir_name));
+      let task_cache = Arc::clone(self);
+      self.db_scheduler.push(SaveTask::new(self.dir_name, task_cache));
    }
 
    pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
@@ -200,7 +207,9 @@ impl<T: CacheContent> UniqueCache<T> {
       db_scheduler: &'static DbScheduler,
       dir_name: &'static str,
       initial_state: T
-   ) -> Self {
+   ) -> Arc<Self>
+      where T: Send + Sync + 'static
+   {
       use crate::db::save_task::SaveTask;
 
       let cache = UniqueCache {
@@ -209,9 +218,12 @@ impl<T: CacheContent> UniqueCache<T> {
          value: RwLock::new(Arc::new(initial_state))
       };
 
-      db_scheduler.push(SaveTask::new(dir_name));
+      let arc = Arc::new(cache);
 
-      cache
+      let task_cache = Arc::clone(&arc);
+      db_scheduler.push(SaveTask::new(dir_name, task_cache));
+
+      arc
    }
 
    pub(crate) fn get(&self) -> Arc<T> {
@@ -219,13 +231,16 @@ impl<T: CacheContent> UniqueCache<T> {
       Arc::clone(&*read_lock)
    }
 
-   pub(crate) fn save(&self, value: T) {
+   pub(crate) fn save(self: &Arc<Self>, value: T)
+      where T: Send + Sync + 'static
+   {
       use crate::db::save_task::SaveTask;
 
       let mut write_lock = self.value.write().unwrap();
       *write_lock = Arc::new(value);
 
-      self.db_scheduler.push(SaveTask::new(self.dir_name));
+      let task_cache = Arc::clone(self);
+      self.db_scheduler.push(SaveTask::new(self.dir_name, task_cache));
    }
 }
 

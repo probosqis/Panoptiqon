@@ -62,7 +62,10 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
-      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+               + CloneIntoJvmHelper
+               + Send + Sync
+               + 'static
    {
       let key = value.key();
       let arc = self.pool.update(key, value);
@@ -88,7 +91,9 @@ impl<T: CacheContent> Repository<T> {
       }
    }
 
-   pub fn save(&mut self, value: T) -> Cache<T> {
+   pub fn save(&mut self, value: T) -> Cache<T>
+      where T: Send + Sync + 'static
+   {
       let key = value.key();
       let arc = self.pool.update(key, value);
       Cache::new(arc)
