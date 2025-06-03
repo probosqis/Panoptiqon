@@ -18,6 +18,8 @@ use std::fs::File;
 use std::io::BufWriter;
 use crate::db::save_task::SaveTask;
 
+pub(crate) type Serializer<'a> = &'a mut serde_json::Serializer<BufWriter<File>>;
+
 pub(crate) struct Saver;
 
 impl Saver {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use serde::Serialize;
 use crate::cache::{Cache, CacheContent};
 use crate::db::scheduler::DbScheduler;
 use crate::pool::UniqueCachePool;
@@ -64,6 +65,7 @@ impl<T: CacheContent> Repository<T> {
    pub fn save(&mut self, value: T) -> Cache<T>
       where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
+               + Serialize
                + Send + Sync
                + 'static
    {
@@ -92,7 +94,7 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
-      where T: Send + Sync + 'static
+      where T: Serialize + Send + Sync + 'static
    {
       let key = value.key();
       let arc = self.pool.update(key, value);
@@ -105,6 +107,7 @@ mod jni_tests {
    use std::sync::Mutex;
    use jni::JNIEnv;
    use jni::objects::JObject;
+   use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::scheduler::DbScheduler;
@@ -116,7 +119,7 @@ mod jni_tests {
       JvmTwoWayConversionData,
    }
 
-   #[derive(Debug, PartialEq, Eq)]
+   #[derive(Debug, PartialEq, Eq, Serialize)]
    struct OneWayConversionData(String, i32);
 
    impl CacheContent for OneWayConversionData {
@@ -145,7 +148,7 @@ mod jni_tests {
       }
    }
 
-   #[derive(Debug, PartialEq, Eq)]
+   #[derive(Debug, PartialEq, Eq, Serialize)]
    struct TwoWayConversionData(String, i32);
 
    impl CacheContent for TwoWayConversionData {

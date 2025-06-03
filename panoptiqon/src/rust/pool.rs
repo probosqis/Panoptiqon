@@ -16,6 +16,7 @@
 
 use std::sync::Arc;
 use fnv::FnvHashMap;
+use serde::Serialize;
 use crate::cache::CacheContent;
 use crate::db::scheduler::DbScheduler;
 use crate::unique_cache::UniqueCache;
@@ -73,6 +74,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
    pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
       where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
+               + Serialize
                + Send + Sync
                + 'static
    {
@@ -112,7 +114,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
    }
 
    pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
-      where T: Send + Sync + 'static
+      where T: Serialize + Send + Sync + 'static
    {
       use std::collections::hash_map::Entry;
 
@@ -141,6 +143,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
 mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::JObject;
+   use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::convert_jvm::CloneIntoJvm;
    use crate::db::scheduler::DbScheduler;
@@ -151,7 +154,7 @@ mod jni_tests {
       JvmContent,
    }
 
-   #[derive(Debug, PartialEq, Eq)]
+   #[derive(Debug, PartialEq, Eq, Serialize)]
    struct Content(String, i32);
 
    impl CacheContent for Content {

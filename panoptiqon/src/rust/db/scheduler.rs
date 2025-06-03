@@ -197,10 +197,21 @@ impl WorkerThread {
 mod test {
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
+   use crate::db::saver;
    use super::DbScheduler;
 
    struct SavableImpl;
-   impl Savable for SavableImpl {}
+   impl Savable for SavableImpl {
+      fn serialize(
+         &self,
+         _serializer: saver::Serializer
+      ) -> anyhow::Result<
+         <saver::Serializer as serde::Serializer>::Ok,
+         <saver::Serializer as serde::Serializer>::Error
+      > {
+         unimplemented!();
+      }
+   }
 
    #[allow(non_snake_case)]
    #[test]

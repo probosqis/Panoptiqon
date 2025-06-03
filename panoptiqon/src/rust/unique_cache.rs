@@ -15,6 +15,7 @@
  */
 
 use std::sync::{Arc, RwLock};
+use serde::Serialize;
 use crate::cache::CacheContent;
 use crate::db::scheduler::DbScheduler;
 
@@ -68,6 +69,7 @@ impl<T: CacheContent> UniqueCache<T> {
    ) -> Arc<Self>
       where T: CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
+               + Serialize
                + Send + Sync
                + 'static
    {
@@ -124,6 +126,7 @@ impl<T: CacheContent> UniqueCache<T> {
 
    pub(crate) fn save<'local>(self: &'local Arc<Self>, value: T)
       where T: CloneIntoJvm<'local, T::JvmType<'local>>
+               + Serialize
                + Send + Sync
                + 'static
    {
@@ -208,7 +211,7 @@ impl<T: CacheContent> UniqueCache<T> {
       dir_name: &'static str,
       initial_state: T
    ) -> Arc<Self>
-      where T: Send + Sync + 'static
+      where T: Serialize + Send + Sync + 'static
    {
       use crate::db::save_task::SaveTask;
 
@@ -232,7 +235,7 @@ impl<T: CacheContent> UniqueCache<T> {
    }
 
    pub(crate) fn save(self: &Arc<Self>, value: T)
-      where T: Send + Sync + 'static
+      where T: Serialize + Send + Sync + 'static
    {
       use crate::db::save_task::SaveTask;
 

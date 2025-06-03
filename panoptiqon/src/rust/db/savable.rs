@@ -14,11 +14,31 @@
  * limitations under the License.
  */
 
+use serde::Serialize;
 use crate::cache::CacheContent;
+use crate::db::saver;
 use crate::unique_cache::UniqueCache;
 
 pub(crate) trait Savable {
+   fn serialize(
+      &self,
+      serializer: saver::Serializer
+   ) -> anyhow::Result<
+      <saver::Serializer as serde::Serializer>::Ok,
+      <saver::Serializer as serde::Serializer>::Error
+   >;
 }
 
-impl<T: CacheContent> Savable for UniqueCache<T> {
+impl<T> Savable for UniqueCache<T>
+   where T: CacheContent + Serialize
+{
+   fn serialize(
+      &self,
+      serializer: saver::Serializer
+   ) -> anyhow::Result<
+      <saver::Serializer as serde::Serializer>::Ok,
+      <saver::Serializer as serde::Serializer>::Error
+   > {
+      self.get().serialize(serializer)
+   }
 }

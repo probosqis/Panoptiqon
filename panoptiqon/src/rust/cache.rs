@@ -17,7 +17,7 @@
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
 use std::sync::Arc;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature = "jvm")]
@@ -42,6 +42,7 @@ impl<T: CacheContent> Cache<T> {
    #[cfg(feature = "jvm")]
    pub fn save(&self, value: T)
       where for<'local> T: CloneIntoJvm<'local, T::JvmType<'local>>
+               + Serialize
                + Send + Sync
                + 'static
    {
@@ -50,7 +51,7 @@ impl<T: CacheContent> Cache<T> {
 
    #[cfg(not(feature = "jvm"))]
    pub fn save(&self, value: T)
-      where T: Send + Sync + 'static
+      where T: Serialize + Send + Sync + 'static
    {
       self.0.save(value);
    }
@@ -128,10 +129,11 @@ pub trait CacheContent {
 
 #[cfg(all(test, not(feature = "jvm")))]
 mod tests {
+   use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::db::scheduler::DbScheduler;
 
-   #[derive(Debug, PartialEq, Eq)]
+   #[derive(Debug, PartialEq, Eq, Serialize)]
    struct CacheContentImpl(i32, i32);
 
    impl CacheContent for CacheContentImpl {
@@ -222,6 +224,7 @@ mod jni_tests {
    use std::sync::Mutex;
    use jni::JNIEnv;
    use jni::objects::JObject;
+   use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::scheduler::DbScheduler;
@@ -234,7 +237,7 @@ mod jni_tests {
       JvmCacheContentImpl,
    }
 
-   #[derive(Debug, PartialEq, Eq)]
+   #[derive(Debug, PartialEq, Eq, Serialize)]
    struct CacheContentImpl(i32, i32);
 
    impl CacheContent for CacheContentImpl {
