@@ -195,6 +195,7 @@ impl WorkerThread {
 
 #[cfg(test)]
 mod test {
+   use std::path::PathBuf;
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
    use crate::db::saver;
@@ -232,7 +233,7 @@ mod test {
 
       db_scheduler.push(
          SaveTask::new(
-            "DbSchedulerTest/push_startWorkerThread",
+            &saver::DirPath::new(PathBuf::from("DbSchedulerTest/push_startWorkerThread")),
             Arc::new(SavableImpl)
          )
       );

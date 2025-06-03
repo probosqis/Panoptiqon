@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
+use std::path::Path;
 use serde::Serialize;
 use crate::cache::{Cache, CacheContent};
+use crate::db::saver;
 use crate::db::scheduler::DbScheduler;
 use crate::pool::UniqueCachePool;
 
@@ -41,11 +43,13 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(feature = "jvm")]
 impl<T: CacheContent> Repository<T> {
-   pub fn new(env: &mut JNIEnv, dir_name: &'static str) -> Self
+   pub fn new(env: &mut JNIEnv, dir_path: impl AsRef<Path>) -> Self
       where T: CloneIntoJvmHelper
    {
+      let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
+
       Repository {
-         pool: UniqueCachePool::new(env, DbScheduler::singleton(), dir_name)
+         pool: UniqueCachePool::new(env, DbScheduler::singleton(), &dir_path)
       }
    }
 
@@ -53,12 +57,14 @@ impl<T: CacheContent> Repository<T> {
    pub fn new_testable(
       env: &mut JNIEnv,
       db_scheduler: &'static DbScheduler,
-      dir_name: &'static str
+      dir_path: impl AsRef<Path>
    ) -> Self
       where T: CloneIntoJvmHelper
    {
+      let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
+
       Repository {
-         pool: UniqueCachePool::new(env, db_scheduler, dir_name)
+         pool: UniqueCachePool::new(env, db_scheduler, &dir_path)
       }
    }
 
@@ -77,19 +83,23 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(not(feature = "jvm"))]
 impl<T: CacheContent> Repository<T> {
-   pub fn new(dir_name: &'static str) -> Self {
+   pub fn new(dir_path: impl AsRef<Path>) -> Self {
+      let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
+
       Repository {
-         pool: UniqueCachePool::new(DbScheduler::singleton(), dir_name)
+         pool: UniqueCachePool::new(DbScheduler::singleton(), &dir_path)
       }
    }
 
    #[cfg(any(test, feature = "jni-test"))]
    pub fn new_testable(
       db_scheduler: &'static DbScheduler,
-      dir_name: &'static str
+      dir_path: impl AsRef<Path>
    ) -> Self {
+      let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
+
       Repository {
-         pool: UniqueCachePool::new(db_scheduler, dir_name)
+         pool: UniqueCachePool::new(db_scheduler, &dir_path)
       }
    }
 

@@ -16,8 +16,11 @@
 
 use std::fs::File;
 use std::io::BufWriter;
+use std::path::PathBuf;
+use std::sync::Arc;
 use crate::db::save_task::SaveTask;
 
+pub(crate) type DirPath = Arc<PathBuf>;
 pub(crate) type Serializer<'a> = &'a mut serde_json::Serializer<BufWriter<File>>;
 
 pub(crate) struct Saver;
@@ -28,7 +31,7 @@ impl Saver {
          .create(true)
          .write(true)
          .truncate(true)
-         .open(task.dir_name)?;
+         .open(task.dir_path.as_path())?;
 
       let writer = BufWriter::new(file);
       let mut serializer = serde_json::Serializer::new(writer);

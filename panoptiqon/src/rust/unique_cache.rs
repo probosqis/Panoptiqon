@@ -17,6 +17,7 @@
 use std::sync::{Arc, RwLock};
 use serde::Serialize;
 use crate::cache::CacheContent;
+use crate::db::saver;
 use crate::db::scheduler::DbScheduler;
 
 #[cfg(feature = "jvm")]
@@ -47,14 +48,14 @@ pub struct UniqueCache<T: CacheContent> {
    // 1(JVMからのものだけ)になったとき強参照のjvm_stateは解放するなどの対応が必要か
    jvm_state: GlobalRef,
    db_scheduler: &'static DbScheduler,
-   dir_name: &'static str,
+   dir_path: saver::DirPath,
    value: RwLock<Arc<T>>
 }
 
 #[cfg(not(feature = "jvm"))]
 pub struct UniqueCache<T: CacheContent> {
    db_scheduler: &'static DbScheduler,
-   dir_name: &'static str,
+   dir_path: saver::DirPath,
    value: RwLock<Arc<T>>
 }
 
@@ -64,7 +65,7 @@ impl<T: CacheContent> UniqueCache<T> {
       jvm: &'local JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       db_scheduler: &'static DbScheduler,
-      dir_name: &'static str,
+      dir_path: &saver::DirPath,
       initial_value: T
    ) -> Arc<Self>
       where T: CloneIntoJvm<'local, T::JvmType<'local>>
@@ -75,10 +76,10 @@ impl<T: CacheContent> UniqueCache<T> {
    {
       use crate::db::save_task::SaveTask;
 
-      let arc = Self::new_arc(jvm, jvm_refs, db_scheduler, dir_name, initial_value);
+      let arc = Self::new_arc(jvm, jvm_refs, db_scheduler, dir_path, initial_value);
 
       let task_cache = Arc::clone(&arc);
-      db_scheduler.push(SaveTask::new(dir_name, task_cache));
+      db_scheduler.push(SaveTask::new(dir_path, task_cache));
 
       arc
    }
@@ -87,7 +88,7 @@ impl<T: CacheContent> UniqueCache<T> {
       jvm: &'local JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       db_scheduler: &'static DbScheduler,
-      dir_name: &'static str,
+      dir_path: &saver::DirPath,
       initial_value: T
    ) -> Arc<Self>
       where T: CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
@@ -108,7 +109,7 @@ impl<T: CacheContent> UniqueCache<T> {
          jvm_refs,
          jvm_state,
          db_scheduler,
-         dir_name,
+         dir_path: saver::DirPath::clone(dir_path),
          value: RwLock::new(Arc::new(initial_value))
       };
 
@@ -152,7 +153,7 @@ impl<T: CacheContent> UniqueCache<T> {
       *write_lock = Arc::new(value);
 
       let task_cache = Arc::clone(self);
-      self.db_scheduler.push(SaveTask::new(self.dir_name, task_cache));
+      self.db_scheduler.push(SaveTask::new(&self.dir_path, task_cache));
    }
 
    pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
@@ -208,7 +209,7 @@ impl<T: CacheContent> UniqueCache<T> {
 impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new_saved(
       db_scheduler: &'static DbScheduler,
-      dir_name: &'static str,
+      dir_path: &saver::DirPath,
       initial_state: T
    ) -> Arc<Self>
       where T: Serialize + Send + Sync + 'static
@@ -217,14 +218,14 @@ impl<T: CacheContent> UniqueCache<T> {
 
       let cache = UniqueCache {
          db_scheduler,
-         dir_name,
+         dir_path: saver::DirPath::clone(dir_path),
          value: RwLock::new(Arc::new(initial_state))
       };
 
       let arc = Arc::new(cache);
 
       let task_cache = Arc::clone(&arc);
-      db_scheduler.push(SaveTask::new(dir_name, task_cache));
+      db_scheduler.push(SaveTask::new(dir_path, task_cache));
 
       arc
    }
@@ -243,7 +244,7 @@ impl<T: CacheContent> UniqueCache<T> {
       *write_lock = Arc::new(value);
 
       let task_cache = Arc::clone(self);
-      self.db_scheduler.push(SaveTask::new(self.dir_name, task_cache));
+      self.db_scheduler.push(SaveTask::new(&self.dir_path, task_cache));
    }
 }
 
