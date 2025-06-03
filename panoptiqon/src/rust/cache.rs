@@ -110,6 +110,14 @@ impl<T: CacheContent> Clone for Cache<T> {
    }
 }
 
+impl<T: CacheContent> Serialize for Cache<T> {
+   fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+      where S: Serializer
+   {
+      Err(serde::ser::Error::custom("not implemented"))
+   }
+}
+
 impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
       where D: Deserializer<'de>
