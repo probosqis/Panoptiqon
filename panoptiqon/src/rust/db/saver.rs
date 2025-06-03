@@ -14,7 +14,25 @@
  * limitations under the License.
  */
 
-pub(crate) mod save_task;
-pub(crate) mod savable;
-pub(crate) mod saver;
-pub(crate) mod scheduler;
+use std::fs::File;
+use std::io::BufWriter;
+use crate::db::save_task::SaveTask;
+
+pub(crate) struct Saver;
+
+impl Saver {
+   pub(crate) fn save(task: SaveTask) -> anyhow::Result<()> {
+      let file = File::options()
+         .create(true)
+         .write(true)
+         .truncate(true)
+         .open(task.dir_name)?;
+
+      let writer = BufWriter::new(file);
+      let mut serializer = serde_json::Serializer::new(writer);
+
+      task.cache.serialize(&mut serializer)?;
+
+      Ok(())
+   }
+}
