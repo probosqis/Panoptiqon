@@ -24,8 +24,11 @@ use crate::pool::UniqueCachePool;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
+   jni::sys::jlong,
    crate::convert_jvm::CloneIntoJvm,
    crate::convert_jvm::CloneIntoJvmHelper,
+   crate::jvm_type::JvmType,
+   crate::jvm_types::JvmRepository,
 };
 
 pub struct Repository<T: CacheContent> {
@@ -66,6 +69,30 @@ impl<T: CacheContent> Repository<T> {
       Repository {
          pool: UniqueCachePool::new(env, db_scheduler, &dir_path)
       }
+   }
+
+   /// 新しいRepositoryを作成し、それをwrapするJVMインスタンスを生成する。
+   /// Repositoryの所有権はすぐさまJVMインスタンスにムーブし、
+   /// インスタンスがGCによって解放されるときにdropされる。
+   fn new_jvm<'local>(
+      env: &mut JNIEnv<'local>,
+      dir_path: impl AsRef<Path>
+   ) -> JvmRepository<'local, T::JvmType<'local>>
+      where T: CloneIntoJvmHelper + 'local
+   {
+      let instance_repo = Box::new(
+         Repository::<T>::new(env, dir_path)
+      );
+
+      let instance_repo_ptr = Box::into_raw(instance_repo);
+
+      let j_object = env.new_object(
+         "com/wcaokaze/probosqis/panoptiqon/Repository",
+         "(J)V",
+         &[(instance_repo_ptr as jlong).into()]
+      ).unwrap();
+
+      unsafe { JvmRepository::from_j_object(j_object) }
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
