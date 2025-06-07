@@ -176,7 +176,7 @@ mod jni_tests {
          let second = self.1;
 
          let j_object = env.new_object(
-            "Lcom/wcaokaze/probosqis/panoptiqon/RepositoryTest$OneWayConversionData;",
+            "Lcom/wcaokaze/probosqis/panoptiqon/NativeRepositoryTest$OneWayConversionData;",
             "(Ljava/lang/String;I)V",
             &[first.j_string().into(), second.into()]
          ).unwrap();
@@ -205,7 +205,7 @@ mod jni_tests {
          let second = self.1;
 
          let j_object = env.new_object(
-            "Lcom/wcaokaze/probosqis/panoptiqon/RepositoryTest$TwoWayConversionData;",
+            "Lcom/wcaokaze/probosqis/panoptiqon/NativeRepositoryTest$TwoWayConversionData;",
             "(Ljava/lang/String;I)V",
             &[first.j_string().into(), second.into()]
          ).unwrap();
@@ -240,28 +240,28 @@ mod jni_tests {
    static switchCacheClass_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_switchCacheClass_00024saveOneWayData<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_switchCacheClass_00024saveOneWayData<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
          &switchCacheClass_dbScheduler,
-         "test/RepositoryTest/switchCacheClass_saveOneWayData"
+         "test/NativeRepositoryTest/switchCacheClass_saveOneWayData"
       );
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_switchCacheClass_00024saveTwoWayData<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_switchCacheClass_00024saveTwoWayData<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          &switchCacheClass_dbScheduler,
-         "test/RepositoryTest/switchCacheClass_saveTwoWayData"
+         "test/NativeRepositoryTest/switchCacheClass_saveTwoWayData"
       );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
@@ -271,14 +271,14 @@ mod jni_tests {
    static saveLoad_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_saveLoad(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_saveLoad(
       mut env: JNIEnv,
       _obj: JObject
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          &saveLoad_dbScheduler,
-         "test/RepositoryTest/saveLoad"
+         "test/NativeRepositoryTest/saveLoad"
       );
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
@@ -303,14 +303,14 @@ mod jni_tests {
    static load_noSuchCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_load_1noSuchCache(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_load_1noSuchCache(
       mut env: JNIEnv,
       _obj: JObject
    ) {
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          &load_noSuchCache_dbScheduler,
-         "test/RepositoryTest/load_noSuchCache"
+         "test/NativeRepositoryTest/load_noSuchCache"
       );
 
       let result = repository.load("A".to_string());
@@ -321,14 +321,14 @@ mod jni_tests {
    static save_viaCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_save_1viaCache(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_save_1viaCache(
       mut env: JNIEnv,
       _obj: JObject
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          &save_viaCache_dbScheduler,
-         "test/RepositoryTest/save_viaCache"
+         "test/NativeRepositoryTest/save_viaCache"
       );
 
       repository.save(TwoWayConversionData("A".to_string(), 42));
@@ -349,14 +349,14 @@ mod jni_tests {
    static save_affectAnotherCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_save_1affectAnotherCache(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_save_1affectAnotherCache(
       mut env: JNIEnv,
       _obj: JObject
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          &save_affectAnotherCache_dbScheduler,
-         "test/RepositoryTest/save_affectAnotherCache"
+         "test/NativeRepositoryTest/save_affectAnotherCache"
       );
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
@@ -378,14 +378,14 @@ mod jni_tests {
    static oneWay_jvmCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_00024getCache<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_00024getCache<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
          &oneWay_jvmCache_dbScheduler,
-         "test/RepositoryTest/oneWay_jvmCache_getCache"
+         "test/NativeRepositoryTest/oneWay_jvmCache_getCache"
       );
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
@@ -395,14 +395,14 @@ mod jni_tests {
    static twoWay_jvmCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_00024getCache<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_00024getCache<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          &twoWay_jvmCache_dbScheduler,
-         "test/RepositoryTest/twoWay_jvmCache_getCache"
+         "test/NativeRepositoryTest/twoWay_jvmCache_getCache"
       );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
@@ -415,7 +415,7 @@ mod jni_tests {
    static oneWay_valueChangeFromNative_repository: Mutex<Option<Repository<OneWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChangeFromNative_00024getCache<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_1valueChangeFromNative_00024getCache<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -423,14 +423,14 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          &oneWay_valueChangeFromNative_dbScheduler,
-         "test/RepositoryTest/oneWay_jvmCache_valueChangeFromNative_getCache"
+         "test/NativeRepositoryTest/oneWay_jvmCache_valueChangeFromNative_getCache"
       ));
       let cache = repo_lock.as_mut().unwrap().save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChangeFromNative_00024changeValue(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_1valueChangeFromNative_00024changeValue(
       _env: JNIEnv,
       _obj: JObject
    ) {
@@ -445,7 +445,7 @@ mod jni_tests {
    static twoWay_valueChangeFromNative_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChangeFromNative_00024getCache<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChangeFromNative_00024getCache<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -453,14 +453,14 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          &twoWay_valueChangeFromNative_dbScheduler,
-         "test/RepositoryTest/twoWay_jvmCache_valueChangeFromNative_getCache"
+         "test/NativeRepositoryTest/twoWay_jvmCache_valueChangeFromNative_getCache"
       ));
       let cache = repo_lock.as_mut().unwrap().save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChangeFromNative_00024changeValue(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChangeFromNative_00024changeValue(
       _env: JNIEnv,
       _obj: JObject
    ) {
@@ -475,7 +475,7 @@ mod jni_tests {
    static valueChangeFromJvm_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChangeFromJvm_00024getCache<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_jvmCache_1valueChangeFromJvm_00024getCache<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -483,14 +483,14 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          &valueChangeFromJvm_dbScheduler,
-         "test/RepositoryTest/jvmCache_valueChangeFromJvm_getCache"
+         "test/NativeRepositoryTest/jvmCache_valueChangeFromJvm_getCache"
       ));
       let cache = repo_lock.as_mut().unwrap().save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_jvmCache_1valueChangeFromJvm_00024assertValue(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_jvmCache_1valueChangeFromJvm_00024assertValue(
       _env: JNIEnv,
       _obj: JObject
    ) {
@@ -508,7 +508,7 @@ mod jni_tests {
    static oneWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<OneWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
       mut env: JNIEnv,
       _obj: JObject
    ) {
@@ -516,12 +516,12 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          &oneWay_valueChange_doesntAffectOtherKeyCaches_dbScheduler,
-         "test/RepositoryTest/jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository"
+         "test/NativeRepositoryTest/jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository"
       ));
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheA<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheA<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -531,7 +531,7 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheB<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheB<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -541,7 +541,7 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheC<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheC<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -551,7 +551,7 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024changeCacheB(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024changeCacheB(
       _env: JNIEnv,
       _obj: JObject
    ) {
@@ -566,7 +566,7 @@ mod jni_tests {
    static twoWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024createRepository(
       mut env: JNIEnv,
       _obj: JObject
    ) {
@@ -574,12 +574,12 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          &twoWay_valueChange_doesntAffectOtherKeyCaches_dbScheduler,
-         "test/RepositoryTest/twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository"
+         "test/NativeRepositoryTest/twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository"
       ));
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheA<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheA<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -589,7 +589,7 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheB<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheB<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -599,7 +599,7 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheC<'local>(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024getCacheC<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
@@ -609,7 +609,7 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024changeCacheB(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024changeCacheB(
       _env: JNIEnv,
       _obj: JObject
    ) {
@@ -618,7 +618,7 @@ mod jni_tests {
    }
 
    #[no_mangle]
-   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024assertCacheB(
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_1valueChange_1doesntAffectOtherKeyCaches_00024assertCacheB(
       _env: JNIEnv,
       _obj: JObject
    ) {
