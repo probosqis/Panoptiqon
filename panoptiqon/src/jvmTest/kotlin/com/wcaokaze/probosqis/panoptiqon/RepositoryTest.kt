@@ -16,8 +16,15 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
-class Repository(
-   @get:JvmName("getNativeRepositoryAddress")
-   internal val nativeRepositoryAddress: Long
-) : Object() {
+import kotlin.test.Test
+
+class RepositoryTest {
+   @Test
+   fun restoreNativeRepositoryBorrow() {
+      val repository = `restoreNativeRepositoryBorrow$createRepository`()
+      `restoreNativeRepositoryBorrow$assertPtr`(repository)
+   }
+
+   private external fun `restoreNativeRepositoryBorrow$createRepository`(): Repository
+   private external fun `restoreNativeRepositoryBorrow$assertPtr`(repository: Repository)
 }

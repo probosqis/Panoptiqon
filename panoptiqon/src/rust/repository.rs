@@ -80,19 +80,37 @@ impl<T: CacheContent> Repository<T> {
    ) -> JvmRepository<'local, T::JvmType<'local>>
       where T: CloneIntoJvmHelper + 'local
    {
-      let instance_repo = Box::new(
-         Repository::<T>::new(env, dir_path)
-      );
+      let repo = Box::new(Repository::<T>::new(env, dir_path));
+      Self::new_jvm_from_ptr(env, Box::into_raw(repo))
+   }
 
-      let instance_repo_ptr = Box::into_raw(instance_repo);
-
+   fn new_jvm_from_ptr<'local>(
+      env: &mut JNIEnv<'local>,
+      repository_ptr: *mut Repository<T>
+   ) -> JvmRepository<'local, T::JvmType<'local>>
+      where T: 'local
+   {
       let j_object = env.new_object(
          "com/wcaokaze/probosqis/panoptiqon/Repository",
          "(J)V",
-         &[(instance_repo_ptr as jlong).into()]
+         &[(repository_ptr as jlong).into()]
       ).unwrap();
 
       unsafe { JvmRepository::from_j_object(j_object) }
+   }
+
+   fn of<'local>(
+      env: &mut JNIEnv<'local>,
+      jvm_instance: &JvmRepository<'local, T::JvmType<'local>>
+   ) -> &'local Self {
+      let instance_repo_ptr = env.call_method(
+         jvm_instance.j_object(),
+         "getNativeRepositoryAddress",
+         "()J",
+         &[]
+      ).unwrap().j().unwrap();
+
+      unsafe { &*(instance_repo_ptr as *const _) }
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
@@ -149,6 +167,7 @@ mod jni_tests {
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
+   use crate::jvm_types::JvmRepository;
    use super::Repository;
 
    jvm_type! {
@@ -627,5 +646,45 @@ mod jni_tests {
       assert!(cache.is_ok());
       let cache = cache.unwrap();
       assert_eq!(TwoWayConversionData("B".to_string(), 4), *cache.get());
+   }
+
+   #[allow(non_upper_case_globals)]
+   static restoreNativeRepositoryBorrow_repo: Mutex<Option<Box<Repository<TwoWayConversionData>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_restoreNativeRepositoryBorrow_00024createRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      let repo = Repository::<TwoWayConversionData>::new(
+         &mut env,
+         "test/RepositoryTest/restoreNativeRepositoryBorrow"
+      );
+      let mut repo = Box::new(repo);
+
+      let repo_ptr = Box::as_mut(&mut repo) as *mut _;
+
+      let mut lock = restoreNativeRepositoryBorrow_repo.lock().unwrap();
+      *lock = Some(repo);
+
+      Repository::new_jvm_from_ptr(&mut env, repo_ptr)
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_restoreNativeRepositoryBorrow_00024assertPtr<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      jvm_repository: JvmRepository<'local, JvmTwoWayConversionData<'local>>
+   ) {
+      use std::ptr;
+
+      let restored_repository = Repository::<TwoWayConversionData>::of(
+         &mut env, &jvm_repository
+      );
+
+      let lock = restoreNativeRepositoryBorrow_repo.lock().unwrap();
+      let repository = Box::as_ref(lock.as_ref().unwrap());
+
+      assert!(ptr::eq(restored_repository, repository));
    }
 }
