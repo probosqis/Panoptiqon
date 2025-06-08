@@ -80,23 +80,27 @@ impl<T: CacheContent> Repository<T> {
    ) -> JvmRepository<'local, T::JvmType<'local>>
       where T: CloneIntoJvmHelper + 'local
    {
-      let repo = Box::new(Repository::<T>::new(env, dir_path));
-      Self::new_jvm_from_ptr(env, Box::into_raw(repo))
+      Self::new_jvm_internal(env, dir_path).0
    }
 
-   fn new_jvm_from_ptr<'local>(
+   fn new_jvm_internal<'local>(
       env: &mut JNIEnv<'local>,
-      repository_ptr: *mut Repository<T>
-   ) -> JvmRepository<'local, T::JvmType<'local>>
-      where T: 'local
+      dir_path: impl AsRef<Path>
+   ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
+      where T: CloneIntoJvmHelper + 'local
    {
+      let repo = Box::new(Repository::<T>::new(env, dir_path));
+      let repo_ptr: *const _ = Box::as_ref(&repo);
+
       let j_object = env.new_object(
          "com/wcaokaze/probosqis/panoptiqon/Repository",
          "(J)V",
-         &[(repository_ptr as jlong).into()]
+         &[(repo_ptr as jlong).into()]
       ).unwrap();
 
-      unsafe { JvmRepository::from_j_object(j_object) }
+      let jvm_repository = unsafe { JvmRepository::from_j_object(j_object) };
+
+      (jvm_repository, repo_ptr)
    }
 
    fn of<'local>(
@@ -649,25 +653,22 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static restoreNativeRepositoryBorrow_repo: Mutex<Option<Box<Repository<TwoWayConversionData>>>> = Mutex::new(None);
+   static restoreNativeRepositoryBorrow_repo: Mutex<usize> = Mutex::new(0);
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_restoreNativeRepositoryBorrow_00024createRepository<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
-      let repo = Repository::<TwoWayConversionData>::new(
+      let (jvm_repository, repo_ptr) = Repository::<TwoWayConversionData>::new_jvm_internal(
          &mut env,
          "test/RepositoryTest/restoreNativeRepositoryBorrow"
       );
-      let mut repo = Box::new(repo);
-
-      let repo_ptr = Box::as_mut(&mut repo) as *mut _;
 
       let mut lock = restoreNativeRepositoryBorrow_repo.lock().unwrap();
-      *lock = Some(repo);
+      *lock = repo_ptr as usize;
 
-      Repository::new_jvm_from_ptr(&mut env, repo_ptr)
+      jvm_repository
    }
 
    #[no_mangle]
@@ -676,15 +677,12 @@ mod jni_tests {
       _obj: JObject<'local>,
       jvm_repository: JvmRepository<'local, JvmTwoWayConversionData<'local>>
    ) {
-      use std::ptr;
-
       let restored_repository = Repository::<TwoWayConversionData>::of(
          &mut env, &jvm_repository
       );
 
       let lock = restoreNativeRepositoryBorrow_repo.lock().unwrap();
-      let repository = Box::as_ref(lock.as_ref().unwrap());
 
-      assert!(ptr::eq(restored_repository, repository));
+      assert_eq!(restored_repository as *const _ as usize, *lock);
    }
 }
