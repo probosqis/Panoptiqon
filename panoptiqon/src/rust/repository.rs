@@ -24,6 +24,7 @@ use crate::pool::UniqueCachePool;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
+   jni::objects::JObject,
    jni::sys::jlong,
    crate::convert_jvm::CloneIntoJvm,
    crate::convert_jvm::CloneIntoJvmHelper,
@@ -78,7 +79,7 @@ impl<T: CacheContent> Repository<T> {
       env: &mut JNIEnv<'local>,
       dir_path: impl AsRef<Path>
    ) -> JvmRepository<'local, T::JvmType<'local>>
-      where T: CloneIntoJvmHelper + 'local
+      where T: CloneIntoJvmHelper + 'static
    {
       Self::new_jvm_internal(env, dir_path).0
    }
@@ -87,15 +88,41 @@ impl<T: CacheContent> Repository<T> {
       env: &mut JNIEnv<'local>,
       dir_path: impl AsRef<Path>
    ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
-      where T: CloneIntoJvmHelper + 'local
+      where T: CloneIntoJvmHelper + 'static
    {
-      let repo = Box::new(Repository::<T>::new(env, dir_path));
-      let repo_ptr: *const _ = Box::as_ref(&repo);
+      use std::any::Any;
+      use std::mem;
+
+      /*
+       * Repositoryを置いたヒープ領域はJVMインスタンスのfinalizeで解放する
+       * 必要がある。しかし一度JVMインスタンスに管理させることで参照先の
+       * 型情報(Repository<T>)が失われ、サイズがわからなくなる。
+       * たいていのアロケータでは確保したメモリサイズを記録しているため
+       * アプリケーション側がサイズを知っている必要はないのだが、
+       * すべての環境でそうなのかについては確信がない。
+       * そのため、Repositoryを置いたヒープ領域(Box<Repository<T>>)への
+       * ポインタをヒープ領域に置き(Box<Box<Repository<T>>>)、それを
+       * Box<dyn Any>のトレイトオブジェクトに変換することでデストラクタを
+       * 実行させ、解放させる。
+       */
+
+      let repo_box = Box::new(Repository::<T>::new(env, dir_path));
+      let mut repo_box_box = Box::new(repo_box);
+
+      let repo_ptr: *mut _ = Box::as_mut(Box::as_mut(&mut repo_box_box));
+
+      let trait_obj: Box<dyn Any> = repo_box_box;
+      let (repo_box_ptr, vtable): (*const Box<Repository<T>>, *const ())
+         = unsafe { mem::transmute(trait_obj) };
 
       let j_object = env.new_object(
          "com/wcaokaze/probosqis/panoptiqon/Repository",
-         "(J)V",
-         &[(repo_ptr as jlong).into()]
+         "(JJJ)V",
+         &[
+            (repo_ptr     as jlong).into(),
+            (repo_box_ptr as jlong).into(),
+            (vtable       as jlong).into(),
+         ]
       ).unwrap();
 
       let jvm_repository = unsafe { JvmRepository::from_j_object(j_object) };
@@ -159,6 +186,26 @@ impl<T: CacheContent> Repository<T> {
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
+}
+
+#[cfg(feature = "jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeRepository<'local>(
+   _env: JNIEnv<'local>,
+   _obj: JObject<'local>,
+   native_repository_ptr_address: jlong,
+   box_vtable_address: jlong
+) {
+   use std::mem;
+
+   // Box<Box<Repository<T>>>のトレイトオブジェクトを復元。
+   // [Repository::new_jvm_internal]参照
+   let trait_obj: Box<dyn Drop> = unsafe {
+      mem::transmute(
+         (native_repository_ptr_address as *const (), box_vtable_address as *const ())
+      )
+   };
+   drop(trait_obj);
 }
 
 #[cfg(feature = "jni-test")]

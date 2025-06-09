@@ -18,6 +18,17 @@ package com.wcaokaze.probosqis.panoptiqon
 
 class Repository(
    @get:JvmName("getNativeRepositoryAddress")
-   internal val nativeRepositoryAddress: Long
+   internal val nativeRepositoryAddress: Long,
+   private val nativeRepositoryPtrAddress: Long,
+   private val boxVtableAddress: Long
 ) : Object() {
+   private external fun dropNativeRepository(
+      nativeRepositoryPtrAddress: Long,
+      boxVtableAddress: Long
+   )
+
+   @Deprecated("")
+   override fun finalize() {
+      dropNativeRepository(nativeRepositoryPtrAddress, boxVtableAddress)
+   }
 }
