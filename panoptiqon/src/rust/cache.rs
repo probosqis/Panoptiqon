@@ -162,7 +162,8 @@ mod tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &saveGet_dbScheduler,
-         "test/CacheTest/saveGet"
+         "test/CacheTest/saveGet",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
@@ -188,7 +189,8 @@ mod tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &saveViaRepository_saveScheduled_dbScheduler,
-         "test/CacheTest/saveViaRepository_saveScheduled"
+         "test/CacheTest/saveViaRepository_saveScheduled",
+         /* drop_observer = */ || ()
       );
 
       repository.save(CacheContentImpl(0, 42));
@@ -211,7 +213,8 @@ mod tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &saveViaCache_saveScheduled_dbScheduler,
-         "test/CacheTest/saveViaCache_saveScheduled"
+         "test/CacheTest/saveViaCache_saveScheduled",
+         /* drop_observer = */ || ()
       );
 
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -305,7 +308,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &saveGet_dbScheduler,
-         "test/CacheTest/saveGet"
+         "test/CacheTest/saveGet",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
@@ -336,7 +340,8 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          &saveGet_viaJni_dbScheduler,
-         "test/CacheTest/saveGet_viaJni_createRepo"
+         "test/CacheTest/saveGet_viaJni_createRepo",
+         /* drop_observer = */ || ()
       ));
    }
 
@@ -375,7 +380,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &saveViaRepository_saveScheduled_dbScheduler,
-         "test/CacheTest/saveViaRepository_saveScheduled"
+         "test/CacheTest/saveViaRepository_saveScheduled",
+         /* drop_observer = */ || ()
       );
 
       repository.save(CacheContentImpl(0, 42));
@@ -401,7 +407,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &saveViaCache_saveScheduled_dbScheduler,
-         "test/CacheTest/saveViaCache_saveScheduled"
+         "test/CacheTest/saveViaCache_saveScheduled",
+         /* drop_observer = */ || ()
       );
 
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -432,7 +439,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &referenceCount_withoutJvmCache_dbScheduler,
-         "test/CacheTest/referenceCount_withoutJvmCache"
+         "test/CacheTest/referenceCount_withoutJvmCache",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
@@ -454,7 +462,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &referenceCount_withJvmCache_dbScheduler,
-         "test/CacheTest/referenceCount_withJvmCache"
+         "test/CacheTest/referenceCount_withJvmCache",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
@@ -478,7 +487,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &referenceCount_clone_dbScheduler,
-         "test/CacheTest/referenceCount_clone"
+         "test/CacheTest/referenceCount_clone",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
@@ -503,7 +513,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &referenceCount_cloneIntoJvm_dbScheduler,
-         "test/CacheTest/referenceCount_cloneIntoJvm"
+         "test/CacheTest/referenceCount_cloneIntoJvm",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
@@ -529,7 +540,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &referenceCount_cloneIntoJvm_cloneFromJvm_dbScheduler,
-         "test/CacheTest/referenceCount_cloneIntoJvm_cloneFromJvm"
+         "test/CacheTest/referenceCount_cloneIntoJvm_cloneFromJvm",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
@@ -556,7 +568,8 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          &referenceCount_save_dbScheduler,
-         "test/CacheTest/referenceCount_save"
+         "test/CacheTest/referenceCount_save",
+         /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
 
