@@ -18,6 +18,8 @@ package com.wcaokaze.probosqis.panoptiqon
 
 import kotlin.test.Test
 
+private typealias TwoWayConversionData = NativeRepositoryTest.TwoWayConversionData
+
 class RepositoryTest {
    @Test
    fun restoreNativeRepositoryBorrow() {
@@ -25,6 +27,19 @@ class RepositoryTest {
       `restoreNativeRepositoryBorrow$assertPtr`(repository)
    }
 
-   private external fun `restoreNativeRepositoryBorrow$createRepository`(): Repository
-   private external fun `restoreNativeRepositoryBorrow$assertPtr`(repository: Repository)
+   private external fun `restoreNativeRepositoryBorrow$createRepository`(): Repository<TwoWayConversionData>
+   private external fun `restoreNativeRepositoryBorrow$assertPtr`(repository: Repository<TwoWayConversionData>)
+
+   @Test
+   fun gc_dropNativeRepository() {
+      `gc_dropNativeRepository$createRepository`()
+
+      System.gc()
+      System.runFinalization()
+
+      `gc_dropNativeRepository$assertDropped`()
+   }
+
+   private external fun `gc_dropNativeRepository$createRepository`(): Repository<TwoWayConversionData>
+   private external fun `gc_dropNativeRepository$assertDropped`()
 }
