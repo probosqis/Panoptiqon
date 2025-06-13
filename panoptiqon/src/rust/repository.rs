@@ -81,7 +81,7 @@ impl<T: CacheContent> Repository<T> {
    /// 新しいRepositoryを作成し、それをwrapするJVMインスタンスを生成する。
    /// Repositoryの所有権はすぐさまJVMインスタンスにムーブし、
    /// インスタンスがGCによって解放されるときにdropされる。
-   fn new_jvm<'local>(
+   pub fn new_jvm<'local>(
       env: &mut JNIEnv<'local>,
       dir_path: impl AsRef<Path>
    ) -> JvmRepository<'local, T::JvmType<'local>>
