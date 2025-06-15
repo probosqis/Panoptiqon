@@ -24,7 +24,7 @@ use crate::pool::UniqueCachePool;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
-   jni::objects::JObject,
+   jni::objects::{JClass, JMethodID, JObject},
    jni::sys::jlong,
    crate::convert_jvm::CloneIntoJvm,
    crate::convert_jvm::CloneIntoJvmHelper,
@@ -78,17 +78,66 @@ impl<T: CacheContent> Repository<T> {
       }
    }
 
+   pub fn of<'local>(
+      env: &mut JNIEnv<'local>,
+      jvm_instance: &JvmRepository<'local, T::JvmType<'local>>
+   ) -> &'local mut Self {
+      let instance_repo_ptr = env.call_method(
+         jvm_instance.j_object(),
+         "getNativeRepositoryAddress",
+         "()J",
+         &[]
+      ).unwrap().j().unwrap();
+
+      unsafe { &mut *(instance_repo_ptr as *mut _) }
+   }
+
+   pub fn save(&mut self, value: T) -> Cache<T>
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+               + CloneIntoJvmHelper
+               + Serialize
+               + Send + Sync
+               + 'static
+   {
+      let key = value.key();
+      let arc = self.pool.update(key, value);
+      Cache::new(arc)
+   }
+}
+
+#[cfg(feature = "jvm")]
+pub struct JvmRepositoryCreator<'local> {
+   repository_class: JClass<'local>,
+   constructor_id: JMethodID
+}
+
+#[cfg(feature = "jvm")]
+impl<'local> JvmRepositoryCreator<'local> {
+   pub fn new(env: &mut JNIEnv<'local>) -> Self {
+      let repository_class =
+         env.find_class("com/wcaokaze/probosqis/panoptiqon/Repository").unwrap();
+      let constructor_id =
+         env.get_method_id(&repository_class, "<init>", "(JJJ)V").unwrap();
+
+      Self {
+         repository_class,
+         constructor_id
+      }
+   }
+
    /// 新しいRepositoryを作成し、それをwrapするJVMインスタンスを生成する。
    /// Repositoryの所有権はすぐさまJVMインスタンスにムーブし、
    /// インスタンスがGCによって解放されるときにdropされる。
-   pub fn new_jvm<'local>(
+   pub fn create<T>(
+      &self,
       env: &mut JNIEnv<'local>,
       dir_path: impl AsRef<Path>
    ) -> JvmRepository<'local, T::JvmType<'local>>
       where T: CloneIntoJvmHelper + 'static
    {
       let repo_box = Box::new(Repository::<T>::new(env, dir_path));
-      Self::new_jvm_internal(env, repo_box).0
+
+      self.create_internal(env, repo_box).0
    }
 
    /// # Returns
@@ -97,7 +146,8 @@ impl<T: CacheContent> Repository<T> {
    /// JVMインスタンスが解放されるときにネイティブ側のRepositoryもdropされるため
    /// 返り値のアドレスのライフタイムはJVMの気分次第
    #[cfg(any(test, feature = "jni-test"))]
-   fn new_jvm_testable<'local>(
+   fn create_testable<T>(
+      &self,
       env: &mut JNIEnv<'local>,
       db_scheduler: &'static DbScheduler,
       dir_path: impl AsRef<Path>,
@@ -108,12 +158,14 @@ impl<T: CacheContent> Repository<T> {
       let repo_box = Box::new(
          Repository::<T>::new_testable(env, db_scheduler, dir_path, drop_observer)
       );
-      Self::new_jvm_internal(env, repo_box)
+
+      self.create_internal(env, repo_box)
    }
 
-   fn new_jvm_internal<'local>(
+   fn create_internal<T>(
+      &self,
       env: &mut JNIEnv<'local>,
-      repo_box: Box<Repository<T>>
+      repo_box: Box<Repository<T>>,
    ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
       where T: CloneIntoJvmHelper + 'static
    {
@@ -142,14 +194,10 @@ impl<T: CacheContent> Repository<T> {
       let (repo_box_ptr, vtable): (*const Box<Repository<T>>, *const ())
          = unsafe { mem::transmute(trait_obj) };
 
-      let repository_class =
-         env.find_class("com/wcaokaze/probosqis/panoptiqon/Repository").unwrap();
-      let constructor_id =
-         env.get_method_id(&repository_class, "<init>", "(JJJ)V").unwrap();
       let j_object = unsafe {
          env.new_object_unchecked(
-            repository_class,
-            constructor_id,
+            &self.repository_class,
+            self.constructor_id,
             &[
                JValue::Long(repo_ptr     as jlong).as_jni(),
                JValue::Long(repo_box_ptr as jlong).as_jni(),
@@ -161,32 +209,6 @@ impl<T: CacheContent> Repository<T> {
       let jvm_repository = unsafe { JvmRepository::from_j_object(j_object) };
 
       (jvm_repository, repo_ptr)
-   }
-
-   pub fn of<'local>(
-      env: &mut JNIEnv<'local>,
-      jvm_instance: &JvmRepository<'local, T::JvmType<'local>>
-   ) -> &'local mut Self {
-      let instance_repo_ptr = env.call_method(
-         jvm_instance.j_object(),
-         "getNativeRepositoryAddress",
-         "()J",
-         &[]
-      ).unwrap().j().unwrap();
-
-      unsafe { &mut *(instance_repo_ptr as *mut _) }
-   }
-
-   pub fn save(&mut self, value: T) -> Cache<T>
-      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
-               + CloneIntoJvmHelper
-               + Serialize
-               + Send + Sync
-               + 'static
-   {
-      let key = value.key();
-      let arc = self.pool.update(key, value);
-      Cache::new(arc)
    }
 }
 
@@ -770,12 +792,16 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
-      let (jvm_repository, repo_ptr) = Repository::<TwoWayConversionData>::new_jvm_testable(
-         &mut env,
-         &restoreNativeRepositoryBorrow_dbScheduler,
-         "test/RepositoryTest/restoreNativeRepositoryBorrow",
-         /* drop_observer = */ || ()
-      );
+      use super::JvmRepositoryCreator;
+
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let (jvm_repository, repo_ptr) = repository_creator
+         .create_testable::<TwoWayConversionData>(
+            &mut env,
+            &restoreNativeRepositoryBorrow_dbScheduler,
+            "test/RepositoryTest/restoreNativeRepositoryBorrow",
+            /* drop_observer = */ || ()
+         );
 
       let mut lock = restoreNativeRepositoryBorrow_repo.lock().unwrap();
       *lock = repo_ptr as usize;
@@ -809,15 +835,19 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
-      let (jvm_repository, _repo_ptr) = Repository::<TwoWayConversionData>::new_jvm_testable(
-         &mut env,
-         &gc_dropNativeRepository_dbScheduler,
-         "test/RepositoryTest/restoreNativeRepositoryBorrow",
-         /* drop_observer = */ || {
-            let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
-            *lock = false;
-         }
-      );
+      use super::JvmRepositoryCreator;
+
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let (jvm_repository, _repo_ptr) = repository_creator
+         .create_testable::<TwoWayConversionData>(
+            &mut env,
+            &gc_dropNativeRepository_dbScheduler,
+            "test/RepositoryTest/restoreNativeRepositoryBorrow",
+            /* drop_observer = */ || {
+               let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
+               *lock = false;
+            }
+         );
 
       let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
       *lock = true;
