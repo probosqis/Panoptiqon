@@ -119,6 +119,7 @@ impl<T: CacheContent> Repository<T> {
    {
       use std::any::Any;
       use std::mem;
+      use jni::objects::JValue;
 
       /*
        * Repositoryを置いたヒープ領域はJVMインスタンスのfinalizeで解放する
@@ -141,15 +142,21 @@ impl<T: CacheContent> Repository<T> {
       let (repo_box_ptr, vtable): (*const Box<Repository<T>>, *const ())
          = unsafe { mem::transmute(trait_obj) };
 
-      let j_object = env.new_object(
-         "com/wcaokaze/probosqis/panoptiqon/Repository",
-         "(JJJ)V",
-         &[
-            (repo_ptr     as jlong).into(),
-            (repo_box_ptr as jlong).into(),
-            (vtable       as jlong).into(),
-         ]
-      ).unwrap();
+      let repository_class =
+         env.find_class("com/wcaokaze/probosqis/panoptiqon/Repository").unwrap();
+      let constructor_id =
+         env.get_method_id(&repository_class, "<init>", "(JJJ)V").unwrap();
+      let j_object = unsafe {
+         env.new_object_unchecked(
+            repository_class,
+            constructor_id,
+            &[
+               JValue::Long(repo_ptr     as jlong).as_jni(),
+               JValue::Long(repo_box_ptr as jlong).as_jni(),
+               JValue::Long(vtable       as jlong).as_jni(),
+            ]
+         ).unwrap()
+      };
 
       let jvm_repository = unsafe { JvmRepository::from_j_object(j_object) };
 
