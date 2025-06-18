@@ -16,6 +16,7 @@
 
 use std::fmt::{Debug, Formatter};
 use std::hash::Hash;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::unique_cache::UniqueCache;
@@ -133,10 +134,12 @@ pub trait CacheContent {
    type JvmType<'local>: JvmType<'local>;
 
    fn key(&self) -> Self::Key;
+   fn file_path(&self, dir_path: &Path) -> PathBuf;
 }
 
 #[cfg(all(test, not(feature = "jvm")))]
 mod tests {
+   use std::path::{Path, PathBuf};
    use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::db::scheduler::DbScheduler;
@@ -149,6 +152,10 @@ mod tests {
 
       fn key(&self) -> i32 {
          self.0
+      }
+
+      fn file_path(&self, dir_path: &Path) -> PathBuf {
+         dir_path.join(self.0.to_string())
       }
    }
 
@@ -234,6 +241,7 @@ mod tests {
 
 #[cfg(feature = "jni-test")]
 mod jni_tests {
+   use std::path::{Path, PathBuf};
    use std::sync::Mutex;
    use jni::JNIEnv;
    use jni::objects::JObject;
@@ -259,6 +267,10 @@ mod jni_tests {
 
       fn key(&self) -> i32 {
          self.0
+      }
+
+      fn file_path(&self, dir_path: &Path) -> PathBuf {
+         dir_path.join(self.0.to_string())
       }
    }
 

@@ -195,7 +195,7 @@ impl WorkerThread {
 
 #[cfg(test)]
 mod test {
-   use std::path::PathBuf;
+   use std::path::{Path, PathBuf};
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
    use crate::db::saver;
@@ -203,6 +203,10 @@ mod test {
 
    struct SavableImpl;
    impl Savable for SavableImpl {
+      fn file_path(&self, dir_path: &Path) -> PathBuf {
+         dir_path.join("SavableImpl")
+      }
+
       fn serialize(
          &self,
          _serializer: saver::Serializer

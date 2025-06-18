@@ -31,7 +31,7 @@ impl Saver {
          .create(true)
          .write(true)
          .truncate(true)
-         .open(task.dir_path.as_path())?;
+         .open(task.file_path())?;
 
       let writer = BufWriter::new(file);
       let mut serializer = serde_json::Serializer::new(writer);

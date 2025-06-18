@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use crate::db::savable::Savable;
 use crate::db::saver;
@@ -32,5 +33,10 @@ impl SaveTask {
          dir_path: saver::DirPath::clone(dir_path),
          cache
       }
+   }
+
+   pub(crate) fn file_path(&self) -> PathBuf {
+      let dir_path = &self.dir_path;
+      self.cache.file_path(dir_path)
    }
 }

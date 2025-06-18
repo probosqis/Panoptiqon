@@ -145,6 +145,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
 
 #[cfg(feature="jni-test")]
 mod jni_tests {
+   use std::path::{Path, PathBuf};
    use jni::JNIEnv;
    use jni::objects::JObject;
    use serde::Serialize;
@@ -167,6 +168,10 @@ mod jni_tests {
 
       fn key(&self) -> String {
          self.0.clone()
+      }
+
+      fn file_path(&self, dir_path: &Path) -> PathBuf {
+         dir_path.join(self.0.to_string())
       }
    }
 

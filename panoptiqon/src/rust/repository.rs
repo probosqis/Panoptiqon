@@ -279,6 +279,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeReposi
 
 #[cfg(feature = "jni-test")]
 mod jni_tests {
+   use std::path::{Path, PathBuf};
    use std::sync::Mutex;
    use jni::JNIEnv;
    use jni::objects::JObject;
@@ -304,6 +305,10 @@ mod jni_tests {
 
       fn key(&self) -> String {
          self.0.clone()
+      }
+
+      fn file_path(&self, dir_path: &Path) -> PathBuf {
+         dir_path.join(self.0.to_string())
       }
    }
 
@@ -333,6 +338,10 @@ mod jni_tests {
 
       fn key(&self) -> String {
          self.0.clone()
+      }
+
+      fn file_path(&self, dir_path: &Path) -> PathBuf {
+         dir_path.join(self.0.to_string())
       }
    }
 
