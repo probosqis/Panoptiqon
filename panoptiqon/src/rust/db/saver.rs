@@ -27,11 +27,19 @@ pub(crate) struct Saver;
 
 impl Saver {
    pub(crate) fn save(task: SaveTask) -> anyhow::Result<()> {
+      use std::fs;
+
+      let file_path = task.file_path();
+
+      if let Some(parent) = file_path.parent() {
+         fs::create_dir_all(parent)?;
+      }
+
       let file = File::options()
          .create(true)
          .write(true)
          .truncate(true)
-         .open(task.file_path())?;
+         .open(file_path)?;
 
       let writer = BufWriter::new(file);
       let mut serializer = serde_json::Serializer::new(writer);
@@ -44,39 +52,39 @@ impl Saver {
 
 #[cfg(test)]
 mod test {
+   use std::path::{Path, PathBuf};
+   use serde::Serialize;
+   use crate::db::savable::Savable;
    use super::{DirPath, Saver, Serializer};
+
+   #[derive(Serialize)]
+   struct SavableImpl {
+      id: i32,
+      value: String
+   }
+
+   impl Savable for SavableImpl {
+      fn file_path(&self, dir_path: &Path) -> PathBuf {
+         dir_path.join(self.id.to_string())
+      }
+
+      fn serialize(
+         &self,
+         serializer: Serializer
+      ) -> anyhow::Result<
+         <Serializer as serde::Serializer>::Ok,
+         <Serializer as serde::Serializer>::Error
+      > {
+         Serialize::serialize(self, serializer)
+      }
+   }
 
    #[test]
    fn save() {
       use std::fs;
-      use std::path::{Path, PathBuf};
       use std::sync::Arc;
       use scopeguard::defer;
-      use serde::Serialize;
-      use crate::db::savable::Savable;
       use crate::db::save_task::SaveTask;
-
-      #[derive(Serialize)]
-      struct SavableImpl {
-         id: i32,
-         value: String
-      }
-
-      impl Savable for SavableImpl {
-         fn file_path(&self, dir_path: &Path) -> PathBuf {
-            dir_path.join(self.id.to_string())
-         }
-
-         fn serialize(
-            &self,
-            serializer: Serializer
-         ) -> anyhow::Result<
-            <Serializer as serde::Serializer>::Ok,
-            <Serializer as serde::Serializer>::Error
-         > {
-            Serialize::serialize(self, serializer)
-         }
-      }
 
       let savable = SavableImpl {
          id: 0,
@@ -98,5 +106,32 @@ mod test {
          r#"{"id":0,"value":"value"}"#,
          &saved_text
       );
+   }
+
+   #[test]
+   fn save_mkdir() {
+      use std::fs;
+      use std::sync::Arc;
+      use scopeguard::defer;
+      use crate::db::save_task::SaveTask;
+
+      if fs::exists("test/Saver/save_mkdir").unwrap() {
+         fs::remove_dir_all("test/Saver/save_mkdir").unwrap();
+      }
+
+      let savable = SavableImpl {
+         id: 0,
+         value: "value".to_string()
+      };
+
+      let dir_path = DirPath::new(PathBuf::from("test/Saver/save_mkdir"));
+      let task = SaveTask::new(&dir_path, Arc::new(savable));
+      Saver::save(task).unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Saver/save_mkdir").unwrap();
+      }
+
+      assert!(fs::exists("test/Saver/save_mkdir").unwrap());
    }
 }
