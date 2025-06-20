@@ -15,10 +15,7 @@
  */
 
 use std::path::{Path, PathBuf};
-use serde::Serialize;
-use crate::cache::CacheContent;
 use crate::db::saver;
-use crate::unique_cache::UniqueCache;
 
 pub(crate) trait Savable {
    fn file_path(&self, dir_path: &Path) -> PathBuf;
@@ -30,22 +27,4 @@ pub(crate) trait Savable {
       <saver::Serializer as serde::Serializer>::Ok,
       <saver::Serializer as serde::Serializer>::Error
    >;
-}
-
-impl<T> Savable for UniqueCache<T>
-   where T: CacheContent + Serialize
-{
-   fn file_path(&self, dir_path: &Path) -> PathBuf {
-      self.get().file_path(dir_path)
-   }
-
-   fn serialize(
-      &self,
-      serializer: saver::Serializer
-   ) -> anyhow::Result<
-      <saver::Serializer as serde::Serializer>::Ok,
-      <saver::Serializer as serde::Serializer>::Error
-   > {
-      self.get().serialize(serializer)
-   }
 }

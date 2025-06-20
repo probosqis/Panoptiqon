@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use serde::Serialize;
 use crate::cache::CacheContent;
@@ -27,6 +28,7 @@ use {
    jni::sys::jlong,
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
 };
+use crate::db::savable::Savable;
 
 #[cfg(feature = "jvm")]
 pub(crate) struct JvmUniqueCacheRefs {
@@ -202,6 +204,24 @@ impl<T: CacheContent> UniqueCache<T> {
       };
 
       env.new_global_ref(local_object).unwrap()
+   }
+}
+
+impl<T> Savable for UniqueCache<T>
+   where T: CacheContent + Serialize
+{
+   fn file_path(&self, dir_path: &Path) -> PathBuf {
+      self.get().file_path(dir_path)
+   }
+
+   fn serialize(
+      &self,
+      serializer: saver::Serializer
+   ) -> anyhow::Result<
+      <saver::Serializer as serde::Serializer>::Ok,
+      <saver::Serializer as serde::Serializer>::Error
+   > {
+      self.get().serialize(serializer)
    }
 }
 
