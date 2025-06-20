@@ -191,7 +191,7 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveViaRepository_saveScheduled() {
-      use std::path::Path;
+      use std::path::PathBuf;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
@@ -203,9 +203,9 @@ mod tests {
       repository.save(CacheContentImpl(0, 42));
 
       assert_eq!(
-         vec![Path::new("test/CacheTest/saveViaRepository_saveScheduled")],
+         vec![PathBuf::from("test/CacheTest/saveViaRepository_saveScheduled/0")],
          saveViaRepository_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.dir_path.as_path()).collect::<Vec<_>>()
+            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
 
@@ -215,7 +215,7 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveViaCache_saveScheduled() {
-      use std::path::Path;
+      use std::path::PathBuf;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
@@ -230,11 +230,11 @@ mod tests {
 
       assert_eq!(
          vec![
-            Path::new("test/CacheTest/saveViaCache_saveScheduled"),
-            Path::new("test/CacheTest/saveViaCache_saveScheduled"),
+            PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
+            PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
          ],
          saveViaCache_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.dir_path.as_path()).collect::<Vec<_>>()
+            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
 }
@@ -386,7 +386,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::path::Path;
+      use std::path::PathBuf;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
@@ -399,9 +399,9 @@ mod jni_tests {
       repository.save(CacheContentImpl(0, 42));
 
       assert_eq!(
-         vec![Path::new("test/CacheTest/saveViaRepository_saveScheduled")],
+         vec![PathBuf::from("test/CacheTest/saveViaRepository_saveScheduled/0")],
          saveViaRepository_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.dir_path.as_path()).collect::<Vec<_>>()
+            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
 
@@ -413,7 +413,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::path::Path;
+      use std::path::PathBuf;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
@@ -429,11 +429,11 @@ mod jni_tests {
 
       assert_eq!(
          vec![
-            Path::new("test/CacheTest/saveViaCache_saveScheduled"),
-            Path::new("test/CacheTest/saveViaCache_saveScheduled"),
+            PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
+            PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
          ],
          saveViaCache_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.dir_path.as_path()).collect::<Vec<_>>()
+            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
 

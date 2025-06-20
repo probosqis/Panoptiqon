@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use crate::db::saver;
 
 pub(crate) trait Savable {
-   fn file_path(&self, dir_path: &Path) -> PathBuf;
+   fn file_path(&self) -> PathBuf;
 
    fn serialize(
       &self,

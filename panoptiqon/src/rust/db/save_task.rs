@@ -17,26 +17,19 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use crate::db::savable::Savable;
-use crate::db::saver;
 
 pub(crate) struct SaveTask {
-   pub(crate) dir_path: saver::DirPath,
    pub(crate) cache: Arc<dyn Savable + Send + Sync>
 }
 
 impl SaveTask {
-   pub(crate) fn new(
-      dir_path: &saver::DirPath,
-      cache: Arc<dyn Savable + Send + Sync>
-   ) -> Self {
+   pub(crate) fn new(cache: Arc<dyn Savable + Send + Sync>) -> Self {
       Self {
-         dir_path: saver::DirPath::clone(dir_path),
          cache
       }
    }
 
    pub(crate) fn file_path(&self) -> PathBuf {
-      let dir_path = &self.dir_path;
-      self.cache.file_path(dir_path)
+      self.cache.file_path()
    }
 }

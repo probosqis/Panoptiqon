@@ -207,7 +207,7 @@ impl WorkerThread {
 
 #[cfg(test)]
 mod test {
-   use std::path::{Path, PathBuf};
+   use std::path::PathBuf;
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
    use crate::db::saver;
@@ -215,8 +215,8 @@ mod test {
 
    struct SavableImpl;
    impl Savable for SavableImpl {
-      fn file_path(&self, dir_path: &Path) -> PathBuf {
-         dir_path.join("SavableImpl")
+      fn file_path(&self) -> PathBuf {
+         PathBuf::from("DbSchedulerTest/SavableImpl")
       }
 
       fn serialize(
@@ -248,10 +248,7 @@ mod test {
       );
 
       db_scheduler.push(
-         SaveTask::new(
-            &saver::DirPath::new(PathBuf::from("DbSchedulerTest/push_startWorkerThread")),
-            Arc::new(SavableImpl)
-         )
+         SaveTask::new(Arc::new(SavableImpl))
       );
 
       assert!(
