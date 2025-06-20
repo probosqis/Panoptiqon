@@ -129,7 +129,7 @@ impl Drop for DbScheduler {
 
 struct WorkerThread {
    #[cfg(not(any(test, feature = "jni-test")))]
-   handle: JoinHandle<()>,
+   handle: JoinHandle<anyhow::Result<()>>,
    #[cfg(any(test, feature = "jni-test"))]
    handle: JoinHandle<Vec<SaveTask>>,
    message: Sender<WorkerThreadMessage>
@@ -148,14 +148,26 @@ impl WorkerThread {
       let (tx, rx) = mpsc::channel();
 
       #[cfg(not(any(test, feature = "jni-test")))]
-      let handle = thread::spawn(move || loop {
-         let Ok(message) = rx.recv() else { break; };
+      let handle = thread::spawn(move || {
+         use crate::db::saver::Saver;
 
-         match message {
-            WorkerThreadMessage::Stop => break,
-            WorkerThreadMessage::SaveTask(task) => {
+         let mut errs = Vec::new();
+
+         loop {
+            let Ok(message) = rx.recv() else { break; };
+
+            match message {
+               WorkerThreadMessage::Stop => break,
+               WorkerThreadMessage::SaveTask(task) => {
+                  let r = Saver::save(task);
+                  if r.is_err() {
+                     errs.push(r);
+                  }
+               }
             }
          }
+
+         errs.into_iter().collect()
       });
 
       #[cfg(any(test, feature = "jni-test"))]
@@ -183,7 +195,7 @@ impl WorkerThread {
    #[cfg(not(any(test, feature = "jni-test")))]
    fn stop(self) {
       self.message.send(WorkerThreadMessage::Stop).unwrap();
-      self.handle.join().unwrap();
+      self.handle.join().unwrap().unwrap();
    }
 
    #[cfg(any(test, feature = "jni-test"))]
