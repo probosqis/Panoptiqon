@@ -111,11 +111,15 @@ impl<T: CacheContent> Clone for Cache<T> {
    }
 }
 
-impl<T: CacheContent> Serialize for Cache<T> {
-   fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+impl<T> Serialize for Cache<T>
+   where T: CacheContent + Serialize
+{
+   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
       where S: Serializer
    {
-      Err(serde::ser::Error::custom("not implemented"))
+      use crate::db::savable::Savable;
+      let file_path = self.0.file_path();
+      file_path.serialize(serializer)
    }
 }
 
@@ -143,6 +147,7 @@ mod tests {
    use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::db::scheduler::DbScheduler;
+   use super::Cache;
 
    #[derive(Debug, PartialEq, Eq, Serialize)]
    struct CacheContentImpl(i32, i32);
@@ -235,6 +240,35 @@ mod tests {
          ],
          saveViaCache_saveScheduled_dbScheduler
             .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
+      );
+   }
+
+   #[allow(non_upper_case_globals)]
+   static serialize_dbScheduler: DbScheduler = DbScheduler::new();
+
+   #[test]
+   fn serialize() {
+      use crate::repository::Repository;
+
+      #[derive(Serialize)]
+      struct CacheContainer {
+         cache: Cache<CacheContentImpl>
+      }
+
+      let mut repository = Repository::<CacheContentImpl>::new_testable(
+         &serialize_dbScheduler,
+         "test/CacheTest/serialize",
+         /* drop_observer = */ || ()
+      );
+      let cache = repository.save(CacheContentImpl(0, 42));
+      let cache_container = CacheContainer {
+         cache
+      };
+      let json = serde_json::to_string(&cache_container).unwrap();
+
+      assert_eq!(
+         r#"{"cache":"test/CacheTest/serialize/0"}"#,
+         &json
       );
    }
 }
