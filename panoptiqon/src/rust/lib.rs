@@ -33,3 +33,6 @@ pub mod convert_jvm;
 pub mod jvm_type;
 #[cfg(feature = "jvm")]
 pub mod jvm_types;
+
+pub struct Panoptiqon {
+}
