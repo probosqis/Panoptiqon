@@ -20,6 +20,8 @@
    specialization
 )]
 
+use crate::db::scheduler::DbScheduler;
+
 pub mod cache;
 pub mod repository;
 
@@ -35,4 +37,13 @@ pub mod jvm_type;
 pub mod jvm_types;
 
 pub struct Panoptiqon {
+   db_scheduler: DbScheduler
+}
+
+impl Panoptiqon {
+   pub const fn new() -> Self {
+      Panoptiqon {
+         db_scheduler: DbScheduler::new()
+      }
+   }
 }
