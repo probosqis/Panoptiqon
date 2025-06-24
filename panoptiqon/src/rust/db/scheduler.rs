@@ -17,11 +17,12 @@
 use std::ptr;
 use std::sync::atomic::AtomicPtr;
 use std::sync::mpsc::Sender;
-use std::sync::Mutex;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::JoinHandle;
 use crate::db::save_task::SaveTask;
 
-static SINGLETON: DbScheduler = DbScheduler::new();
+static SINGLETON: LazyLock<Arc<DbScheduler>>
+   = LazyLock::new(|| Arc::new(DbScheduler::new()));
 
 pub(crate) struct DbScheduler {
    worker_thread: Mutex<Option<WorkerThread>>,
@@ -29,8 +30,8 @@ pub(crate) struct DbScheduler {
 }
 
 impl DbScheduler {
-   pub(crate) fn singleton() -> &'static Self {
-      &SINGLETON
+   pub(crate) fn singleton() -> Arc<Self> {
+      Arc::clone(&SINGLETON)
    }
 
    pub(crate) const fn new() -> Self {

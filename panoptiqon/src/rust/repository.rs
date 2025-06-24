@@ -32,6 +32,9 @@ use {
    crate::jvm_types::JvmRepository,
 };
 
+#[cfg(any(test, feature = "jni-test"))]
+use std::sync::Arc;
+
 pub struct Repository<T: CacheContent> {
    pool: UniqueCachePool<T>,
    #[cfg(any(test, feature = "jni-test"))]
@@ -64,7 +67,7 @@ impl<T: CacheContent> Repository<T> {
    #[cfg(any(test, feature = "jni-test"))]
    pub fn new_testable(
       env: &mut JNIEnv,
-      db_scheduler: &'static DbScheduler,
+      db_scheduler: Arc<DbScheduler>,
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self
@@ -149,7 +152,7 @@ impl<'local> JvmRepositoryCreator<'local> {
    fn create_testable<T>(
       &self,
       env: &mut JNIEnv<'local>,
-      db_scheduler: &'static DbScheduler,
+      db_scheduler: Arc<DbScheduler>,
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
@@ -226,7 +229,7 @@ impl<T: CacheContent> Repository<T> {
 
    #[cfg(any(test, feature = "jni-test"))]
    pub fn new_testable(
-      db_scheduler: &'static DbScheduler,
+      db_scheduler: Arc<DbScheduler>,
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self {
@@ -280,7 +283,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeReposi
 #[cfg(feature = "jni-test")]
 mod jni_tests {
    use std::path::{Path, PathBuf};
-   use std::sync::Mutex;
+   use std::sync::{Arc, LazyLock, Mutex};
    use jni::JNIEnv;
    use jni::objects::JObject;
    use serde::Serialize;
@@ -385,7 +388,8 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static switchCacheClass_dbScheduler: DbScheduler = DbScheduler::new();
+   static switchCacheClass_dbScheduler: LazyLock<Arc<DbScheduler>>
+      = LazyLock::new(|| Arc::new(DbScheduler::new()));
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_switchCacheClass_00024saveOneWayData<'local>(
@@ -394,7 +398,7 @@ mod jni_tests {
    ) -> JObject<'local> {
       let mut repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
-         &switchCacheClass_dbScheduler,
+         Arc::clone(&switchCacheClass_dbScheduler),
          "test/NativeRepositoryTest/switchCacheClass_saveOneWayData",
          /* drop_observer = */ || ()
       );
@@ -409,16 +413,13 @@ mod jni_tests {
    ) -> JObject<'local> {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         &switchCacheClass_dbScheduler,
+         Arc::clone(&switchCacheClass_dbScheduler),
          "test/NativeRepositoryTest/switchCacheClass_saveTwoWayData",
          /* drop_observer = */ || ()
       );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
-
-   #[allow(non_upper_case_globals)]
-   static saveLoad_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_saveLoad(
@@ -427,7 +428,7 @@ mod jni_tests {
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         &saveLoad_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/saveLoad",
          /* drop_observer = */ || ()
       );
@@ -450,9 +451,6 @@ mod jni_tests {
       }
    }
 
-   #[allow(non_upper_case_globals)]
-   static load_noSuchCache_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_load_1noSuchCache(
       mut env: JNIEnv,
@@ -460,7 +458,7 @@ mod jni_tests {
    ) {
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         &load_noSuchCache_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/load_noSuchCache",
          /* drop_observer = */ || ()
       );
@@ -469,9 +467,6 @@ mod jni_tests {
       assert!(result.is_err());
    }
 
-   #[allow(non_upper_case_globals)]
-   static save_viaCache_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_save_1viaCache(
       mut env: JNIEnv,
@@ -479,7 +474,7 @@ mod jni_tests {
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         &save_viaCache_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/save_viaCache",
          /* drop_observer = */ || ()
       );
@@ -498,9 +493,6 @@ mod jni_tests {
       }
    }
 
-   #[allow(non_upper_case_globals)]
-   static save_affectAnotherCache_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_save_1affectAnotherCache(
       mut env: JNIEnv,
@@ -508,7 +500,7 @@ mod jni_tests {
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         &save_affectAnotherCache_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/save_affectAnotherCache",
          /* drop_observer = */ || ()
       );
@@ -528,9 +520,6 @@ mod jni_tests {
       assert_eq!(TwoWayConversionData("A".to_string(), 0), *cache2.get());
    }
 
-   #[allow(non_upper_case_globals)]
-   static oneWay_jvmCache_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_oneWay_1jvmCache_00024getCache<'local>(
       mut env: JNIEnv<'local>,
@@ -538,16 +527,13 @@ mod jni_tests {
    ) -> JObject<'local> {
       let mut repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
-         &oneWay_jvmCache_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/oneWay_jvmCache_getCache",
          /* drop_observer = */ || ()
       );
       let cache = repository.save(OneWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
-
-   #[allow(non_upper_case_globals)]
-   static twoWay_jvmCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_twoWay_1jvmCache_00024getCache<'local>(
@@ -556,16 +542,13 @@ mod jni_tests {
    ) -> JObject<'local> {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         &twoWay_jvmCache_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/twoWay_jvmCache_getCache",
          /* drop_observer = */ || ()
       );
       let cache = repository.save(TwoWayConversionData("A".to_string(), 42));
       cache.create_jvm_instance(&mut env)
    }
-
-   #[allow(non_upper_case_globals)]
-   static oneWay_valueChangeFromNative_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[allow(non_upper_case_globals)]
    static oneWay_valueChangeFromNative_repository: Mutex<Option<Repository<OneWayConversionData>>> = Mutex::new(None);
@@ -578,7 +561,7 @@ mod jni_tests {
       let mut repo_lock = oneWay_valueChangeFromNative_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         &oneWay_valueChangeFromNative_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/oneWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
       ));
@@ -596,9 +579,6 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static twoWay_valueChangeFromNative_dbScheduler: DbScheduler = DbScheduler::new();
-
-   #[allow(non_upper_case_globals)]
    static twoWay_valueChangeFromNative_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
@@ -609,7 +589,7 @@ mod jni_tests {
       let mut repo_lock = twoWay_valueChangeFromNative_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         &twoWay_valueChangeFromNative_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
       ));
@@ -627,9 +607,6 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static valueChangeFromJvm_dbScheduler: DbScheduler = DbScheduler::new();
-
-   #[allow(non_upper_case_globals)]
    static valueChangeFromJvm_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
@@ -640,7 +617,7 @@ mod jni_tests {
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         &valueChangeFromJvm_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/jvmCache_valueChangeFromJvm_getCache",
          /* drop_observer = */ || ()
       ));
@@ -661,9 +638,6 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static oneWay_valueChange_doesntAffectOtherKeyCaches_dbScheduler: DbScheduler = DbScheduler::new();
-
-   #[allow(non_upper_case_globals)]
    static oneWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<OneWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
@@ -674,7 +648,7 @@ mod jni_tests {
       let mut repo_lock = oneWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         &oneWay_valueChange_doesntAffectOtherKeyCaches_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
       ));
@@ -720,9 +694,6 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static twoWay_valueChange_doesntAffectOtherKeyCaches_dbScheduler: DbScheduler = DbScheduler::new();
-
-   #[allow(non_upper_case_globals)]
    static twoWay_valueChange_doesntAffectOtherKeyCaches_repository: Mutex<Option<Repository<TwoWayConversionData>>> = Mutex::new(None);
 
    #[no_mangle]
@@ -733,7 +704,7 @@ mod jni_tests {
       let mut repo_lock = twoWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         &twoWay_valueChange_doesntAffectOtherKeyCaches_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
       ));
@@ -791,9 +762,6 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static restoreNativeRepositoryBorrow_dbScheduler: DbScheduler = DbScheduler::new();
-
-   #[allow(non_upper_case_globals)]
    static restoreNativeRepositoryBorrow_repo: Mutex<usize> = Mutex::new(0);
 
    #[no_mangle]
@@ -807,7 +775,7 @@ mod jni_tests {
       let (jvm_repository, repo_ptr) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,
-            &restoreNativeRepositoryBorrow_dbScheduler,
+            Arc::new(DbScheduler::new()),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || ()
          );
@@ -834,9 +802,6 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static gc_dropNativeRepository_dbScheduler: DbScheduler = DbScheduler::new();
-
-   #[allow(non_upper_case_globals)]
    static gc_dropNativeRepository_repoExists: Mutex<bool> = Mutex::new(false);
 
    #[no_mangle]
@@ -850,7 +815,7 @@ mod jni_tests {
       let (jvm_repository, _repo_ptr) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,
-            &gc_dropNativeRepository_dbScheduler,
+            Arc::new(DbScheduler::new()),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || {
                let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();

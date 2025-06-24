@@ -49,14 +49,14 @@ pub struct UniqueCache<T: CacheContent> {
    // jvm_stateと同一インスタンスを指す弱参照も別途持っておき、Arcの強参照が
    // 1(JVMからのものだけ)になったとき強参照のjvm_stateは解放するなどの対応が必要か
    jvm_state: GlobalRef,
-   db_scheduler: &'static DbScheduler,
+   db_scheduler: Arc<DbScheduler>,
    dir_path: saver::DirPath,
    value: RwLock<Arc<T>>
 }
 
 #[cfg(not(feature = "jvm"))]
 pub struct UniqueCache<T: CacheContent> {
-   db_scheduler: &'static DbScheduler,
+   db_scheduler: Arc<DbScheduler>,
    dir_path: saver::DirPath,
    value: RwLock<Arc<T>>
 }
@@ -66,7 +66,7 @@ impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new_saved<'local>(
       jvm: &'local JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
-      db_scheduler: &'static DbScheduler,
+      db_scheduler: Arc<DbScheduler>,
       dir_path: &saver::DirPath,
       initial_value: T
    ) -> Arc<Self>
@@ -81,7 +81,7 @@ impl<T: CacheContent> UniqueCache<T> {
       let arc = Self::new_arc(jvm, jvm_refs, db_scheduler, dir_path, initial_value);
 
       let task_cache = Arc::clone(&arc);
-      db_scheduler.push(SaveTask::new(task_cache));
+      arc.db_scheduler.push(SaveTask::new(task_cache));
 
       arc
    }
@@ -89,7 +89,7 @@ impl<T: CacheContent> UniqueCache<T> {
    fn new_arc<'local>(
       jvm: &'local JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
-      db_scheduler: &'static DbScheduler,
+      db_scheduler: Arc<DbScheduler>,
       dir_path: &saver::DirPath,
       initial_value: T
    ) -> Arc<Self>
@@ -228,7 +228,7 @@ impl<T> Savable for UniqueCache<T>
 #[cfg(not(feature = "jvm"))]
 impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn new_saved(
-      db_scheduler: &'static DbScheduler,
+      db_scheduler: Arc<DbScheduler>,
       dir_path: &saver::DirPath,
       initial_state: T
    ) -> Arc<Self>
@@ -245,7 +245,7 @@ impl<T: CacheContent> UniqueCache<T> {
       let arc = Arc::new(cache);
 
       let task_cache = Arc::clone(&arc);
-      db_scheduler.push(SaveTask::new(task_cache));
+      arc.db_scheduler.push(SaveTask::new(task_cache));
 
       arc
    }

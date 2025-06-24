@@ -164,16 +164,14 @@ mod tests {
       }
    }
 
-   #[allow(non_upper_case_globals)]
-   static saveGet_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[allow(non_snake_case)]
    #[test]
    fn saveGet() {
+      use std::sync::Arc;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
-         &saveGet_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/saveGet",
          /* drop_observer = */ || ()
       );
@@ -190,17 +188,17 @@ mod tests {
       assert_eq!(0, content.1);
    }
 
-   #[allow(non_upper_case_globals)]
-   static saveViaRepository_saveScheduled_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[allow(non_snake_case)]
    #[test]
    fn saveViaRepository_saveScheduled() {
       use std::path::PathBuf;
+      use std::sync::Arc;
       use crate::repository::Repository;
 
+      let db_scheduler = Arc::new(DbScheduler::new());
+
       let mut repository = Repository::<CacheContentImpl>::new_testable(
-         &saveViaRepository_saveScheduled_dbScheduler,
+         Arc::clone(&db_scheduler),
          "test/CacheTest/saveViaRepository_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -209,8 +207,7 @@ mod tests {
 
       assert_eq!(
          vec![PathBuf::from("test/CacheTest/saveViaRepository_saveScheduled/0")],
-         saveViaRepository_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
+         db_scheduler.stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
 
@@ -221,10 +218,13 @@ mod tests {
    #[test]
    fn saveViaCache_saveScheduled() {
       use std::path::PathBuf;
+      use std::sync::Arc;
       use crate::repository::Repository;
 
+      let db_scheduler = Arc::new(DbScheduler::new());
+
       let mut repository = Repository::<CacheContentImpl>::new_testable(
-         &saveViaCache_saveScheduled_dbScheduler,
+         Arc::clone(&db_scheduler),
          "test/CacheTest/saveViaCache_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -238,16 +238,13 @@ mod tests {
             PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
             PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
          ],
-         saveViaCache_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
+         db_scheduler.stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
 
-   #[allow(non_upper_case_globals)]
-   static serialize_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[test]
    fn serialize() {
+      use std::sync::Arc;
       use crate::repository::Repository;
 
       #[derive(Serialize)]
@@ -256,7 +253,7 @@ mod tests {
       }
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
-         &serialize_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/serialize",
          /* drop_observer = */ || ()
       );
@@ -341,19 +338,17 @@ mod jni_tests {
       }
    }
 
-   #[allow(non_upper_case_globals)]
-   static saveGet_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveGet<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
+      use std::sync::Arc;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &saveGet_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/saveGet",
          /* drop_observer = */ || ()
       );
@@ -371,8 +366,6 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static saveGet_viaJni_dbScheduler: DbScheduler = DbScheduler::new();
-   #[allow(non_upper_case_globals)]
    static saveGet_viaJni_repository: Mutex<Option<Repository<CacheContentImpl>>> = Mutex::new(None);
 
    #[no_mangle]
@@ -380,12 +373,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
+      use std::sync::Arc;
       use crate::repository::Repository;
 
       let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         &saveGet_viaJni_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/saveGet_viaJni_createRepo",
          /* drop_observer = */ || ()
       ));
@@ -412,20 +406,20 @@ mod jni_tests {
       assert_eq!(0, cache.unwrap().get().1);
    }
 
-   #[allow(non_upper_case_globals)]
-   static saveViaRepository_saveScheduled_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaRepository_1saveScheduled<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
       use std::path::PathBuf;
+      use std::sync::Arc;
       use crate::repository::Repository;
+
+      let db_scheduler = Arc::new(DbScheduler::new());
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &saveViaRepository_saveScheduled_dbScheduler,
+         Arc::clone(&db_scheduler),
          "test/CacheTest/saveViaRepository_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -434,13 +428,9 @@ mod jni_tests {
 
       assert_eq!(
          vec![PathBuf::from("test/CacheTest/saveViaRepository_saveScheduled/0")],
-         saveViaRepository_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
+         db_scheduler.stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
-
-   #[allow(non_upper_case_globals)]
-   static saveViaCache_saveScheduled_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaCache_1saveScheduled<'local>(
@@ -448,11 +438,14 @@ mod jni_tests {
       _obj: JObject<'local>
    ) {
       use std::path::PathBuf;
+      use std::sync::Arc;
       use crate::repository::Repository;
+
+      let db_scheduler = Arc::new(DbScheduler::new());
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &saveViaCache_saveScheduled_dbScheduler,
+         Arc::clone(&db_scheduler),
          "test/CacheTest/saveViaCache_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -466,13 +459,9 @@ mod jni_tests {
             PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
             PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
          ],
-         saveViaCache_saveScheduled_dbScheduler
-            .stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
+         db_scheduler.stop().iter().map(|t| t.file_path()).collect::<Vec<_>>()
       );
    }
-
-   #[allow(non_upper_case_globals)]
-   static referenceCount_withoutJvmCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1withoutJvmCache<'local>(
@@ -484,7 +473,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &referenceCount_withoutJvmCache_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/referenceCount_withoutJvmCache",
          /* drop_observer = */ || ()
       );
@@ -493,9 +482,6 @@ mod jni_tests {
       // pool内、JVM、cache、SaveTask
       assert_eq!(4, Arc::strong_count(&cache.0));
    }
-
-   #[allow(non_upper_case_globals)]
-   static referenceCount_withJvmCache_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1withJvmCache<'local>(
@@ -507,7 +493,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &referenceCount_withJvmCache_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/referenceCount_withJvmCache",
          /* drop_observer = */ || ()
       );
@@ -519,9 +505,6 @@ mod jni_tests {
       assert_eq!(4, Arc::strong_count(&cache.0));
    }
 
-   #[allow(non_upper_case_globals)]
-   static referenceCount_clone_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1clone<'local>(
       mut env: JNIEnv<'local>,
@@ -532,7 +515,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &referenceCount_clone_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/referenceCount_clone",
          /* drop_observer = */ || ()
       );
@@ -543,9 +526,6 @@ mod jni_tests {
       // pool内、JVM、cache、SaveTask、_clone
       assert_eq!(5, Arc::strong_count(&cache.0));
    }
-
-   #[allow(non_upper_case_globals)]
-   static referenceCount_cloneIntoJvm_dbScheduler: DbScheduler = DbScheduler::new();
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1cloneIntoJvm<'local>(
@@ -558,7 +538,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &referenceCount_cloneIntoJvm_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/referenceCount_cloneIntoJvm",
          /* drop_observer = */ || ()
       );
@@ -571,9 +551,6 @@ mod jni_tests {
       assert_eq!(4, Arc::strong_count(&cache.0));
    }
 
-   #[allow(non_upper_case_globals)]
-   static referenceCount_cloneIntoJvm_cloneFromJvm_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1cloneIntoJvm_1cloneFromJvm<'local>(
       mut env: JNIEnv<'local>,
@@ -585,7 +562,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &referenceCount_cloneIntoJvm_cloneFromJvm_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/referenceCount_cloneIntoJvm_cloneFromJvm",
          /* drop_observer = */ || ()
       );
@@ -600,9 +577,6 @@ mod jni_tests {
       assert_eq!(5, Arc::strong_count(&cache.0));
    }
 
-   #[allow(non_upper_case_globals)]
-   static referenceCount_save_dbScheduler: DbScheduler = DbScheduler::new();
-
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1save<'local>(
       mut env: JNIEnv<'local>,
@@ -613,7 +587,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         &referenceCount_save_dbScheduler,
+         Arc::new(DbScheduler::new()),
          "test/CacheTest/referenceCount_save",
          /* drop_observer = */ || ()
       );
