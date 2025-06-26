@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-use std::ptr;
 use std::sync::atomic::AtomicPtr;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -25,7 +24,7 @@ static SINGLETON: LazyLock<Arc<DbScheduler>>
    = LazyLock::new(|| Arc::new(DbScheduler::new()));
 
 pub(crate) struct DbScheduler {
-   worker_thread: Mutex<Option<WorkerThread>>,
+   worker_thread: Mutex<WorkerThread>,
    worker_thread_message_sender: AtomicPtr<Sender<WorkerThreadMessage>>
 }
 
@@ -35,8 +34,10 @@ impl DbScheduler {
    }
 
    pub(crate) const fn new() -> Self {
+      use std::ptr;
+
       Self {
-         worker_thread: Mutex::new(None),
+         worker_thread: Mutex::new(WorkerThread::NotStarted),
          worker_thread_message_sender: AtomicPtr::new(ptr::null_mut())
       }
    }
@@ -61,22 +62,22 @@ impl DbScheduler {
       let mut lock = self.worker_thread.lock().unwrap();
 
       let message_sender = match *lock {
-         Some(ref mut worker_thread) => {
-            // WorkerThreadが存在している。
+         WorkerThread::Running { ref mut message, .. } => {
+            // WorkerThreadが起動済み。
             // worker_thread_message_senderがnullでも
             // 同時に別スレッドがWorkerThreadを起動していた場合は
-            // ロックが取れたあとにWorkerThreadが存在することはありうる
-            &mut worker_thread.message
+            // ロックが取れたあとにWorkerThreadが起動されていることはありうる
+            message
          }
-         None => {
-            // WorkerThreadが存在しない。起動する
-            let worker_thread = WorkerThread::start();
+         WorkerThread::NotStarted => {
+            // WorkerThreadが起動されていない。起動する
+            lock.start();
 
-            // worker_threadとworker_thread_message_senderに
-            // 起動したインスタンスを格納
-            *lock = Some(worker_thread);
+            // worker_thread_message_senderに起動したインスタンスを格納
+            let WorkerThread::Running { ref mut message, .. } = *lock else {
+               panic!();
+            };
 
-            let message = &mut lock.as_mut().unwrap().message;
             self.worker_thread_message_sender
                .store(message as *mut _, Ordering::Relaxed);
 
@@ -99,41 +100,45 @@ impl DbScheduler {
 
    #[cfg(any(test, feature = "jni-test"))]
    pub(crate) fn stop(&self) -> Vec<SaveTask> {
+      use std::{mem, ptr};
+      use std::ops::DerefMut;
       use std::sync::atomic::Ordering;
 
       let mut lock = self.worker_thread.lock().unwrap();
-      if let Some(worker_thread) = lock.take() {
-         self.worker_thread_message_sender
-            .store(ptr::null_mut(), Ordering::Relaxed);
-
-         worker_thread.stop()
-      } else {
-         vec![]
-      }
+      let worker_thread
+         = mem::replace(lock.deref_mut(), WorkerThread::NotStarted);
+      self.worker_thread_message_sender
+         .store(ptr::null_mut(), Ordering::Relaxed);
+      worker_thread.stop()
    }
 }
 
 impl Drop for DbScheduler {
    fn drop(&mut self) {
+      use std::{mem, ptr};
+      use std::ops::DerefMut;
       use std::sync::atomic::Ordering;
 
       if let Ok(mut worker_thread) = self.worker_thread.lock() {
-         if let Some(worker_thread) = worker_thread.take() {
-            self.worker_thread_message_sender
-               .store(ptr::null_mut(), Ordering::Relaxed);
-
-            worker_thread.stop();
-         }
+         let worker_thread
+            = mem::replace(worker_thread.deref_mut(), WorkerThread::NotStarted);
+         self.worker_thread_message_sender
+            .store(ptr::null_mut(), Ordering::Relaxed);
+         worker_thread.stop();
       }
    }
 }
 
-struct WorkerThread {
-   #[cfg(not(any(test, feature = "jni-test")))]
-   handle: JoinHandle<anyhow::Result<()>>,
-   #[cfg(any(test, feature = "jni-test"))]
-   handle: JoinHandle<Vec<SaveTask>>,
-   message: Sender<WorkerThreadMessage>
+enum WorkerThread {
+   NotStarted,
+
+   Running {
+      #[cfg(not(any(test, feature = "jni-test")))]
+      handle: JoinHandle<anyhow::Result<()>>,
+      #[cfg(any(test, feature = "jni-test"))]
+      handle: JoinHandle<Vec<SaveTask>>,
+      message: Sender<WorkerThreadMessage>
+   }
 }
 
 enum WorkerThreadMessage {
@@ -142,9 +147,11 @@ enum WorkerThreadMessage {
 }
 
 impl WorkerThread {
-   fn start() -> Self {
+   fn start(&mut self) {
       use std::sync::mpsc;
       use std::thread;
+
+      if let WorkerThread::Running { .. } = self { return; }
 
       let (tx, rx) = mpsc::channel();
 
@@ -187,22 +194,26 @@ impl WorkerThread {
          }
       });
 
-      Self {
+      *self = Self::Running {
          handle,
          message: tx
-      }
+      };
    }
 
    #[cfg(not(any(test, feature = "jni-test")))]
    fn stop(self) {
-      self.message.send(WorkerThreadMessage::Stop).unwrap();
-      self.handle.join().unwrap().unwrap();
+      let WorkerThread::Running { handle, message } = self else { return; };
+
+      message.send(WorkerThreadMessage::Stop).unwrap();
+      handle.join().unwrap();
    }
 
    #[cfg(any(test, feature = "jni-test"))]
    fn stop(self) -> Vec<SaveTask> {
-      self.message.send(WorkerThreadMessage::Stop).unwrap();
-      self.handle.join().unwrap()
+      let WorkerThread::Running { handle, message } = self else { return vec![]; };
+
+      message.send(WorkerThreadMessage::Stop).unwrap();
+      handle.join().unwrap()
    }
 }
 
@@ -212,7 +223,7 @@ mod test {
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
    use crate::db::saver;
-   use super::DbScheduler;
+   use super::{DbScheduler, WorkerThread};
 
    struct SavableImpl;
    impl Savable for SavableImpl {
@@ -240,8 +251,10 @@ mod test {
       let db_scheduler = DbScheduler::new();
 
       assert!(
-         db_scheduler.worker_thread.lock().unwrap()
-            .is_none()
+         matches!(
+            *db_scheduler.worker_thread.lock().unwrap(),
+            WorkerThread::NotStarted
+         )
       );
       assert!(
          db_scheduler.worker_thread_message_sender.load(Ordering::Relaxed)
@@ -253,8 +266,10 @@ mod test {
       );
 
       assert!(
-         db_scheduler.worker_thread.lock().unwrap()
-            .is_some()
+         matches!(
+            *db_scheduler.worker_thread.lock().unwrap(),
+            WorkerThread::Running { .. }
+         )
       );
       assert!(
          !db_scheduler.worker_thread_message_sender.load(Ordering::Relaxed)
