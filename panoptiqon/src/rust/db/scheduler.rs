@@ -100,28 +100,22 @@ impl DbScheduler {
 
    #[cfg(any(test, feature = "jni-test"))]
    pub(crate) fn stop(&self) -> Vec<SaveTask> {
-      use std::{mem, ptr};
-      use std::ops::DerefMut;
+      use std::ptr;
       use std::sync::atomic::Ordering;
 
       let mut lock = self.worker_thread.lock().unwrap();
-      let worker_thread
-         = mem::replace(lock.deref_mut(), WorkerThread::NotStarted);
       self.worker_thread_message_sender
          .store(ptr::null_mut(), Ordering::Relaxed);
-      worker_thread.stop()
+      lock.stop()
    }
 }
 
 impl Drop for DbScheduler {
    fn drop(&mut self) {
-      use std::{mem, ptr};
-      use std::ops::DerefMut;
+      use std::ptr;
       use std::sync::atomic::Ordering;
 
       if let Ok(mut worker_thread) = self.worker_thread.lock() {
-         let worker_thread
-            = mem::replace(worker_thread.deref_mut(), WorkerThread::NotStarted);
          self.worker_thread_message_sender
             .store(ptr::null_mut(), Ordering::Relaxed);
          worker_thread.stop();
@@ -201,16 +195,22 @@ impl WorkerThread {
    }
 
    #[cfg(not(any(test, feature = "jni-test")))]
-   fn stop(self) {
-      let WorkerThread::Running { handle, message } = self else { return; };
+   fn stop(&mut self) {
+      use std::mem;
+
+      let WorkerThread::Running { handle, message }
+         = mem::replace(self, Self::NotStarted) else { return; };
 
       message.send(WorkerThreadMessage::Stop).unwrap();
       handle.join().unwrap();
    }
 
    #[cfg(any(test, feature = "jni-test"))]
-   fn stop(self) -> Vec<SaveTask> {
-      let WorkerThread::Running { handle, message } = self else { return vec![]; };
+   fn stop(&mut self) -> Vec<SaveTask> {
+      use std::mem;
+
+      let WorkerThread::Running { handle, message }
+         = mem::replace(self, Self::NotStarted) else { return vec![]; }; 
 
       message.send(WorkerThreadMessage::Stop).unwrap();
       handle.join().unwrap()
