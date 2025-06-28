@@ -172,7 +172,7 @@ mod tests {
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/saveGet",
          /* drop_observer = */ || ()
       );
@@ -196,7 +196,7 @@ mod tests {
       use std::sync::Arc;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          Arc::clone(&db_scheduler),
@@ -212,9 +212,6 @@ mod tests {
       );
    }
 
-   #[allow(non_upper_case_globals)]
-   static saveViaCache_saveScheduled_dbScheduler: DbScheduler = DbScheduler::new(Saver);
-
    #[allow(non_snake_case)]
    #[test]
    fn saveViaCache_saveScheduled() {
@@ -222,7 +219,7 @@ mod tests {
       use std::sync::Arc;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          Arc::clone(&db_scheduler),
@@ -254,7 +251,7 @@ mod tests {
       }
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/serialize",
          /* drop_observer = */ || ()
       );
@@ -350,7 +347,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/saveGet",
          /* drop_observer = */ || ()
       );
@@ -382,7 +379,7 @@ mod jni_tests {
       let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/saveGet_viaJni_createRepo",
          /* drop_observer = */ || ()
       ));
@@ -419,7 +416,7 @@ mod jni_tests {
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -446,7 +443,7 @@ mod jni_tests {
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -479,7 +476,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/referenceCount_withoutJvmCache",
          /* drop_observer = */ || ()
       );
@@ -500,7 +497,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/referenceCount_withJvmCache",
          /* drop_observer = */ || ()
       );
@@ -523,7 +520,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/referenceCount_clone",
          /* drop_observer = */ || ()
       );
@@ -547,7 +544,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/referenceCount_cloneIntoJvm",
          /* drop_observer = */ || ()
       );
@@ -572,7 +569,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/referenceCount_cloneIntoJvm_cloneFromJvm",
          /* drop_observer = */ || ()
       );
@@ -598,7 +595,7 @@ mod jni_tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          "test/CacheTest/referenceCount_save",
          /* drop_observer = */ || ()
       );

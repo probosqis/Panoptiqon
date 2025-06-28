@@ -45,7 +45,7 @@ impl Panoptiqon {
       use crate::db::saver::Saver;
 
       Panoptiqon {
-         db_scheduler: DbScheduler::new(Saver)
+         db_scheduler: DbScheduler::new(Saver::new())
       }
    }
 }

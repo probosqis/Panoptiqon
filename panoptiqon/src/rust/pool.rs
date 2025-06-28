@@ -195,7 +195,7 @@ mod jni_tests {
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/createCache"))
       );
 
@@ -217,7 +217,7 @@ mod jni_tests {
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/getCache"))
       );
 
@@ -243,7 +243,7 @@ mod jni_tests {
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/pooling"))
       );
       let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
@@ -265,7 +265,7 @@ mod jni_tests {
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver)),
+         Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/save"))
       );
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));

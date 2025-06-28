@@ -23,10 +23,25 @@ use crate::db::save_task::SaveTask;
 pub(crate) type DirPath = Arc<PathBuf>;
 pub(crate) type Serializer<'a> = &'a mut serde_json::Serializer<BufWriter<File>>;
 
-pub(crate) struct Saver;
+pub(crate) struct Saver {
+   #[cfg(any(test, feature = "jni-test"))]
+   received_tasks: Vec<SaveTask>
+}
 
 impl Saver {
+   pub(crate) const fn new() -> Self {
+      Self {
+         #[cfg(any(test, feature = "jni-test"))]
+         received_tasks: Vec::new()
+      }
+   }
+
+   #[cfg(not(any(test, feature = "jni-test")))]
    pub(crate) fn save(&mut self, task: SaveTask) -> anyhow::Result<()> {
+      self._save(task)
+   }
+
+   fn _save(&mut self, task: SaveTask) -> anyhow::Result<()> {
       use std::fs;
 
       let file_path = task.file_path();
@@ -47,6 +62,18 @@ impl Saver {
       task.cache.serialize(&mut serializer)?;
 
       Ok(())
+   }
+
+   #[cfg(any(test, feature = "jni-test"))]
+   pub(crate) fn save(&mut self, task: SaveTask) -> anyhow::Result<()> {
+      self.received_tasks.push(task);
+      Ok(())
+   }
+
+   #[cfg(any(test, feature = "jni-test"))]
+   pub(crate) fn clear_received_tasks(&mut self) -> Vec<SaveTask> {
+      use std::mem;
+      mem::replace(&mut self.received_tasks, Vec::new())
    }
 }
 
@@ -91,8 +118,9 @@ mod test {
          value: "value".to_string()
       };
 
+      let mut saver = Saver::new();
       let task = SaveTask::new(Arc::new(savable));
-      let result = Saver.save(task);
+      let result = saver._save(task);
       assert!(result.is_ok());
 
       defer! {
@@ -150,8 +178,9 @@ mod test {
          value: "value".to_string()
       };
 
+      let mut saver = Saver::new();
       let task = SaveTask::new(Arc::new(savable));
-      Saver.save(task).unwrap();
+      saver._save(task).unwrap();
 
       defer! {
          fs::remove_dir_all("test/Saver/save_mkdir").unwrap();

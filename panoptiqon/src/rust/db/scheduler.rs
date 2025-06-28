@@ -22,7 +22,7 @@ use crate::db::save_task::SaveTask;
 use crate::db::saver::Saver;
 
 static SINGLETON: LazyLock<Arc<DbScheduler>>
-   = LazyLock::new(|| Arc::new(DbScheduler::new(Saver)));
+   = LazyLock::new(|| Arc::new(DbScheduler::new(Saver::new())));
 
 pub(crate) struct DbScheduler {
    worker_thread: Mutex<WorkerThread>,
@@ -134,10 +134,7 @@ enum WorkerThread {
    },
 
    Running {
-      #[cfg(not(any(test, feature = "jni-test")))]
       handle: JoinHandle<(anyhow::Result<()>, Saver)>,
-      #[cfg(any(test, feature = "jni-test"))]
-      handle: JoinHandle<(Vec<SaveTask>, Saver)>,
       message: Sender<WorkerThreadMessage>
    }
 }
@@ -156,9 +153,8 @@ impl WorkerThread {
 
       let (tx, rx) = mpsc::channel();
 
-      let mut saver = mem::replace(saver, Saver);
+      let mut saver = mem::replace(saver, Saver::new());
 
-      #[cfg(not(any(test, feature = "jni-test")))]
       let handle = thread::spawn(move || {
          let mut errs = Vec::new();
 
@@ -179,24 +175,6 @@ impl WorkerThread {
          (errs.into_iter().collect(), saver)
       });
 
-      #[cfg(any(test, feature = "jni-test"))]
-      let handle = thread::spawn(move || {
-         let mut received_tasks = Vec::new();
-
-         loop {
-            let Ok(message) = rx.recv() else { break; };
-
-            match message {
-               WorkerThreadMessage::Stop => break,
-               WorkerThreadMessage::SaveTask(task) => {
-                  received_tasks.push(task);
-               }
-            }
-         }
-
-         (received_tasks, saver)
-      });
-
       *self = Self::Running {
          handle,
          message: tx
@@ -205,40 +183,38 @@ impl WorkerThread {
 
    #[cfg(not(any(test, feature = "jni-test")))]
    fn stop(&mut self) {
-      use std::mem;
-
-      let running_worker_thread
-         = mem::replace(self, Self::NotStarted { saver: Saver });
-      match running_worker_thread {
-         Self::Running { handle, message } => {
-            message.send(WorkerThreadMessage::Stop).unwrap();
-            handle.join().unwrap();
-         }
-         Self::NotStarted { .. } => {
-            *self = running_worker_thread;
-         }
-      }
+      let (result, _) = self._stop();
+      result.unwrap();
    }
 
    #[cfg(any(test, feature = "jni-test"))]
    fn stop(&mut self) -> Vec<SaveTask> {
+      let (result, saver) = self._stop();
+      result.unwrap();
+      saver.clear_received_tasks()
+   }
+
+   fn _stop(&mut self) -> (anyhow::Result<()>, &mut Saver) {
       use std::mem;
 
       let running_worker_thread
-         = mem::replace(self, Self::NotStarted { saver: Saver });
-      match running_worker_thread {
+         = mem::replace(self, Self::NotStarted { saver: Saver::new() });
+      let result = match running_worker_thread {
          Self::Running { handle, message } => {
             message.send(WorkerThreadMessage::Stop).unwrap();
 
-            let (received_tasks, saver) = handle.join().unwrap();
+            let (result, saver) = handle.join().unwrap();
             *self = Self::NotStarted { saver };
-            received_tasks
+            result
          }
          Self::NotStarted { .. } => {
             *self = running_worker_thread;
-            vec![]
+            Ok(())
          }
-      }
+      };
+
+      let Self::NotStarted { saver } = self else { panic!() };
+      (result, saver)
    }
 }
 
@@ -274,12 +250,13 @@ mod test {
       use std::sync::atomic::Ordering;
       use crate::db::saver::Saver;
 
-      let db_scheduler = DbScheduler::new(Saver);
+      let saver = Saver::new();
+      let db_scheduler = DbScheduler::new(saver);
 
       assert!(
          matches!(
-            *db_scheduler.worker_thread.lock().unwrap(),
-            WorkerThread::NotStarted { saver: Saver }
+            &*db_scheduler.worker_thread.lock().unwrap(),
+            WorkerThread::NotStarted { .. }
          )
       );
       assert!(
@@ -293,7 +270,7 @@ mod test {
 
       assert!(
          matches!(
-            *db_scheduler.worker_thread.lock().unwrap(),
+            &*db_scheduler.worker_thread.lock().unwrap(),
             WorkerThread::Running { .. }
          )
       );
