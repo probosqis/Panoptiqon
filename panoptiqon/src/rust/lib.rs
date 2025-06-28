@@ -42,8 +42,10 @@ pub struct Panoptiqon {
 
 impl Panoptiqon {
    pub const fn new() -> Self {
+      use crate::db::saver::Saver;
+
       Panoptiqon {
-         db_scheduler: DbScheduler::new()
+         db_scheduler: DbScheduler::new(Saver)
       }
    }
 }

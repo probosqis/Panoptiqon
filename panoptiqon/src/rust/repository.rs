@@ -289,6 +289,7 @@ mod jni_tests {
    use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
+   use crate::db::saver::Saver;
    use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
    use crate::jvm_types::JvmRepository;
@@ -389,7 +390,7 @@ mod jni_tests {
 
    #[allow(non_upper_case_globals)]
    static switchCacheClass_dbScheduler: LazyLock<Arc<DbScheduler>>
-      = LazyLock::new(|| Arc::new(DbScheduler::new()));
+      = LazyLock::new(|| Arc::new(DbScheduler::new(Saver)));
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_switchCacheClass_00024saveOneWayData<'local>(
@@ -428,7 +429,7 @@ mod jni_tests {
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/saveLoad",
          /* drop_observer = */ || ()
       );
@@ -458,7 +459,7 @@ mod jni_tests {
    ) {
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/load_noSuchCache",
          /* drop_observer = */ || ()
       );
@@ -474,7 +475,7 @@ mod jni_tests {
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/save_viaCache",
          /* drop_observer = */ || ()
       );
@@ -500,7 +501,7 @@ mod jni_tests {
    ) {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/save_affectAnotherCache",
          /* drop_observer = */ || ()
       );
@@ -527,7 +528,7 @@ mod jni_tests {
    ) -> JObject<'local> {
       let mut repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/oneWay_jvmCache_getCache",
          /* drop_observer = */ || ()
       );
@@ -542,7 +543,7 @@ mod jni_tests {
    ) -> JObject<'local> {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/twoWay_jvmCache_getCache",
          /* drop_observer = */ || ()
       );
@@ -561,7 +562,7 @@ mod jni_tests {
       let mut repo_lock = oneWay_valueChangeFromNative_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/oneWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
       ));
@@ -589,7 +590,7 @@ mod jni_tests {
       let mut repo_lock = twoWay_valueChangeFromNative_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
       ));
@@ -617,7 +618,7 @@ mod jni_tests {
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/jvmCache_valueChangeFromJvm_getCache",
          /* drop_observer = */ || ()
       ));
@@ -648,7 +649,7 @@ mod jni_tests {
       let mut repo_lock = oneWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
       ));
@@ -704,7 +705,7 @@ mod jni_tests {
       let mut repo_lock = twoWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
       ));
@@ -775,7 +776,7 @@ mod jni_tests {
       let (jvm_repository, repo_ptr) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,
-            Arc::new(DbScheduler::new()),
+            Arc::new(DbScheduler::new(Saver)),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || ()
          );
@@ -815,7 +816,7 @@ mod jni_tests {
       let (jvm_repository, _repo_ptr) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,
-            Arc::new(DbScheduler::new()),
+            Arc::new(DbScheduler::new(Saver)),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || {
                let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();

@@ -191,11 +191,11 @@ mod jni_tests {
    ) {
       use std::path::PathBuf;
       use std::sync::Arc;
-      use crate::db::saver;
+      use crate::db::saver::{self, Saver};
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/createCache"))
       );
 
@@ -213,11 +213,11 @@ mod jni_tests {
    ) {
       use std::path::PathBuf;
       use std::sync::Arc;
-      use crate::db::saver;
+      use crate::db::saver::{self, Saver};
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/getCache"))
       );
 
@@ -239,11 +239,11 @@ mod jni_tests {
    ) {
       use std::path::PathBuf;
       use std::sync::Arc;
-      use crate::db::saver;
+      use crate::db::saver::{self, Saver};
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/pooling"))
       );
       let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
@@ -261,11 +261,11 @@ mod jni_tests {
    ) {
       use std::path::PathBuf;
       use std::sync::Arc;
-      use crate::db::saver;
+      use crate::db::saver::{self, Saver};
 
       let mut pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new()),
+         Arc::new(DbScheduler::new(Saver)),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/save"))
       );
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));

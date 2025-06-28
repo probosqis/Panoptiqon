@@ -19,9 +19,10 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::thread::JoinHandle;
 use crate::db::save_task::SaveTask;
+use crate::db::saver::Saver;
 
 static SINGLETON: LazyLock<Arc<DbScheduler>>
-   = LazyLock::new(|| Arc::new(DbScheduler::new()));
+   = LazyLock::new(|| Arc::new(DbScheduler::new(Saver)));
 
 pub(crate) struct DbScheduler {
    worker_thread: Mutex<WorkerThread>,
@@ -33,11 +34,15 @@ impl DbScheduler {
       Arc::clone(&SINGLETON)
    }
 
-   pub(crate) const fn new() -> Self {
+   pub(crate) const fn new(saver: Saver) -> Self {
       use std::ptr;
 
+      let worker_thread = WorkerThread::NotStarted {
+         saver
+      };
+
       Self {
-         worker_thread: Mutex::new(WorkerThread::NotStarted),
+         worker_thread: Mutex::new(worker_thread),
          worker_thread_message_sender: AtomicPtr::new(ptr::null_mut())
       }
    }
@@ -69,7 +74,7 @@ impl DbScheduler {
             // ロックが取れたあとにWorkerThreadが起動されていることはありうる
             message
          }
-         WorkerThread::NotStarted => {
+         WorkerThread::NotStarted { .. } => {
             // WorkerThreadが起動されていない。起動する
             lock.start();
 
@@ -124,13 +129,15 @@ impl Drop for DbScheduler {
 }
 
 enum WorkerThread {
-   NotStarted,
+   NotStarted {
+      saver: Saver
+   },
 
    Running {
       #[cfg(not(any(test, feature = "jni-test")))]
-      handle: JoinHandle<anyhow::Result<()>>,
+      handle: JoinHandle<(anyhow::Result<()>, Saver)>,
       #[cfg(any(test, feature = "jni-test"))]
-      handle: JoinHandle<Vec<SaveTask>>,
+      handle: JoinHandle<(Vec<SaveTask>, Saver)>,
       message: Sender<WorkerThreadMessage>
    }
 }
@@ -142,17 +149,17 @@ enum WorkerThreadMessage {
 
 impl WorkerThread {
    fn start(&mut self) {
+      use std::{mem, thread};
       use std::sync::mpsc;
-      use std::thread;
 
-      if let WorkerThread::Running { .. } = self { return; }
+      let WorkerThread::NotStarted { saver } = self else { return; };
 
       let (tx, rx) = mpsc::channel();
 
+      let mut saver = mem::replace(saver, Saver);
+
       #[cfg(not(any(test, feature = "jni-test")))]
       let handle = thread::spawn(move || {
-         use crate::db::saver::Saver;
-
          let mut errs = Vec::new();
 
          loop {
@@ -161,7 +168,7 @@ impl WorkerThread {
             match message {
                WorkerThreadMessage::Stop => break,
                WorkerThreadMessage::SaveTask(task) => {
-                  let r = Saver::save(task);
+                  let r = saver.save(task);
                   if r.is_err() {
                      errs.push(r);
                   }
@@ -169,7 +176,7 @@ impl WorkerThread {
             }
          }
 
-         errs.into_iter().collect()
+         (errs.into_iter().collect(), saver)
       });
 
       #[cfg(any(test, feature = "jni-test"))]
@@ -177,15 +184,17 @@ impl WorkerThread {
          let mut received_tasks = Vec::new();
 
          loop {
-            let Ok(message) = rx.recv() else { break received_tasks; };
+            let Ok(message) = rx.recv() else { break; };
 
             match message {
-               WorkerThreadMessage::Stop => break received_tasks,
+               WorkerThreadMessage::Stop => break,
                WorkerThreadMessage::SaveTask(task) => {
                   received_tasks.push(task);
                }
             }
          }
+
+         (received_tasks, saver)
       });
 
       *self = Self::Running {
@@ -198,22 +207,38 @@ impl WorkerThread {
    fn stop(&mut self) {
       use std::mem;
 
-      let WorkerThread::Running { handle, message }
-         = mem::replace(self, Self::NotStarted) else { return; };
-
-      message.send(WorkerThreadMessage::Stop).unwrap();
-      handle.join().unwrap();
+      let running_worker_thread
+         = mem::replace(self, Self::NotStarted { saver: Saver });
+      match running_worker_thread {
+         Self::Running { handle, message } => {
+            message.send(WorkerThreadMessage::Stop).unwrap();
+            handle.join().unwrap();
+         }
+         Self::NotStarted { .. } => {
+            *self = running_worker_thread;
+         }
+      }
    }
 
    #[cfg(any(test, feature = "jni-test"))]
    fn stop(&mut self) -> Vec<SaveTask> {
       use std::mem;
 
-      let WorkerThread::Running { handle, message }
-         = mem::replace(self, Self::NotStarted) else { return vec![]; }; 
+      let running_worker_thread
+         = mem::replace(self, Self::NotStarted { saver: Saver });
+      match running_worker_thread {
+         Self::Running { handle, message } => {
+            message.send(WorkerThreadMessage::Stop).unwrap();
 
-      message.send(WorkerThreadMessage::Stop).unwrap();
-      handle.join().unwrap()
+            let (received_tasks, saver) = handle.join().unwrap();
+            *self = Self::NotStarted { saver };
+            received_tasks
+         }
+         Self::NotStarted { .. } => {
+            *self = running_worker_thread;
+            vec![]
+         }
+      }
    }
 }
 
@@ -247,13 +272,14 @@ mod test {
    fn push_startWorkerThread() {
       use std::sync::Arc;
       use std::sync::atomic::Ordering;
+      use crate::db::saver::Saver;
 
-      let db_scheduler = DbScheduler::new();
+      let db_scheduler = DbScheduler::new(Saver);
 
       assert!(
          matches!(
             *db_scheduler.worker_thread.lock().unwrap(),
-            WorkerThread::NotStarted
+            WorkerThread::NotStarted { saver: Saver }
          )
       );
       assert!(

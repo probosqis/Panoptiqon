@@ -26,7 +26,7 @@ pub(crate) type Serializer<'a> = &'a mut serde_json::Serializer<BufWriter<File>>
 pub(crate) struct Saver;
 
 impl Saver {
-   pub(crate) fn save(task: SaveTask) -> anyhow::Result<()> {
+   pub(crate) fn save(&mut self, task: SaveTask) -> anyhow::Result<()> {
       use std::fs;
 
       let file_path = task.file_path();
@@ -92,7 +92,7 @@ mod test {
       };
 
       let task = SaveTask::new(Arc::new(savable));
-      let result = Saver::save(task);
+      let result = Saver.save(task);
       assert!(result.is_ok());
 
       defer! {
@@ -151,7 +151,7 @@ mod test {
       };
 
       let task = SaveTask::new(Arc::new(savable));
-      Saver::save(task).unwrap();
+      Saver.save(task).unwrap();
 
       defer! {
          fs::remove_dir_all("test/Saver/save_mkdir").unwrap();
