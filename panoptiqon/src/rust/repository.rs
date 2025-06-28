@@ -15,6 +15,7 @@
  */
 
 use std::path::Path;
+use std::sync::Arc;
 use serde::Serialize;
 use crate::cache::{Cache, CacheContent};
 use crate::db::saver;
@@ -31,9 +32,6 @@ use {
    crate::jvm_type::JvmType,
    crate::jvm_types::JvmRepository,
 };
-
-#[cfg(any(test, feature = "jni-test"))]
-use std::sync::Arc;
 
 pub struct Repository<T: CacheContent> {
    pool: UniqueCachePool<T>,
@@ -52,13 +50,17 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(feature = "jvm")]
 impl<T: CacheContent> Repository<T> {
-   pub fn new(env: &mut JNIEnv, dir_path: impl AsRef<Path>) -> Self
+   pub fn new(
+      env: &mut JNIEnv,
+      db_scheduler: Arc<DbScheduler>,
+      dir_path: impl AsRef<Path>
+   ) -> Self
       where T: CloneIntoJvmHelper
    {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
       Repository {
-         pool: UniqueCachePool::new(env, DbScheduler::singleton(), &dir_path),
+         pool: UniqueCachePool::new(env, db_scheduler, &dir_path),
          #[cfg(any(test, feature = "jni-test"))]
          drop_observer: Box::new(|| ())
       }
@@ -110,19 +112,21 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(feature = "jvm")]
 pub struct JvmRepositoryCreator<'local> {
+   db_scheduler: Arc<DbScheduler>,
    repository_class: JClass<'local>,
    constructor_id: JMethodID
 }
 
 #[cfg(feature = "jvm")]
 impl<'local> JvmRepositoryCreator<'local> {
-   pub fn new(env: &mut JNIEnv<'local>) -> Self {
+   pub fn new(env: &mut JNIEnv<'local>, db_scheduler: Arc<DbScheduler>) -> Self {
       let repository_class =
          env.find_class("com/wcaokaze/probosqis/panoptiqon/Repository").unwrap();
       let constructor_id =
          env.get_method_id(&repository_class, "<init>", "(JJJ)V").unwrap();
 
       Self {
+         db_scheduler,
          repository_class,
          constructor_id
       }
@@ -138,7 +142,8 @@ impl<'local> JvmRepositoryCreator<'local> {
    ) -> JvmRepository<'local, T::JvmType<'local>>
       where T: CloneIntoJvmHelper + 'static
    {
-      let repo_box = Box::new(Repository::<T>::new(env, dir_path));
+      let repo = Repository::<T>::new(env, Arc::clone(&self.db_scheduler), dir_path);
+      let repo_box = Box::new(repo);
 
       self.create_internal(env, repo_box).0
    }
@@ -217,11 +222,14 @@ impl<'local> JvmRepositoryCreator<'local> {
 
 #[cfg(not(feature = "jvm"))]
 impl<T: CacheContent> Repository<T> {
-   pub fn new(dir_path: impl AsRef<Path>) -> Self {
+   pub fn new(
+      db_scheduler: Arc<DbScheduler>,
+      dir_path: impl AsRef<Path>
+   ) -> Self {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
       Repository {
-         pool: UniqueCachePool::new(DbScheduler::singleton(), &dir_path),
+         pool: UniqueCachePool::new(db_scheduler, &dir_path),
          #[cfg(any(test, feature = "jni-test"))]
          drop_observer: Box::new(|| ())
       }
