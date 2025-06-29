@@ -20,7 +20,17 @@
    specialization
 )]
 
+use std::path::Path;
+use std::sync::Arc;
+use crate::cache::CacheContent;
 use crate::db::scheduler::DbScheduler;
+use crate::repository::Repository;
+
+#[cfg(feature = "jvm")]
+use {
+   jni::JNIEnv,
+   crate::convert_jvm::CloneIntoJvmHelper,
+};
 
 pub mod cache;
 pub mod repository;
@@ -37,15 +47,40 @@ pub mod jvm_type;
 pub mod jvm_types;
 
 pub struct Panoptiqon {
-   db_scheduler: DbScheduler
+   db_scheduler: Arc<DbScheduler>
 }
 
 impl Panoptiqon {
-   pub const fn new() -> Self {
+   pub fn new() -> Self {
       use crate::db::saver::Saver;
 
       Panoptiqon {
-         db_scheduler: DbScheduler::new(Saver::new())
+         db_scheduler: Arc::new(DbScheduler::new(Saver::new()))
       }
+   }
+
+   #[cfg(not(feature = "jvm"))]
+   pub fn new_repository<T>(
+      &self,
+      dir_path: impl AsRef<Path>
+   ) -> Arc<Repository<T>>
+      where T: CacheContent
+   {
+      Arc::new(
+         Repository::new(Arc::clone(&self.db_scheduler), dir_path)
+      )
+   }
+
+   #[cfg(feature = "jvm")]
+   pub fn new_repository<T>(
+      &self,
+      env: &mut JNIEnv,
+      dir_path: impl AsRef<Path>
+   ) -> Arc<Repository<T>>
+      where T: CacheContent + CloneIntoJvmHelper
+   {
+      Arc::new(
+         Repository::new(env, Arc::clone(&self.db_scheduler), dir_path)
+      )
    }
 }
