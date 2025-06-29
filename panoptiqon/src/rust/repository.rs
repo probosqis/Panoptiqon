@@ -148,26 +148,21 @@ impl<'local> JvmRepositoryCreator<'local> {
    }
 
    /// 新しいRepositoryを作成し、それをwrapするJVMインスタンスを生成する。
-   /// Repositoryの所有権はすぐさまJVMインスタンスにムーブし、
-   /// インスタンスがGCによって解放されるときにdropされる。
    pub fn create<T>(
       &self,
       env: &mut JNIEnv<'local>,
       dir_path: impl AsRef<Path>
-   ) -> JvmRepository<'local, T::JvmType<'local>>
+   ) -> (Arc<Repository<T>>, JvmRepository<'local, T::JvmType<'local>>)
       where T: CloneIntoJvmHelper + 'static
    {
       let repo = Repository::<T>::new(env, Arc::clone(&self.db_scheduler), dir_path);
       let repo = Arc::new(repo);
 
-      self.create_internal(env, repo).0
+      let jvm_repo = self.create_internal(env, Arc::clone(&repo));
+
+      (repo, jvm_repo)
    }
 
-   /// # Returns
-   /// RepositoryをwrapするJVMインスタンス, wrapされたRepositoryのアドレス（テスト用）
-   ///
-   /// JVMインスタンスが解放されるときにネイティブ側のRepositoryもdropされるため
-   /// 返り値のアドレスのライフタイムはJVMの気分次第
    #[cfg(any(test, feature = "jni-test"))]
    fn create_testable<T>(
       &self,
@@ -175,21 +170,23 @@ impl<'local> JvmRepositoryCreator<'local> {
       db_scheduler: Arc<DbScheduler>,
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
-   ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
+   ) -> (Arc<Repository<T>>, JvmRepository<'local, T::JvmType<'local>>)
       where T: CloneIntoJvmHelper + 'static
    {
       let repo = Arc::new(
          Repository::<T>::new_testable(env, db_scheduler, dir_path, drop_observer)
       );
 
-      self.create_internal(env, repo)
+      let jvm_repo = self.create_internal(env, Arc::clone(&repo));
+
+      (repo, jvm_repo)
    }
 
    fn create_internal<T>(
       &self,
       env: &mut JNIEnv<'local>,
       repo: Arc<Repository<T>>,
-   ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
+   ) -> JvmRepository<'local, T::JvmType<'local>>
       where T: CloneIntoJvmHelper + 'static
    {
       use std::{mem, ptr};
@@ -222,9 +219,7 @@ impl<'local> JvmRepositoryCreator<'local> {
          ).unwrap()
       };
 
-      let jvm_repository = unsafe { JvmRepository::from_j_object(j_object) };
-
-      (jvm_repository, repo_address)
+      unsafe { JvmRepository::from_j_object(j_object) }
    }
 }
 
@@ -792,7 +787,7 @@ mod jni_tests {
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
       let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
-      let (jvm_repository, repo_ptr) = repository_creator
+      let (repo, jvm_repository) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,
             Arc::new(DbScheduler::new(Saver::new())),
@@ -801,7 +796,7 @@ mod jni_tests {
          );
 
       let mut lock = restoreNativeRepositoryBorrow_repo.lock().unwrap();
-      *lock = repo_ptr as usize;
+      *lock = Arc::into_raw(Arc::clone(&repo)) as usize;
 
       jvm_repository
    }
@@ -833,7 +828,7 @@ mod jni_tests {
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
       let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
-      let (jvm_repository, _repo_ptr) = repository_creator
+      let (_repo, jvm_repository) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,
             Arc::new(DbScheduler::new(Saver::new())),
