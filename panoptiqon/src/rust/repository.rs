@@ -111,6 +111,21 @@ impl<T: CacheContent> Repository<T> {
 }
 
 #[cfg(feature = "jvm")]
+pub(crate) trait DynRepository {
+   /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
+   /// 解放されている可能性がある
+   unsafe fn decrement_arc(&self);
+}
+
+#[cfg(feature = "jvm")]
+impl<T: CacheContent> DynRepository for Repository<T> {
+   unsafe fn decrement_arc(&self) {
+      let arc = Arc::from_raw(self as *const _);
+      drop(arc);
+   }
+}
+
+#[cfg(feature = "jvm")]
 pub struct JvmRepositoryCreator<'local> {
    db_scheduler: Arc<DbScheduler>,
    repository_class: JClass<'local>,
@@ -123,7 +138,7 @@ impl<'local> JvmRepositoryCreator<'local> {
       let repository_class =
          env.find_class("com/wcaokaze/probosqis/panoptiqon/Repository").unwrap();
       let constructor_id =
-         env.get_method_id(&repository_class, "<init>", "(JJJ)V").unwrap();
+         env.get_method_id(&repository_class, "<init>", "(JJ)V").unwrap();
 
       Self {
          db_scheduler,
@@ -143,9 +158,9 @@ impl<'local> JvmRepositoryCreator<'local> {
       where T: CloneIntoJvmHelper + 'static
    {
       let repo = Repository::<T>::new(env, Arc::clone(&self.db_scheduler), dir_path);
-      let repo_box = Box::new(repo);
+      let repo = Arc::new(repo);
 
-      self.create_internal(env, repo_box).0
+      self.create_internal(env, repo).0
    }
 
    /// # Returns
@@ -163,60 +178,53 @@ impl<'local> JvmRepositoryCreator<'local> {
    ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
       where T: CloneIntoJvmHelper + 'static
    {
-      let repo_box = Box::new(
+      let repo = Arc::new(
          Repository::<T>::new_testable(env, db_scheduler, dir_path, drop_observer)
       );
 
-      self.create_internal(env, repo_box)
+      self.create_internal(env, repo)
    }
 
    fn create_internal<T>(
       &self,
       env: &mut JNIEnv<'local>,
-      repo_box: Box<Repository<T>>,
+      repo: Arc<Repository<T>>,
    ) -> (JvmRepository<'local, T::JvmType<'local>>, *const Repository<T>)
       where T: CloneIntoJvmHelper + 'static
    {
-      use std::any::Any;
-      use std::mem;
+      use std::{mem, ptr};
       use jni::objects::JValue;
 
       /*
-       * Repositoryを置いたヒープ領域はJVMインスタンスのfinalizeで解放する
-       * 必要がある。しかし一度JVMインスタンスに管理させることで参照先の
-       * 型情報(Repository<T>)が失われ、サイズがわからなくなる。
-       * たいていのアロケータでは確保したメモリサイズを記録しているため
-       * アプリケーション側がサイズを知っている必要はないのだが、
-       * すべての環境でそうなのかについては確信がない。
-       * そのため、Repositoryを置いたヒープ領域(Box<Repository<T>>)への
-       * ポインタをヒープ領域に置き(Box<Box<Repository<T>>>)、それを
-       * Box<dyn Any>のトレイトオブジェクトに変換することでデストラクタを
-       * 実行させ、解放させる。
+       * JVMインスタンスのfinalizeでArcの参照カウントをデクリメントする必要が
+       * あるが、一度JVMインスタンスに管理させることで参照先の
+       * 型情報(Repository<T>)が失われ、アドレスから元の構造体を復元できなくなる。
+       * そのため、DynRepositoryのトレイトオブジェクトを生成し、finalize時にも
+       * それを復元し、動的ディスパッチでArcをデクリメントさせる。
        */
 
-      let mut repo_box_box = Box::new(repo_box);
+      let dyn_repository: *const dyn DynRepository = Arc::into_raw(repo);
+      let repo_address = dyn_repository as *const Repository<T>;
 
-      let repo_ptr: *mut _ = Box::as_mut(Box::as_mut(&mut repo_box_box));
-
-      let trait_obj: Box<dyn Any> = repo_box_box;
-      let (repo_box_ptr, vtable): (*const Box<Repository<T>>, *const ())
-         = unsafe { mem::transmute(trait_obj) };
+      let trait_object_metadata = ptr::metadata(dyn_repository);
+      let vtable_address: *const () = unsafe {
+         mem::transmute(trait_object_metadata)
+      };
 
       let j_object = unsafe {
          env.new_object_unchecked(
             &self.repository_class,
             self.constructor_id,
             &[
-               JValue::Long(repo_ptr     as jlong).as_jni(),
-               JValue::Long(repo_box_ptr as jlong).as_jni(),
-               JValue::Long(vtable       as jlong).as_jni(),
+               JValue::Long(repo_address   as jlong).as_jni(),
+               JValue::Long(vtable_address as jlong).as_jni(),
             ]
          ).unwrap()
       };
 
       let jvm_repository = unsafe { JvmRepository::from_j_object(j_object) };
 
-      (jvm_repository, repo_ptr)
+      (jvm_repository, repo_address)
    }
 }
 
@@ -273,19 +281,21 @@ impl<T: CacheContent> Drop for Repository<T> {
 extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeRepository<'local>(
    _env: JNIEnv<'local>,
    _obj: JObject<'local>,
-   native_repository_ptr_address: jlong,
-   box_vtable_address: jlong
+   native_repository_address: jlong,
+   vtable_address: jlong
 ) {
-   use std::mem;
+   use std::{mem, ptr};
 
-   // Box<Box<Repository<T>>>のトレイトオブジェクトを復元。
-   // [Repository::new_jvm_internal]参照
-   let trait_obj: Box<dyn Drop> = unsafe {
-      mem::transmute(
-         (native_repository_ptr_address as *const (), box_vtable_address as *const ())
-      )
+   unsafe {
+      let vtable_address = vtable_address as *const ();
+      let dyn_metadata = mem::transmute(vtable_address);
+
+      let dyn_repository: *const dyn DynRepository = ptr::from_raw_parts(
+         native_repository_address as *const (), dyn_metadata
+      );
+
+      (&*dyn_repository).decrement_arc();
    };
-   drop(trait_obj);
 }
 
 #[cfg(feature = "jni-test")]
@@ -780,7 +790,8 @@ mod jni_tests {
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
       use super::JvmRepositoryCreator;
 
-      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
       let (jvm_repository, repo_ptr) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,
@@ -820,7 +831,8 @@ mod jni_tests {
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
       use super::JvmRepositoryCreator;
 
-      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
       let (jvm_repository, _repo_ptr) = repository_creator
          .create_testable::<TwoWayConversionData>(
             &mut env,

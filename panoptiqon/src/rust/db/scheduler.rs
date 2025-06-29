@@ -21,13 +21,13 @@ use std::thread::JoinHandle;
 use crate::db::save_task::SaveTask;
 use crate::db::saver::Saver;
 
-pub(crate) struct DbScheduler {
+pub struct DbScheduler {
    worker_thread: Mutex<WorkerThread>,
    worker_thread_message_sender: AtomicPtr<Sender<WorkerThreadMessage>>
 }
 
 impl DbScheduler {
-   pub(crate) const fn new(saver: Saver) -> Self {
+   pub const fn new(saver: Saver) -> Self {
       use std::ptr;
 
       let worker_thread = WorkerThread::NotStarted {

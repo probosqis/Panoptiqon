@@ -19,16 +19,15 @@ package com.wcaokaze.probosqis.panoptiqon
 class Repository<@Suppress("UNUSED_PARAMETER") T>(
    @get:JvmName("getNativeRepositoryAddress")
    internal val nativeRepositoryAddress: Long,
-   private val nativeRepositoryPtrAddress: Long,
-   private val boxVtableAddress: Long
+   private val vtableAddress: Long
 ) : Object() {
    private external fun dropNativeRepository(
-      nativeRepositoryPtrAddress: Long,
-      boxVtableAddress: Long
+      nativeRepositoryAddress: Long,
+      vtableAddress: Long
    )
 
    @Deprecated("")
    override fun finalize() {
-      dropNativeRepository(nativeRepositoryPtrAddress, boxVtableAddress)
+      dropNativeRepository(nativeRepositoryAddress, vtableAddress)
    }
 }
