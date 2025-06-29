@@ -147,42 +147,7 @@ impl<'local> JvmRepositoryCreator<'local> {
       }
    }
 
-   /// 新しいRepositoryを作成し、それをwrapするJVMインスタンスを生成する。
-   pub fn create<T>(
-      &self,
-      env: &mut JNIEnv<'local>,
-      dir_path: impl AsRef<Path>
-   ) -> (Arc<Repository<T>>, JvmRepository<'local, T::JvmType<'local>>)
-      where T: CloneIntoJvmHelper + 'static
-   {
-      let repo = Repository::<T>::new(env, Arc::clone(&self.db_scheduler), dir_path);
-      let repo = Arc::new(repo);
-
-      let jvm_repo = self.create_internal(env, Arc::clone(&repo));
-
-      (repo, jvm_repo)
-   }
-
-   #[cfg(any(test, feature = "jni-test"))]
-   fn create_testable<T>(
-      &self,
-      env: &mut JNIEnv<'local>,
-      db_scheduler: Arc<DbScheduler>,
-      dir_path: impl AsRef<Path>,
-      drop_observer: impl FnOnce() -> () + Send + Sync + 'static
-   ) -> (Arc<Repository<T>>, JvmRepository<'local, T::JvmType<'local>>)
-      where T: CloneIntoJvmHelper + 'static
-   {
-      let repo = Arc::new(
-         Repository::<T>::new_testable(env, db_scheduler, dir_path, drop_observer)
-      );
-
-      let jvm_repo = self.create_internal(env, Arc::clone(&repo));
-
-      (repo, jvm_repo)
-   }
-
-   fn create_internal<T>(
+   pub fn create_jvm_wrapper<T>(
       &self,
       env: &mut JNIEnv<'local>,
       repo: Arc<Repository<T>>,
@@ -787,13 +752,14 @@ mod jni_tests {
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
       let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
-      let (repo, jvm_repository) = repository_creator
-         .create_testable::<TwoWayConversionData>(
-            &mut env,
-            Arc::new(DbScheduler::new(Saver::new())),
-            "test/RepositoryTest/restoreNativeRepositoryBorrow",
-            /* drop_observer = */ || ()
-         );
+      let repo = Arc::new(Repository::<TwoWayConversionData>::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         "test/RepositoryTest/restoreNativeRepositoryBorrow",
+         /* drop_observer = */ || ()
+      ));
+      let jvm_repository = repository_creator
+         .create_jvm_wrapper(&mut env, Arc::clone(&repo));
 
       let mut lock = restoreNativeRepositoryBorrow_repo.lock().unwrap();
       *lock = Arc::into_raw(Arc::clone(&repo)) as usize;
@@ -828,16 +794,16 @@ mod jni_tests {
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
       let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
-      let (_repo, jvm_repository) = repository_creator
-         .create_testable::<TwoWayConversionData>(
-            &mut env,
-            Arc::new(DbScheduler::new(Saver::new())),
-            "test/RepositoryTest/restoreNativeRepositoryBorrow",
-            /* drop_observer = */ || {
-               let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
-               *lock = false;
-            }
-         );
+      let repo = Arc::new(Repository::<TwoWayConversionData>::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         "test/RepositoryTest/restoreNativeRepositoryBorrow",
+         /* drop_observer = */ || {
+            let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
+            *lock = false;
+         }
+      ));
+      let jvm_repository = repository_creator.create_jvm_wrapper(&mut env, repo);
 
       let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
       *lock = true;
