@@ -127,21 +127,19 @@ impl<T: CacheContent> DynRepository for Repository<T> {
 
 #[cfg(feature = "jvm")]
 pub struct JvmRepositoryCreator<'local> {
-   db_scheduler: Arc<DbScheduler>,
    repository_class: JClass<'local>,
    constructor_id: JMethodID
 }
 
 #[cfg(feature = "jvm")]
 impl<'local> JvmRepositoryCreator<'local> {
-   pub fn new(env: &mut JNIEnv<'local>, db_scheduler: Arc<DbScheduler>) -> Self {
+   pub fn new(env: &mut JNIEnv<'local>) -> Self {
       let repository_class =
          env.find_class("com/wcaokaze/probosqis/panoptiqon/Repository").unwrap();
       let constructor_id =
          env.get_method_id(&repository_class, "<init>", "(JJ)V").unwrap();
 
       Self {
-         db_scheduler,
          repository_class,
          constructor_id
       }
@@ -750,8 +748,7 @@ mod jni_tests {
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
       use super::JvmRepositoryCreator;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
-      let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
       let repo = Arc::new(Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
@@ -792,8 +789,7 @@ mod jni_tests {
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
       use super::JvmRepositoryCreator;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
-      let repository_creator = JvmRepositoryCreator::new(&mut env, db_scheduler);
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
       let repo = Arc::new(Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
