@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 
-pub(crate) mod loader;
-pub(crate) mod save_task;
-pub(crate) mod savable;
-pub(crate) mod saver;
-pub(crate) mod scheduler;
+pub(crate) struct Loader {
+}
+
+impl Loader {
+   pub(crate) fn new() -> Self {
+      Self {
+      }
+   }
+}

@@ -23,6 +23,7 @@
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use crate::cache::CacheContent;
+use crate::db::loader::Loader;
 use crate::db::scheduler::DbScheduler;
 use crate::repository::Repository;
 
@@ -47,7 +48,8 @@ pub mod jvm_type;
 pub mod jvm_types;
 
 pub struct Panoptiqon {
-   db_scheduler: Arc<DbScheduler>
+   db_scheduler: Arc<DbScheduler>,
+   loader: Arc<Loader>
 }
 
 impl Panoptiqon {
@@ -55,7 +57,8 @@ impl Panoptiqon {
       use crate::db::saver::Saver;
 
       Panoptiqon {
-         db_scheduler: Arc::new(DbScheduler::new(Saver::new()))
+         db_scheduler: Arc::new(DbScheduler::new(Saver::new())),
+         loader: Arc::new(Loader::new())
       }
    }
 
