@@ -21,7 +21,7 @@
 )]
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use crate::cache::CacheContent;
 use crate::db::scheduler::DbScheduler;
 use crate::repository::Repository;
@@ -63,12 +63,12 @@ impl Panoptiqon {
    pub fn new_repository<T>(
       &self,
       dir_path: impl AsRef<Path>
-   ) -> Arc<Repository<T>>
+   ) -> Arc<Mutex<Repository<T>>>
       where T: CacheContent
    {
-      Arc::new(
+      Arc::new(Mutex::new(
          Repository::new(Arc::clone(&self.db_scheduler), dir_path)
-      )
+      ))
    }
 
    #[cfg(feature = "jvm")]
@@ -76,11 +76,11 @@ impl Panoptiqon {
       &self,
       env: &mut JNIEnv,
       dir_path: impl AsRef<Path>
-   ) -> Arc<Repository<T>>
+   ) -> Arc<Mutex<Repository<T>>>
       where T: CacheContent + CloneIntoJvmHelper
    {
-      Arc::new(
+      Arc::new(Mutex::new(
          Repository::new(env, Arc::clone(&self.db_scheduler), dir_path)
-      )
+      ))
    }
 }

@@ -15,7 +15,7 @@
  */
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use crate::cache::{Cache, CacheContent};
 use crate::db::saver;
@@ -118,7 +118,7 @@ pub(crate) trait DynRepository {
 }
 
 #[cfg(feature = "jvm")]
-impl<T: CacheContent> DynRepository for Repository<T> {
+impl<T: CacheContent> DynRepository for Mutex<Repository<T>> {
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
       drop(arc);
@@ -148,7 +148,7 @@ impl<'local> JvmRepositoryCreator<'local> {
    pub fn create_jvm_wrapper<T>(
       &self,
       env: &mut JNIEnv<'local>,
-      repo: Arc<Repository<T>>,
+      repo: Arc<Mutex<Repository<T>>>,
    ) -> JvmRepository<'local, T::JvmType<'local>>
       where T: CloneIntoJvmHelper + 'static
    {
@@ -749,11 +749,13 @@ mod jni_tests {
       use super::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let repo = Arc::new(Repository::<TwoWayConversionData>::new_testable(
-         &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
-         "test/RepositoryTest/restoreNativeRepositoryBorrow",
-         /* drop_observer = */ || ()
+      let repo = Arc::new(Mutex::new(
+         Repository::<TwoWayConversionData>::new_testable(
+            &mut env,
+            Arc::new(DbScheduler::new(Saver::new())),
+            "test/RepositoryTest/restoreNativeRepositoryBorrow",
+            /* drop_observer = */ || ()
+         )
       ));
       let jvm_repository = repository_creator
          .create_jvm_wrapper(&mut env, Arc::clone(&repo));
@@ -790,14 +792,16 @@ mod jni_tests {
       use super::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let repo = Arc::new(Repository::<TwoWayConversionData>::new_testable(
-         &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
-         "test/RepositoryTest/restoreNativeRepositoryBorrow",
-         /* drop_observer = */ || {
-            let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
-            *lock = false;
-         }
+      let repo = Arc::new(Mutex::new(
+         Repository::<TwoWayConversionData>::new_testable(
+            &mut env,
+            Arc::new(DbScheduler::new(Saver::new())),
+            "test/RepositoryTest/restoreNativeRepositoryBorrow",
+            /* drop_observer = */ || {
+               let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();
+               *lock = false;
+            }
+         )
       ));
       let jvm_repository = repository_creator.create_jvm_wrapper(&mut env, repo);
 
