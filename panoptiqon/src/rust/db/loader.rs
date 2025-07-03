@@ -14,140 +14,143 @@
  * limitations under the License.
  */
 
+use std::fs::File;
+use std::io::BufReader;
 use serde::de::Visitor;
 use serde::Deserializer;
+use serde_json::de::IoRead;
 
 pub struct CacheDeserializer {
+   deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>
 }
 
-impl<'de> Deserializer<'de> for CacheDeserializer
-{
-   type Error = !;
+impl<'de> Deserializer<'de> for &mut CacheDeserializer {
+   type Error = serde_json::Error;
 
    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_any(visitor)
    }
 
    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_bool(visitor)
    }
 
    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_i8(visitor)
    }
 
    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_i16(visitor)
    }
 
    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_i32(visitor)
    }
 
    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_i64(visitor)
    }
 
    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_i128(visitor)
    }
 
    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_u8(visitor)
    }
 
    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_u16(visitor)
    }
 
    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_u32(visitor)
    }
 
    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_u64(visitor)
    }
 
    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_u128(visitor)
    }
 
    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_f32(visitor)
    }
 
    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_f64(visitor)
    }
 
    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_char(visitor)
    }
 
    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_str(visitor)
    }
 
    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_string(visitor)
    }
 
    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_bytes(visitor)
    }
 
    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_byte_buf(visitor)
    }
 
    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_option(visitor)
    }
 
    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_unit(visitor)
    }
 
    fn deserialize_unit_struct<V>(
@@ -157,7 +160,7 @@ impl<'de> Deserializer<'de> for CacheDeserializer
    ) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_unit_struct(name, visitor)
    }
 
    fn deserialize_newtype_struct<V>(
@@ -167,19 +170,19 @@ impl<'de> Deserializer<'de> for CacheDeserializer
    ) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_newtype_struct(name, visitor)
    }
 
    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_seq(visitor)
    }
 
    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_tuple(len, visitor)
    }
 
    fn deserialize_tuple_struct<V>(
@@ -190,13 +193,13 @@ impl<'de> Deserializer<'de> for CacheDeserializer
    ) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_tuple_struct(name, len, visitor)
    }
 
    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_map(visitor)
    }
 
    fn deserialize_struct<V>(
@@ -207,7 +210,7 @@ impl<'de> Deserializer<'de> for CacheDeserializer
    ) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_struct(name, fields, visitor)
    }
 
    fn deserialize_enum<V>(
@@ -218,24 +221,19 @@ impl<'de> Deserializer<'de> for CacheDeserializer
    ) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_enum(name, variants, visitor)
    }
 
    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
+      self.deserializer.deserialize_identifier(visitor)
    }
 
    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
       where V: Visitor<'de>
    {
-      todo!();
-   }
-
-   #[inline]
-   fn is_human_readable(&self) -> bool {
-      todo!();
+      self.deserializer.deserialize_ignored_any(visitor)
    }
 }
 
