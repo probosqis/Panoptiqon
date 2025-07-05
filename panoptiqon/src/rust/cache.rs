@@ -44,15 +44,13 @@ impl<T: CacheContent> Cache<T> {
    pub fn save(&self, value: T)
       where for<'local> T: CloneIntoJvm<'local, T::JvmType<'local>>
                + Serialize
-               + Send + Sync
-               + 'static
    {
       self.0.save(value);
    }
 
    #[cfg(not(feature = "jvm"))]
    pub fn save(&self, value: T)
-      where T: Serialize + Send + Sync + 'static
+      where T: Serialize
    {
       self.0.save(value);
    }
@@ -131,8 +129,8 @@ impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
    }
 }
 
-pub trait CacheContent: Send + Sync {
-   type Key: Hash + Eq + Send + Sync;
+pub trait CacheContent: Send + Sync + 'static {
+   type Key: Hash + Eq + Send + Sync + 'static;
 
    #[cfg(feature = "jvm")]
    type JvmType<'local>: JvmType<'local>;

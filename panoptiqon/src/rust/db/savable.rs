@@ -17,7 +17,7 @@
 use std::path::PathBuf;
 use crate::db::saver;
 
-pub(crate) trait Savable {
+pub(crate) trait Savable: Send + Sync + 'static {
    fn file_path(&self) -> PathBuf;
 
    fn serialize(

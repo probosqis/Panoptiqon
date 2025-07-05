@@ -19,11 +19,11 @@ use std::sync::Arc;
 use crate::db::savable::Savable;
 
 pub(crate) struct SaveTask {
-   pub(crate) cache: Arc<dyn Savable + Send + Sync>
+   pub(crate) cache: Arc<dyn Savable>
 }
 
 impl SaveTask {
-   pub(crate) fn new(cache: Arc<dyn Savable + Send + Sync>) -> Self {
+   pub(crate) fn new(cache: Arc<dyn Savable>) -> Self {
       Self {
          cache
       }

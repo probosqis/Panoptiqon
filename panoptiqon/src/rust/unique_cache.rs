@@ -73,8 +73,6 @@ impl<T: CacheContent> UniqueCache<T> {
       where T: CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
                + Serialize
-               + Send + Sync
-               + 'static
    {
       use crate::db::save_task::SaveTask;
 
@@ -130,8 +128,6 @@ impl<T: CacheContent> UniqueCache<T> {
    pub(crate) fn save<'local>(self: &'local Arc<Self>, value: T)
       where T: CloneIntoJvm<'local, T::JvmType<'local>>
                + Serialize
-               + Send + Sync
-               + 'static
    {
       use jni::objects::JValueGen;
       use jni::signature::{Primitive, ReturnType};
@@ -232,7 +228,7 @@ impl<T: CacheContent> UniqueCache<T> {
       dir_path: &saver::DirPath,
       initial_state: T
    ) -> Arc<Self>
-      where T: Serialize + Send + Sync + 'static
+      where T: Serialize
    {
       use crate::db::save_task::SaveTask;
 
@@ -256,7 +252,7 @@ impl<T: CacheContent> UniqueCache<T> {
    }
 
    pub(crate) fn save(self: &Arc<Self>, value: T)
-      where T: Serialize + Send + Sync + 'static
+      where T: Serialize
    {
       use crate::db::save_task::SaveTask;
 

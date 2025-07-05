@@ -76,8 +76,6 @@ impl<T: CacheContent> UniqueCachePool<T> {
       where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
                + Serialize
-               + Send + Sync
-               + 'static
    {
       use std::collections::hash_map::Entry;
 
@@ -118,7 +116,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
    }
 
    pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
-      where T: Serialize + Send + Sync + 'static
+      where T: Serialize
    {
       use std::collections::hash_map::Entry;
 

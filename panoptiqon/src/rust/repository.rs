@@ -101,8 +101,6 @@ impl<T: CacheContent> Repository<T> {
       where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
                + Serialize
-               + Send + Sync
-               + 'static
    {
       let key = value.key();
       let arc = self.pool.update(key, value);
@@ -150,7 +148,7 @@ impl<'local> JvmRepositoryCreator<'local> {
       env: &mut JNIEnv<'local>,
       repo: Arc<Mutex<Repository<T>>>,
    ) -> JvmRepository<'local, T::JvmType<'local>>
-      where T: CloneIntoJvmHelper + 'static
+      where T: CloneIntoJvmHelper
    {
       use std::{mem, ptr};
       use jni::objects::JValue;
@@ -216,7 +214,7 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
-      where T: Serialize + Send + Sync + 'static
+      where T: Serialize
    {
       let key = value.key();
       let arc = self.pool.update(key, value);
