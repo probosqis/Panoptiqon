@@ -110,15 +110,15 @@ impl<T: CacheContent> Repository<T> {
    }
 }
 
-#[cfg(feature = "jvm")]
-pub(crate) trait DynRepository {
+pub(crate) trait DynRepository: Send + Sync {
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
    /// 解放されている可能性がある
+   #[cfg(feature = "jvm")]
    unsafe fn decrement_arc(&self);
 }
 
-#[cfg(feature = "jvm")]
 impl<T: CacheContent> DynRepository for Mutex<Repository<T>> {
+   #[cfg(feature = "jvm")]
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
       drop(arc);

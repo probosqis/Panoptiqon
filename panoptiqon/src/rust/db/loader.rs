@@ -16,9 +16,11 @@
 
 use std::fs::File;
 use std::io::BufReader;
+use std::sync::{Arc, RwLock};
 use serde::de::Visitor;
 use serde::Deserializer;
 use serde_json::de::IoRead;
+use crate::repository::DynRepository;
 
 pub struct CacheDeserializer {
    deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>
@@ -238,11 +240,18 @@ impl<'de> Deserializer<'de> for &mut CacheDeserializer {
 }
 
 pub(crate) struct Loader {
+   repositories: RwLock<Vec<Arc<dyn DynRepository>>>
 }
 
 impl Loader {
    pub(crate) fn new() -> Self {
       Self {
+         repositories: RwLock::new(Vec::new())
       }
+   }
+
+   pub(crate) fn push_repository(&self, repository: Arc<dyn DynRepository>) {
+      let mut lock = self.repositories.write().unwrap();
+      lock.push(repository);
    }
 }

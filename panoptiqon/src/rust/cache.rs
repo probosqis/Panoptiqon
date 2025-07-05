@@ -131,8 +131,8 @@ impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
    }
 }
 
-pub trait CacheContent {
-   type Key: Hash + Eq;
+pub trait CacheContent: Send + Sync {
+   type Key: Hash + Eq + Send + Sync;
 
    #[cfg(feature = "jvm")]
    type JvmType<'local>: JvmType<'local>;

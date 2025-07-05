@@ -80,10 +80,15 @@ impl Panoptiqon {
       env: &mut JNIEnv,
       dir_path: impl AsRef<Path>
    ) -> Arc<Mutex<Repository<T>>>
-      where T: CacheContent + CloneIntoJvmHelper
+      where T: CacheContent + CloneIntoJvmHelper + 'static
    {
-      Arc::new(Mutex::new(
+      let repository = Arc::new(Mutex::new(
          Repository::new(env, Arc::clone(&self.db_scheduler), dir_path)
-      ))
+      ));
+
+      let dyn_repository: Arc<Mutex<Repository<T>>> = Arc::clone(&repository);
+      self.loader.push_repository(dyn_repository);
+
+      repository
    }
 }
