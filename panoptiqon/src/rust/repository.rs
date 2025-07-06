@@ -102,7 +102,7 @@ impl<T: CacheContent> Repository<T> {
                + CloneIntoJvmHelper
                + Serialize
    {
-      let key = value.key();
+      let key = T::Key::clone(value.key());
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
@@ -216,7 +216,7 @@ impl<T: CacheContent> Repository<T> {
    pub fn save(&mut self, value: T) -> Cache<T>
       where T: Serialize
    {
-      let key = value.key();
+      let key = T::Key::clone(value.key());
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
