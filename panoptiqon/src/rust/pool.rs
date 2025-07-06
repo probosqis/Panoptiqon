@@ -164,12 +164,12 @@ mod jni_tests {
       type Key = String;
       type JvmType<'local> = JvmContent<'local>;
 
-      fn key(&self) -> String {
-         self.0.clone()
+      fn key(&self) -> &String {
+         &self.0
       }
 
-      fn file_path(&self, dir_path: &Path) -> PathBuf {
-         dir_path.join(self.0.to_string())
+      fn file_path_for_key(dir_path: &Path, key: &String) -> PathBuf {
+         dir_path.join(key)
       }
    }
 

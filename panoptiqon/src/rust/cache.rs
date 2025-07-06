@@ -135,8 +135,13 @@ pub trait CacheContent: Send + Sync + 'static {
    #[cfg(feature = "jvm")]
    type JvmType<'local>: JvmType<'local>;
 
-   fn key(&self) -> Self::Key;
-   fn file_path(&self, dir_path: &Path) -> PathBuf;
+   fn key(&self) -> &Self::Key;
+   fn file_path_for_key(dir_path: &Path, key: &Self::Key) -> PathBuf;
+
+   fn file_path(&self, dir_path: &Path) -> PathBuf {
+      let key = self.key();
+      Self::file_path_for_key(dir_path, key)
+   }
 }
 
 #[cfg(all(test, not(feature = "jvm")))]
@@ -154,12 +159,12 @@ mod tests {
    impl CacheContent for CacheContentImpl {
       type Key = i32;
 
-      fn key(&self) -> i32 {
-         self.0
+      fn key(&self) -> &i32 {
+         &self.0
       }
 
-      fn file_path(&self, dir_path: &Path) -> PathBuf {
-         dir_path.join(self.0.to_string())
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
       }
    }
 
@@ -292,12 +297,12 @@ mod jni_tests {
       type Key = i32;
       type JvmType<'local> = JvmCacheContentImpl<'local>;
 
-      fn key(&self) -> i32 {
-         self.0
+      fn key(&self) -> &i32 {
+         &self.0
       }
 
-      fn file_path(&self, dir_path: &Path) -> PathBuf {
-         dir_path.join(self.0.to_string())
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
       }
    }
 
