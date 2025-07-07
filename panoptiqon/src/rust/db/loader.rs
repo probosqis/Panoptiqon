@@ -254,4 +254,9 @@ impl Loader {
       let mut lock = self.repositories.write().unwrap();
       lock.push(repository);
    }
+
+   #[cfg(test)]
+   pub(crate) fn repositories(&self) -> Vec<Arc<dyn DynRepository>> {
+      self.repositories.read().unwrap().clone()
+   }
 }

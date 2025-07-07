@@ -171,11 +171,12 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveGet() {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/saveGet",
          /* drop_observer = */ || ()
       );
@@ -196,13 +197,14 @@ mod tests {
    #[test]
    fn saveViaRepository_saveScheduled() {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::repository::Repository;
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          Arc::clone(&db_scheduler),
+         /* loader = */ Weak::new(),
          "test/CacheTest/saveViaRepository_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -219,13 +221,14 @@ mod tests {
    #[test]
    fn saveViaCache_saveScheduled() {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::repository::Repository;
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          Arc::clone(&db_scheduler),
+         /* loader = */ Weak::new(),
          "test/CacheTest/saveViaCache_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -245,7 +248,7 @@ mod tests {
 
    #[test]
    fn serialize() {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::repository::Repository;
 
       #[derive(Serialize)]
@@ -255,6 +258,7 @@ mod tests {
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/serialize",
          /* drop_observer = */ || ()
       );
@@ -344,13 +348,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/saveGet",
          /* drop_observer = */ || ()
       );
@@ -375,7 +380,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -383,6 +388,7 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/saveGet_viaJni_createRepo",
          /* drop_observer = */ || ()
       ));
@@ -415,7 +421,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -424,6 +430,7 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::clone(&db_scheduler),
+         /* loader = */ Weak::new(),
          "test/CacheTest/saveViaRepository_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -442,7 +449,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -451,6 +458,7 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::clone(&db_scheduler),
+         /* loader = */ Weak::new(),
          "test/CacheTest/saveViaCache_saveScheduled",
          /* drop_observer = */ || ()
       );
@@ -473,13 +481,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_withoutJvmCache",
          /* drop_observer = */ || ()
       );
@@ -494,13 +503,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_withJvmCache",
          /* drop_observer = */ || ()
       );
@@ -517,13 +527,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_clone",
          /* drop_observer = */ || ()
       );
@@ -540,7 +551,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
@@ -548,6 +559,7 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_cloneIntoJvm",
          /* drop_observer = */ || ()
       );
@@ -565,7 +577,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
@@ -573,6 +585,7 @@ mod jni_tests {
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_cloneIntoJvm_cloneFromJvm",
          /* drop_observer = */ || ()
       );
@@ -592,13 +605,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::Arc;
+      use std::sync::{Arc, Weak};
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
       let mut repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_save",
          /* drop_observer = */ || ()
       );

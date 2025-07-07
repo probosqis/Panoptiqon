@@ -15,9 +15,10 @@
  */
 
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
 use serde::Serialize;
 use crate::cache::{Cache, CacheContent};
+use crate::db::loader::Loader;
 use crate::db::saver;
 use crate::db::scheduler::DbScheduler;
 use crate::pool::UniqueCachePool;
@@ -35,6 +36,7 @@ use {
 
 pub struct Repository<T: CacheContent> {
    pool: UniqueCachePool<T>,
+   loader: Weak<Loader>,
    #[cfg(any(test, feature = "jni-test"))]
    drop_observer: Box<dyn FnOnce() -> () + Send + Sync>
 }
@@ -46,6 +48,11 @@ impl<T: CacheContent> Repository<T> {
       let cache = Cache::new(arc);
       Ok(cache)
    }
+
+   #[cfg(test)]
+   pub(crate) fn loader(&self) -> &Weak<Loader> {
+      &self.loader
+   }
 }
 
 #[cfg(feature = "jvm")]
@@ -53,6 +60,7 @@ impl<T: CacheContent> Repository<T> {
    pub fn new(
       env: &mut JNIEnv,
       db_scheduler: Arc<DbScheduler>,
+      loader: Weak<Loader>,
       dir_path: impl AsRef<Path>
    ) -> Self
       where T: CloneIntoJvmHelper
@@ -61,6 +69,7 @@ impl<T: CacheContent> Repository<T> {
 
       Repository {
          pool: UniqueCachePool::new(env, db_scheduler, &dir_path),
+         loader,
          #[cfg(any(test, feature = "jni-test"))]
          drop_observer: Box::new(|| ())
       }
@@ -70,6 +79,7 @@ impl<T: CacheContent> Repository<T> {
    pub fn new_testable(
       env: &mut JNIEnv,
       db_scheduler: Arc<DbScheduler>,
+      loader: Weak<Loader>,
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self
@@ -79,6 +89,7 @@ impl<T: CacheContent> Repository<T> {
 
       Repository {
          pool: UniqueCachePool::new(env, db_scheduler, &dir_path),
+         loader,
          drop_observer: Box::new(drop_observer)
       }
    }
@@ -188,12 +199,14 @@ impl<'local> JvmRepositoryCreator<'local> {
 impl<T: CacheContent> Repository<T> {
    pub fn new(
       db_scheduler: Arc<DbScheduler>,
+      loader: Weak<Loader>,
       dir_path: impl AsRef<Path>
    ) -> Self {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
       Repository {
          pool: UniqueCachePool::new(db_scheduler, &dir_path),
+         loader,
          #[cfg(any(test, feature = "jni-test"))]
          drop_observer: Box::new(|| ())
       }
@@ -202,6 +215,7 @@ impl<T: CacheContent> Repository<T> {
    #[cfg(any(test, feature = "jni-test"))]
    pub fn new_testable(
       db_scheduler: Arc<DbScheduler>,
+      loader: Weak<Loader>,
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self {
@@ -209,6 +223,7 @@ impl<T: CacheContent> Repository<T> {
 
       Repository {
          pool: UniqueCachePool::new(db_scheduler, &dir_path),
+         loader,
          drop_observer: Box::new(drop_observer)
       }
    }
@@ -257,7 +272,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeReposi
 #[cfg(feature = "jni-test")]
 mod jni_tests {
    use std::path::{Path, PathBuf};
-   use std::sync::{Arc, LazyLock, Mutex};
+   use std::sync::{Arc, LazyLock, Mutex, Weak};
    use jni::JNIEnv;
    use jni::objects::JObject;
    use serde::Serialize;
@@ -374,6 +389,7 @@ mod jni_tests {
       let mut repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
          Arc::clone(&switchCacheClass_dbScheduler),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/switchCacheClass_saveOneWayData",
          /* drop_observer = */ || ()
       );
@@ -389,6 +405,7 @@ mod jni_tests {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::clone(&switchCacheClass_dbScheduler),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/switchCacheClass_saveTwoWayData",
          /* drop_observer = */ || ()
       );
@@ -404,6 +421,7 @@ mod jni_tests {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/saveLoad",
          /* drop_observer = */ || ()
       );
@@ -434,6 +452,7 @@ mod jni_tests {
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/load_noSuchCache",
          /* drop_observer = */ || ()
       );
@@ -450,6 +469,7 @@ mod jni_tests {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/save_viaCache",
          /* drop_observer = */ || ()
       );
@@ -476,6 +496,7 @@ mod jni_tests {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/save_affectAnotherCache",
          /* drop_observer = */ || ()
       );
@@ -503,6 +524,7 @@ mod jni_tests {
       let mut repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/oneWay_jvmCache_getCache",
          /* drop_observer = */ || ()
       );
@@ -518,6 +540,7 @@ mod jni_tests {
       let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/twoWay_jvmCache_getCache",
          /* drop_observer = */ || ()
       );
@@ -537,6 +560,7 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/oneWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
       ));
@@ -565,6 +589,7 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
       ));
@@ -593,6 +618,7 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/jvmCache_valueChangeFromJvm_getCache",
          /* drop_observer = */ || ()
       ));
@@ -624,6 +650,7 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
       ));
@@ -680,6 +707,7 @@ mod jni_tests {
       *repo_lock = Some(Repository::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
       ));
@@ -751,6 +779,7 @@ mod jni_tests {
          Repository::<TwoWayConversionData>::new_testable(
             &mut env,
             Arc::new(DbScheduler::new(Saver::new())),
+            /* loader = */ Weak::new(),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || ()
          )
@@ -794,6 +823,7 @@ mod jni_tests {
          Repository::<TwoWayConversionData>::new_testable(
             &mut env,
             Arc::new(DbScheduler::new(Saver::new())),
+            /* loader = */ Weak::new(),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || {
                let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();

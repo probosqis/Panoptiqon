@@ -69,9 +69,18 @@ impl Panoptiqon {
    ) -> Arc<Mutex<Repository<T>>>
       where T: CacheContent
    {
-      Arc::new(Mutex::new(
-         Repository::new(Arc::clone(&self.db_scheduler), dir_path)
-      ))
+      let repository = Arc::new(Mutex::new(
+         Repository::new(
+            Arc::clone(&self.db_scheduler),
+            Arc::downgrade(&self.loader),
+            dir_path
+         )
+      ));
+
+      let dyn_repository = Arc::clone(&repository);
+      self.loader.push_repository(dyn_repository);
+
+      repository
    }
 
    #[cfg(feature = "jvm")]
@@ -83,12 +92,64 @@ impl Panoptiqon {
       where T: CacheContent + CloneIntoJvmHelper
    {
       let repository = Arc::new(Mutex::new(
-         Repository::new(env, Arc::clone(&self.db_scheduler), dir_path)
+         Repository::new(
+            env,
+            Arc::clone(&self.db_scheduler),
+            Arc::downgrade(&self.loader),
+            dir_path
+         )
       ));
 
-      let dyn_repository: Arc<Mutex<Repository<T>>> = Arc::clone(&repository);
+      let dyn_repository = Arc::clone(&repository);
       self.loader.push_repository(dyn_repository);
 
       repository
+   }
+}
+
+#[cfg(test)]
+mod test {
+   use std::path::{Path, PathBuf};
+   use serde::Serialize;
+   use crate::cache::CacheContent;
+   use super::Panoptiqon;
+   
+   #[derive(Debug, PartialEq, Eq, Serialize)]
+   struct CacheContentImpl(i32, i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = i32;
+
+      fn key(&self) -> &i32 {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
+      }
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn newRepository_pushesIntoLoader() {
+      use std::sync::{Arc, Mutex, Weak};
+      use crate::repository::Repository;
+
+      let panoptiqon = Panoptiqon::new();
+      let repository = panoptiqon.new_repository::<CacheContentImpl>(
+         "test/Panoptiqon/newRepository_pushesIntoLoader"
+      );
+
+      assert_eq!(
+         Arc::as_ptr(&panoptiqon.loader),
+         Weak::as_ptr(repository.lock().unwrap().loader())
+      );
+
+      let repositories = panoptiqon.loader.repositories();
+      assert_eq!(1, repositories.len());
+      assert_eq!(
+         Arc::as_ptr(&repositories[0]) as *const Mutex<Repository<CacheContentImpl>>,
+         Arc::as_ptr(&repository)
+      );
    }
 }
