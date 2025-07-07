@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+use std::borrow::Borrow;
+use std::hash::Hash;
 use std::sync::Arc;
 use fnv::FnvHashMap;
 use serde::Serialize;
@@ -47,8 +49,11 @@ pub(crate) struct UniqueCachePool<T: CacheContent> {
 }
 
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn get(&self, key: T::Key) -> Option<Arc<UniqueCache<T>>> {
-      self.map.get(&key).map(|arc| arc.clone())
+   pub fn get<Q>(&self, key: &Q) -> Option<Arc<UniqueCache<T>>>
+      where T::Key: Borrow<Q>,
+            Q: Hash + Eq + ?Sized
+   {
+      self.map.get(key).map(|arc| arc.clone())
    }
 }
 
@@ -221,12 +226,12 @@ mod jni_tests {
 
       let _ = pool.update("A".to_string(), Content("A".to_string(), 42));
 
-      let unique_cache = pool.get("A".to_string());
+      let unique_cache = pool.get("A");
       assert!(unique_cache.is_some());
       let unique_cache = unique_cache.unwrap();
       assert_eq!(Content("A".to_string(), 42), *unique_cache.get());
 
-      let unique_cache = pool.get("B".to_string());
+      let unique_cache = pool.get("B");
       assert!(unique_cache.is_none());
    }
 

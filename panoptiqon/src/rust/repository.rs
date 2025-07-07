@@ -40,7 +40,7 @@ pub struct Repository<T: CacheContent> {
 }
 
 impl<T: CacheContent> Repository<T> {
-   pub fn load(&self, key: T::Key) -> anyhow::Result<Cache<T>> {
+   pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>> {
       let Some(arc) = self.pool.get(key) else { anyhow::bail!("not yet implemented."); };
 
       let cache = Cache::new(arc);
@@ -410,7 +410,7 @@ mod jni_tests {
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
-         let result = repository.load("A".to_string());
+         let result = repository.load(&"A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
          assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache.get());
@@ -419,7 +419,7 @@ mod jni_tests {
       repository.save(TwoWayConversionData("A".to_string(), 13));
 
       {
-         let result = repository.load("A".to_string());
+         let result = repository.load(&"A".to_string());
          assert!(result.is_ok());
          let cache = result.unwrap();
          assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache.get());
@@ -438,7 +438,7 @@ mod jni_tests {
          /* drop_observer = */ || ()
       );
 
-      let result = repository.load("A".to_string());
+      let result = repository.load(&"A".to_string());
       assert!(result.is_err());
    }
 
@@ -457,13 +457,13 @@ mod jni_tests {
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
       {
-         let cache = repository.load("A".to_string()).unwrap();
+         let cache = repository.load(&"A".to_string()).unwrap();
          assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache.get());
          cache.save(TwoWayConversionData("A".to_string(), 13));
       }
 
       {
-         let cache = repository.load("A".to_string()).unwrap();
+         let cache = repository.load(&"A".to_string()).unwrap();
          assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache.get());
       }
    }
@@ -481,12 +481,12 @@ mod jni_tests {
       );
       repository.save(TwoWayConversionData("A".to_string(), 42));
 
-      let cache1 = repository.load("A".to_string()).unwrap();
+      let cache1 = repository.load(&"A".to_string()).unwrap();
       assert_eq!(TwoWayConversionData("A".to_string(), 42), *cache1.get());
 
       repository.save(TwoWayConversionData("A".to_string(), 13));
 
-      let cache2 = repository.load("A".to_string()).unwrap();
+      let cache2 = repository.load(&"A".to_string()).unwrap();
       assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache1.get());
       assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache2.get());
 
@@ -606,7 +606,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
-      let cache = repo_lock.as_mut().unwrap().load("A".to_string());
+      let cache = repo_lock.as_mut().unwrap().load(&"A".to_string());
       assert!(cache.is_ok());
       let cache = cache.unwrap();
       assert_eq!(TwoWayConversionData("A".to_string(), 13), *cache.get());
@@ -730,7 +730,7 @@ mod jni_tests {
       _obj: JObject
    ) {
       let mut repo_lock = twoWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      let cache = repo_lock.as_mut().unwrap().load("B".to_string());
+      let cache = repo_lock.as_mut().unwrap().load(&"B".to_string());
       assert!(cache.is_ok());
       let cache = cache.unwrap();
       assert_eq!(TwoWayConversionData("B".to_string(), 4), *cache.get());

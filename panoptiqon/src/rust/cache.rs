@@ -405,7 +405,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) {
       let repo_lock = saveGet_viaJni_repository.lock().unwrap();
-      let cache = repo_lock.as_ref().unwrap().load(0);
+      let cache = repo_lock.as_ref().unwrap().load(&0);
       assert_eq!(0, cache.unwrap().get().1);
    }
 
