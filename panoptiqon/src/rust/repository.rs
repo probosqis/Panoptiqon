@@ -57,7 +57,7 @@ impl<T: CacheContent> Repository<T> {
 
 #[cfg(feature = "jvm")]
 impl<T: CacheContent> Repository<T> {
-   pub fn new(
+   pub(crate) fn new(
       env: &mut JNIEnv,
       db_scheduler: Arc<DbScheduler>,
       loader: Weak<Loader>,
@@ -197,7 +197,7 @@ impl<'local> JvmRepositoryCreator<'local> {
 
 #[cfg(not(feature = "jvm"))]
 impl<T: CacheContent> Repository<T> {
-   pub fn new(
+   pub(crate) fn new(
       db_scheduler: Arc<DbScheduler>,
       loader: Weak<Loader>,
       dir_path: impl AsRef<Path>
