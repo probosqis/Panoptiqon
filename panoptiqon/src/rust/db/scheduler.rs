@@ -213,7 +213,7 @@ impl WorkerThread {
 
 #[cfg(test)]
 mod test {
-   use std::path::PathBuf;
+   use std::path::{Path, PathBuf};
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
    use crate::db::saver;
@@ -221,6 +221,10 @@ mod test {
 
    struct SavableImpl;
    impl Savable for SavableImpl {
+      fn repository_dir_path(&self) -> &Path {
+         Path::new("DbSchedulerTest")
+      }
+
       fn file_path(&self) -> PathBuf {
          PathBuf::from("DbSchedulerTest/SavableImpl")
       }

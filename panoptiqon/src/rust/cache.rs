@@ -115,9 +115,18 @@ impl<T> Serialize for Cache<T>
    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
       where S: Serializer
    {
+      use serde::ser::SerializeTuple;
       use crate::db::savable::Savable;
+
+      let mut tuple = serializer.serialize_tuple(2)?;
+
+      let repository_dir_path = self.0.repository_dir_path();
+      tuple.serialize_element(repository_dir_path)?;
+
       let file_path = self.0.file_path();
-      file_path.serialize(serializer)
+      tuple.serialize_element(&file_path)?;
+
+      tuple.end()
    }
 }
 
@@ -269,7 +278,7 @@ mod tests {
       let json = serde_json::to_string(&cache_container).unwrap();
 
       assert_eq!(
-         r#"{"cache":"test/CacheTest/serialize/0"}"#,
+         r#"{"cache":["test/CacheTest/serialize","test/CacheTest/serialize/0"]}"#,
          &json
       );
    }

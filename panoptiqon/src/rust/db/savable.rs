@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use crate::db::saver;
 
 pub(crate) trait Savable: Send + Sync + 'static {
+   fn repository_dir_path(&self) -> &Path;
    fn file_path(&self) -> PathBuf;
 
    fn serialize(

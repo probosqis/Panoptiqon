@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use serde::Serialize;
 use crate::cache::CacheContent;
@@ -76,7 +76,9 @@ impl<T: CacheContent> UniqueCache<T> {
    {
       use crate::db::save_task::SaveTask;
 
-      let arc = Self::new_arc(jvm, jvm_refs, db_scheduler, dir_path, initial_value);
+      let arc = Self::new_not_saved(
+         jvm, jvm_refs, db_scheduler, dir_path, initial_value
+      );
 
       let task_cache = Arc::clone(&arc);
       arc.db_scheduler.push(SaveTask::new(task_cache));
@@ -84,7 +86,7 @@ impl<T: CacheContent> UniqueCache<T> {
       arc
    }
 
-   fn new_arc<'local>(
+   pub(crate) fn new_not_saved<'local>(
       jvm: &'local JavaVM,
       jvm_refs: Arc<JvmUniqueCacheRefs>,
       db_scheduler: Arc<DbScheduler>,
@@ -206,6 +208,10 @@ impl<T: CacheContent> UniqueCache<T> {
 impl<T> Savable for UniqueCache<T>
    where T: CacheContent + Serialize
 {
+   fn repository_dir_path(&self) -> &Path {
+      &self.dir_path
+   }
+
    fn file_path(&self) -> PathBuf {
       self.get().file_path(&self.dir_path)
    }
@@ -232,18 +238,26 @@ impl<T: CacheContent> UniqueCache<T> {
    {
       use crate::db::save_task::SaveTask;
 
+      let arc = Self::new_not_saved(db_scheduler, dir_path, initial_state);
+
+      let task_cache = Arc::clone(&arc);
+      arc.db_scheduler.push(SaveTask::new(task_cache));
+
+      arc
+   }
+
+   pub(crate) fn new_not_saved(
+      db_scheduler: Arc<DbScheduler>,
+      dir_path: &saver::DirPath,
+      initial_state: T
+   ) -> Arc<Self> {
       let cache = UniqueCache {
          db_scheduler,
          dir_path: saver::DirPath::clone(dir_path),
          value: RwLock::new(Arc::new(initial_state))
       };
 
-      let arc = Arc::new(cache);
-
-      let task_cache = Arc::clone(&arc);
-      arc.db_scheduler.push(SaveTask::new(task_cache));
-
-      arc
+      Arc::new(cache)
    }
 
    pub(crate) fn get(&self) -> Arc<T> {

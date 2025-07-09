@@ -79,6 +79,8 @@ impl Saver {
 
 #[cfg(test)]
 mod test {
+   use std::path::Path;
+
    #[test]
    fn save() {
       use std::fs;
@@ -97,6 +99,10 @@ mod test {
       }
 
       impl Savable for SavableImpl {
+         fn repository_dir_path(&self) -> &Path {
+            Path::new("test/Saver/save")
+         }
+
          fn file_path(&self) -> PathBuf {
             use std::path::Path;
             Path::new("test/Saver/save").join(self.id.to_string())
@@ -153,6 +159,10 @@ mod test {
       }
 
       impl Savable for SavableImpl {
+         fn repository_dir_path(&self) -> &Path {
+            Path::new("test/Saver/save_mkdir")
+         }
+
          fn file_path(&self) -> PathBuf {
             use std::path::Path;
             Path::new("test/Saver/save_mkdir").join(self.id.to_string())
