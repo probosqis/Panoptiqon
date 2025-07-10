@@ -55,6 +55,10 @@ impl<T: CacheContent> UniqueCachePool<T> {
    {
       self.map.get(key).map(|arc| arc.clone())
    }
+
+   pub(crate) fn dir_path(&self) -> &saver::DirPath {
+      &self.dir_path
+   }
 }
 
 #[cfg(feature="jvm")]
@@ -105,6 +109,37 @@ impl<T: CacheContent> UniqueCachePool<T> {
          }
       }
    }
+
+   pub fn insert_if_vacant(
+      &mut self,
+      key: T::Key,
+      value: T
+   ) -> Arc<UniqueCache<T>>
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
+   {
+      use std::collections::hash_map::Entry;
+
+      let entry = self.map.entry(key);
+
+      match entry {
+         Entry::Occupied(entry) => {
+            let arc = entry.get();
+            Arc::clone(arc)
+         },
+         Entry::Vacant(entry) => {
+            let arc = UniqueCache::new_not_saved(
+               &self.jvm,
+               Arc::clone(&self.jvm_unique_cache_refs),
+               Arc::clone(&self.db_scheduler),
+               &self.dir_path,
+               value
+            );
+            entry.insert(Arc::clone(&arc));
+            arc
+         }
+      }
+   }
 }
 
 #[cfg(not(feature="jvm"))]
@@ -143,6 +178,92 @@ impl<T: CacheContent> UniqueCachePool<T> {
             arc
          }
       }
+   }
+
+   /// 指定されたkeyがまだこのPool内に存在しない場合追加する。
+   /// すでに存在する場合はそのUniqueCacheを返却する。
+   ///
+   /// いずれの場合も、[Self::new]と異なり[DbScheduler]への
+   /// [push][DbScheduler::push]は行わない。
+   pub fn insert_if_vacant(
+      &mut self,
+      key: T::Key,
+      value: T
+   ) -> Arc<UniqueCache<T>> {
+      use std::collections::hash_map::Entry;
+
+      let entry = self.map.entry(key);
+
+      match entry {
+         Entry::Occupied(entry) => {
+            let arc = entry.get();
+            Arc::clone(arc)
+         },
+         Entry::Vacant(entry) => {
+            let arc = UniqueCache::new_not_saved(
+               Arc::clone(&self.db_scheduler),
+               &self.dir_path,
+               value
+            );
+            entry.insert(Arc::clone(&arc));
+            arc
+         }
+      }
+   }
+}
+
+#[cfg(all(test, not(feature = "jvm")))]
+mod test {
+   use std::path::{Path, PathBuf};
+   use serde::Serialize;
+   use crate::cache::CacheContent;
+
+   #[derive(Debug, PartialEq, Eq, Serialize)]
+   struct CacheContentImpl(String, i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = String;
+
+      fn key(&self) -> &String {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &String) -> PathBuf {
+         dir_path.join(key)
+      }
+   }
+
+   #[test]
+   fn insert_if_vacant() {
+      use std::sync::Arc;
+      use crate::db::saver::{DirPath, Saver};
+      use crate::db::scheduler::DbScheduler;
+      use crate::pool::UniqueCachePool;
+
+      let mut pool = UniqueCachePool::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         &DirPath::new(PathBuf::from("test/UniqueCachePool/insert_if_vacant"))
+      );
+
+      assert!(pool.get("A").is_none());
+
+      let content = CacheContentImpl("A".to_string(), 0);
+      pool.insert_if_vacant("A".to_string(), content);
+
+      assert!(pool.get("A").is_some());
+      assert_eq!(
+         CacheContentImpl("A".to_string(), 0),
+         *pool.get("A").unwrap().get()
+      );
+
+      let content = CacheContentImpl("A".to_string(), 1);
+      pool.insert_if_vacant("A".to_string(), content);
+
+      assert!(pool.get("A").is_some());
+      assert_eq!(
+         CacheContentImpl("A".to_string(), 0),
+         *pool.get("A").unwrap().get()
+      );
    }
 }
 
