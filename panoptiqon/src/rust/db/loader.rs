@@ -22,21 +22,24 @@ use serde::Deserializer;
 use serde_json::de::IoRead;
 use crate::repository::DynRepository;
 
-pub struct CacheDeserializer {
-   deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>
+pub struct CacheDeserializer<'a> {
+   deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+   loader: &'a Loader
 }
 
-impl CacheDeserializer {
+impl<'a> CacheDeserializer<'a> {
    pub(crate) fn new(
-      json_deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>
+      json_deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+      loader: &'a Loader
    ) -> Self {
       Self {
-         deserializer: json_deserializer
+         deserializer: json_deserializer,
+         loader
       }
    }
 }
 
-impl<'de> Deserializer<'de> for &mut CacheDeserializer {
+impl<'de, 'a> Deserializer<'de> for &mut CacheDeserializer<'a> {
    type Error = serde_json::Error;
 
    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>

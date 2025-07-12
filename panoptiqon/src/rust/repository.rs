@@ -48,12 +48,17 @@ impl<T: CacheContent> Repository<T> {
    {
       use std::fs::File;
       use std::io::BufReader;
+      use anyhow::Context;
       use crate::db::loader::CacheDeserializer;
+
+      let loader = self.loader.upgrade().context("Loader is already dropped")?;
 
       let file = File::open(file_path)?;
       let reader = BufReader::new(file);
       let deserializer = serde_json::Deserializer::from_reader(reader);
-      let mut deserializer = CacheDeserializer::new(deserializer);
+      let mut deserializer = CacheDeserializer::new(
+         deserializer, Arc::as_ref(&loader)
+      );
 
       let cache_content = T::deserialize(&mut deserializer)?;
       Ok(cache_content)
@@ -451,8 +456,9 @@ mod test {
    #[test]
    fn loadFile() {
       use std::fs;
-      use std::sync::{Arc, Weak};
+      use std::sync::Arc;
       use scopeguard::defer;
+      use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
@@ -463,9 +469,11 @@ mod test {
          fs::remove_dir_all("test/Repository/loadFile").unwrap()
       }
 
+      let loader = Arc::new(Loader::new());
+
       let mut repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(Saver::new())),
-         /* loader = */ Weak::new(),
+         Arc::downgrade(&loader),
          "test/Repository/loadFile"
       );
 
@@ -483,8 +491,9 @@ mod test {
    #[test]
    fn loadFile_viaLoad() {
       use std::fs;
-      use std::sync::{Arc, Weak};
+      use std::sync::Arc;
       use scopeguard::defer;
+      use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
@@ -495,9 +504,11 @@ mod test {
          fs::remove_dir_all("test/Repository/loadFile_viaLoad").unwrap()
       }
 
+      let loader = Arc::new(Loader::new());
+
       let mut repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(Saver::new())),
-         /* loader = */ Weak::new(),
+         Arc::downgrade(&loader),
          "test/Repository/loadFile_viaLoad"
       );
 
@@ -512,8 +523,9 @@ mod test {
    #[test]
    fn loadFile_deserializeErr() {
       use std::fs;
-      use std::sync::{Arc, Weak};
+      use std::sync::Arc;
       use scopeguard::defer;
+      use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
@@ -523,9 +535,11 @@ mod test {
          fs::remove_dir_all("test/Repository/loadFile_deserializeErr").unwrap()
       }
 
+      let loader = Arc::new(Loader::new());
+
       let mut repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(Saver::new())),
-         /* loader = */ Weak::new(),
+         Arc::downgrade(&loader),
          "test/Repository/loadFile_deserializeErr"
       );
 
@@ -545,13 +559,16 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn loadFile_fileNotFound() {
-      use std::sync::{Arc, Weak};
+      use std::sync::Arc;
+      use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
+      let loader = Arc::new(Loader::new());
+
       let mut repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(Saver::new())),
-         /* loader = */ Weak::new(),
+         Arc::downgrade(&loader),
          "test/Repository/loadFile_fileNotFound"
       );
 
@@ -563,8 +580,9 @@ mod test {
    #[test]
    fn loadFile_cacheAlreadyExists() {
       use std::fs;
-      use std::sync::{Arc, Weak};
+      use std::sync::Arc;
       use scopeguard::defer;
+      use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
@@ -575,9 +593,11 @@ mod test {
          fs::remove_dir_all("test/Repository/loadFile_cacheAlreadyExists").unwrap()
       }
 
+      let loader = Arc::new(Loader::new());
+
       let mut repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(Saver::new())),
-         /* loader = */ Weak::new(),
+         Arc::downgrade(&loader),
          "test/Repository/loadFile_cacheAlreadyExists"
       );
 
