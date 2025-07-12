@@ -26,6 +26,16 @@ pub struct CacheDeserializer {
    deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>
 }
 
+impl CacheDeserializer {
+   pub(crate) fn new(
+      json_deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>
+   ) -> Self {
+      Self {
+         deserializer: json_deserializer
+      }
+   }
+}
+
 impl<'de> Deserializer<'de> for &mut CacheDeserializer {
    type Error = serde_json::Error;
 

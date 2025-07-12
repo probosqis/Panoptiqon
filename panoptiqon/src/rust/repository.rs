@@ -16,7 +16,7 @@
 
 use std::path::Path;
 use std::sync::{Arc, Mutex, Weak};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use crate::cache::{Cache, CacheContent};
 use crate::db::loader::Loader;
 use crate::db::saver;
@@ -42,11 +42,20 @@ pub struct Repository<T: CacheContent> {
 }
 
 impl<T: CacheContent> Repository<T> {
-   pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>> {
-      let Some(arc) = self.pool.get(key) else { anyhow::bail!("not yet implemented."); };
+   fn _load_file(&self, file_path: impl AsRef<Path>) -> anyhow::Result<T>
+      where for<'de> T: Deserialize<'de>
+   {
+      use std::fs::File;
+      use std::io::BufReader;
+      use crate::db::loader::CacheDeserializer;
 
-      let cache = Cache::new(arc);
-      Ok(cache)
+      let file = File::open(file_path)?;
+      let reader = BufReader::new(file);
+      let deserializer = serde_json::Deserializer::from_reader(reader);
+      let mut deserializer = CacheDeserializer::new(deserializer);
+
+      let cache_content = T::deserialize(&mut deserializer)?;
+      Ok(cache_content)
    }
 
    #[cfg(test)]
@@ -116,6 +125,41 @@ impl<T: CacheContent> Repository<T> {
       let key = T::Key::clone(value.key());
       let arc = self.pool.update(key, value);
       Cache::new(arc)
+   }
+
+   pub fn load(&mut self, key: &T::Key) -> anyhow::Result<Cache<T>>
+      where for<'de, 'local> T: Deserialize<'de>
+            + CloneIntoJvm<'local, T::JvmType<'local>>
+            + CloneIntoJvmHelper
+   {
+      let Some(arc) = self.pool.get(key) else {
+         let file_path = T::file_path_for_key(self.pool.dir_path(), key);
+         return self.load_file(file_path);
+      };
+
+      let cache = Cache::new(arc);
+      Ok(cache)
+   }
+
+   /// 指定されたパスのファイルを読み込み、デシリアライズして
+   /// *そのキーがまだRepository内に存在しない場合* 追加して返却する。
+   /// すでにRepository内に存在した場合、存在した方のCacheを返却する。
+   ///
+   /// loadが即読み込み処理を行うのに対してsaveはRepositoryへの追加だけを行い
+   /// 実際のファイルへの書き込みは遅延するため、RepositoryにすでにCacheが
+   /// 存在する場合そちらの方が新しいものである可能性が高いためである。
+   pub(crate) fn load_file(
+      &mut self,
+      file_path: impl AsRef<Path>
+   ) -> anyhow::Result<Cache<T>>
+      where for<'de, 'local> T: Deserialize<'de>
+            + CloneIntoJvm<'local, T::JvmType<'local>>
+            + CloneIntoJvmHelper
+   {
+      let cache_content = self._load_file(file_path)?;
+      let key = T::Key::clone(cache_content.key());
+      let unique_cache = self.pool.insert_if_vacant(key, cache_content);
+      Ok(Cache::new(unique_cache))
    }
 }
 
@@ -235,6 +279,37 @@ impl<T: CacheContent> Repository<T> {
       let arc = self.pool.update(key, value);
       Cache::new(arc)
    }
+
+   pub fn load(&mut self, key: &T::Key) -> anyhow::Result<Cache<T>>
+      where for<'de> T: Deserialize<'de>
+   {
+      let Some(arc) = self.pool.get(key) else {
+         let file_path = T::file_path_for_key(self.pool.dir_path(), key);
+         return self.load_file(file_path);
+      };
+
+      let cache = Cache::new(arc);
+      Ok(cache)
+   }
+
+   /// 指定されたパスのファイルを読み込み、デシリアライズして
+   /// *そのキーがまだRepository内に存在しない場合* 追加して返却する。
+   /// すでにRepository内に存在した場合、存在した方のCacheを返却する。
+   ///
+   /// loadが即読み込み処理を行うのに対してsaveはRepositoryへの追加だけを行い
+   /// 実際のファイルへの書き込みは遅延するため、RepositoryにすでにCacheが
+   /// 存在する場合そちらの方が新しいものである可能性が高いためである。
+   pub(crate) fn load_file(
+      &mut self,
+      file_path: impl AsRef<Path>
+   ) -> anyhow::Result<Cache<T>>
+      where for<'de> T: Deserialize<'de>
+   {
+      let cache_content = self._load_file(file_path)?;
+      let key = T::Key::clone(cache_content.key());
+      let unique_cache = self.pool.insert_if_vacant(key, cache_content);
+      Ok(Cache::new(unique_cache))
+   }
 }
 
 #[cfg(any(test, feature = "jni-test"))]
@@ -269,13 +344,181 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeReposi
    };
 }
 
+#[cfg(all(test, not(feature = "jvm")))]
+mod test {
+   use std::path::{Path, PathBuf};
+   use serde::{Deserialize, Serialize};
+   use crate::cache::CacheContent;
+   use super::Repository;
+
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+   struct CacheContentImpl(i32, i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = i32;
+
+      fn key(&self) -> &i32 {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
+      }
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn loadFile() {
+      use std::fs;
+      use std::sync::{Arc, Weak};
+      use scopeguard::defer;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+
+      fs::create_dir_all("test/Repository/loadFile").unwrap();
+      fs::write("test/Repository/loadFile/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Repository/loadFile").unwrap()
+      }
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/Repository/loadFile"
+      );
+
+      let cache = repository.load_file("test/Repository/loadFile/0").unwrap();
+      assert_eq!(
+         CacheContentImpl(0, 42),
+         *cache.get()
+      );
+
+      let cache2 = repository.load(&0).unwrap();
+      assert!(Arc::ptr_eq(&cache.get(), &cache2.get()));
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn loadFile_viaLoad() {
+      use std::fs;
+      use std::sync::{Arc, Weak};
+      use scopeguard::defer;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+
+      fs::create_dir_all("test/Repository/loadFile_viaLoad").unwrap();
+      fs::write("test/Repository/loadFile_viaLoad/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Repository/loadFile_viaLoad").unwrap()
+      }
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/Repository/loadFile_viaLoad"
+      );
+
+      let cache = repository.load(&0).unwrap();
+      assert_eq!(
+         CacheContentImpl(0, 42),
+         *cache.get()
+      );
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn loadFile_deserializeErr() {
+      use std::fs;
+      use std::sync::{Arc, Weak};
+      use scopeguard::defer;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+
+      fs::create_dir_all("test/Repository/loadFile_deserializeErr").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Repository/loadFile_deserializeErr").unwrap()
+      }
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/Repository/loadFile_deserializeErr"
+      );
+
+      fs::write("test/Repository/loadFile_deserializeErr/0", "[0,42}").unwrap();
+      let result = repository.load_file("test/Repository/loadFile_deserializeErr/0");
+      assert!(result.is_err());
+
+      fs::write("test/Repository/loadFile_deserializeErr/1", r#"{"key":1,"value":42}"#).unwrap();
+      let result = repository.load_file("test/Repository/loadFile_deserializeErr/1");
+      assert!(result.is_err());
+
+      fs::write("test/Repository/loadFile_deserializeErr/2", r#"[2]"#).unwrap();
+      let result = repository.load_file("test/Repository/loadFile_deserializeErr/2");
+      assert!(result.is_err());
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn loadFile_fileNotFound() {
+      use std::sync::{Arc, Weak};
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/Repository/loadFile_fileNotFound"
+      );
+
+      let result = repository.load_file("test/Repository/loadFile_fileNotFound/0");
+      assert!(result.is_err());
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn loadFile_cacheAlreadyExists() {
+      use std::fs;
+      use std::sync::{Arc, Weak};
+      use scopeguard::defer;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+
+      fs::create_dir_all("test/Repository/loadFile_cacheAlreadyExists").unwrap();
+      fs::write("test/Repository/loadFile_cacheAlreadyExists/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Repository/loadFile_cacheAlreadyExists").unwrap()
+      }
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/Repository/loadFile_cacheAlreadyExists"
+      );
+
+      let cache = repository.save(CacheContentImpl(0, 0));
+
+      let cache2 = repository.load_file("test/Repository/loadFile_cacheAlreadyExists/0").unwrap();
+      assert_eq!(
+         CacheContentImpl(0, 0),
+         *cache.get()
+      );
+
+      assert!(Arc::ptr_eq(&cache.get(), &cache2.get()));
+   }
+}
+
 #[cfg(feature = "jni-test")]
 mod jni_tests {
    use std::path::{Path, PathBuf};
    use std::sync::{Arc, LazyLock, Mutex, Weak};
    use jni::JNIEnv;
    use jni::objects::JObject;
-   use serde::Serialize;
+   use serde::{Deserialize, Serialize};
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::saver::Saver;
@@ -289,7 +532,7 @@ mod jni_tests {
       JvmTwoWayConversionData,
    }
 
-   #[derive(Debug, PartialEq, Eq, Serialize)]
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
    struct OneWayConversionData(String, i32);
 
    impl CacheContent for OneWayConversionData {
@@ -322,7 +565,7 @@ mod jni_tests {
       }
    }
 
-   #[derive(Debug, PartialEq, Eq, Serialize)]
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
    struct TwoWayConversionData(String, i32);
 
    impl CacheContent for TwoWayConversionData {
@@ -449,7 +692,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let repository = Repository::<TwoWayConversionData>::new_testable(
+      let mut repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
