@@ -16,11 +16,18 @@
 
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::{Arc, RwLock};
+use std::path::Path;
+use std::sync::{Arc, MutexGuard, RwLock};
 use serde::de::Visitor;
-use serde::Deserializer;
+use serde::{Deserialize, Deserializer};
 use serde_json::de::IoRead;
-use crate::repository::DynRepository;
+use crate::cache::{Cache, CacheContent};
+use crate::repository::{DynRepository, Repository};
+
+#[cfg(feature = "jvm")]
+use {
+   crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
+};
 
 pub struct CacheDeserializer<'a> {
    deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
@@ -268,8 +275,162 @@ impl Loader {
       lock.push(repository);
    }
 
+   fn find_repository<T: CacheContent>(
+      &self,
+      repository_dir_path: &Path
+   ) -> anyhow::Result<MutexGuard<Repository<T>>> {
+      use std::any::{self, TypeId};
+      use std::sync::Mutex;
+      use anyhow::Context;
+
+      let lock = self.repositories.read()
+         .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
+
+      let arc = lock.iter()
+         .find(|repo| repo.can_load(repository_dir_path, TypeId::of::<T>()))
+         .context(format!(
+            "Repository not found (repo dir: {}, content type: {})",
+            repository_dir_path.display(), any::type_name::<T>()
+         ))?;
+
+      let lock = unsafe {
+         let dyn_repository: *const dyn DynRepository = Arc::as_ptr(&arc);
+         let mutex_address = dyn_repository as *const Mutex<Repository<T>>;
+
+         (*mutex_address).lock()
+            .map_err(|_| anyhow::anyhow!("Repository is poisoned"))?
+      };
+
+      Ok(lock)
+   }
+
+   #[cfg(not(feature = "jvm"))]
+   pub(crate) fn load<T>(
+      &self,
+      repository_dir_path: impl AsRef<Path>,
+      file_path: impl AsRef<Path>
+   ) -> anyhow::Result<Cache<T>>
+      where for<'de> T: CacheContent + Deserialize<'de>
+   {
+      let mut repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      repository_lock.load_file(file_path)
+   }
+
+   #[cfg(feature = "jvm")]
+   pub(crate) fn load<T>(
+      &self,
+      repository_dir_path: impl AsRef<Path>,
+      file_path: impl AsRef<Path>
+   ) -> anyhow::Result<Cache<T>>
+      where for<'de, 'local> T: Deserialize<'de>
+            + CloneIntoJvm<'local, T::JvmType<'local>>
+            + CloneIntoJvmHelper
+   {
+      let mut repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      repository_lock.load_file(file_path)
+   }
+
    #[cfg(test)]
    pub(crate) fn repositories(&self) -> Vec<Arc<dyn DynRepository>> {
       self.repositories.read().unwrap().clone()
+   }
+}
+
+#[cfg(all(test, not(feature = "jvm")))]
+mod test {
+   use std::path::{Path, PathBuf};
+   use serde::{Deserialize, Serialize};
+   use crate::cache::CacheContent;
+   use super::Loader;
+
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+   struct CacheContentImpl(i32, i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = i32;
+
+      fn key(&self) -> &i32 {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
+      }
+   }
+
+   #[test]
+   fn load() {
+      use std::fs;
+      use std::sync::{Arc, Mutex};
+      use scopeguard::defer;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
+
+      fs::create_dir_all("test/Loader/load").unwrap();
+      fs::write("test/Loader/load/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Loader/load").unwrap()
+      }
+
+      let loader = Arc::new(Loader::new());
+
+      let repository = Arc::new(Mutex::new(
+         Repository::<CacheContentImpl>::new(
+            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::downgrade(&loader),
+            "test/Loader/load"
+         )
+      ));
+
+      let dyn_repo = Arc::clone(&repository);
+      loader.push_repository(dyn_repo);
+
+      let cache = loader.load("test/Loader/load", "test/Loader/load/0").unwrap();
+
+      assert_eq!(
+         CacheContentImpl(0, 42),
+         *cache.get()
+      );
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn load_repositoryNotFound() {
+      use std::fs;
+      use std::sync::{Arc, Mutex};
+      use scopeguard::defer;
+      use crate::cache::Cache;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
+
+      fs::create_dir_all("test/Loader/load_repositoryNotFound").unwrap();
+      fs::write("test/Loader/load_repositoryNotFound/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Loader/load_repositoryNotFound").unwrap()
+      }
+
+      let loader = Arc::new(Loader::new());
+
+      let repository = Arc::new(Mutex::new(
+         Repository::<CacheContentImpl>::new(
+            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::downgrade(&loader),
+            "test/Loader/load_repositoryNotFound_dummy"
+         )
+      ));
+
+      let dyn_repo = Arc::clone(&repository);
+      loader.push_repository(dyn_repo);
+
+      let result: anyhow::Result<Cache<CacheContentImpl>> = loader.load(
+         "test/Loader/load_repositoryNotFound",
+         "test/Loader/load_repositoryNotFound/0"
+      );
+
+      assert!(result.is_err());
    }
 }

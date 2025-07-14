@@ -521,6 +521,37 @@ mod test {
 
    #[allow(non_snake_case)]
    #[test]
+   fn loadFile_loaderDropped() {
+      use std::fs;
+      use std::sync::Arc;
+      use scopeguard::defer;
+      use crate::db::loader::Loader;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+
+      fs::create_dir_all("test/Repository/loadFile_loaderDropped").unwrap();
+      fs::write("test/Repository/loadFile_loaderDropped/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Repository/loadFile_loaderDropped").unwrap()
+      }
+
+      let loader = Arc::new(Loader::new());
+
+      let mut repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::downgrade(&loader),
+         "test/Repository/loadFile_loaderDropped"
+      );
+
+      drop(loader);
+
+      let result = repository.load_file("test/Repository/loadFile_loaderDropped/0");
+      assert!(result.is_err());
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
    fn loadFile_deserializeErr() {
       use std::fs;
       use std::sync::Arc;
