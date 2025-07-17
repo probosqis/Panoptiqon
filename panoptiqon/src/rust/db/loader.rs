@@ -30,8 +30,8 @@ use {
 };
 
 pub struct CacheDeserializer<'a> {
-   deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
-   loader: &'a Loader
+   pub(crate) deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+   pub(crate) loader: &'a Loader
 }
 
 impl<'a> CacheDeserializer<'a> {

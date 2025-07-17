@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use std::fmt::{Debug, Formatter};
+use std::fmt::{self, Debug, Formatter};
 use std::hash::Hash;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use crate::unique_cache::UniqueCache;
 use {
    jni::JNIEnv,
    jni::objects::JObject,
-   crate::convert_jvm::CloneIntoJvm,
+   crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
    crate::jvm_type::JvmType,
 };
 
@@ -42,15 +42,17 @@ impl<T: CacheContent> Cache<T> {
 
    #[cfg(feature = "jvm")]
    pub fn save(&self, value: T)
-      where for<'local> T: CloneIntoJvm<'local, T::JvmType<'local>>
-               + Serialize
+   where for<'local>
+      T: CloneIntoJvm<'local, T::JvmType<'local>>
+         + Serialize
    {
       self.0.save(value);
    }
 
    #[cfg(not(feature = "jvm"))]
    pub fn save(&self, value: T)
-      where T: Serialize
+   where
+      T: Serialize
    {
       self.0.save(value);
    }
@@ -88,8 +90,11 @@ impl<T: CacheContent> Cache<T> {
    }
 }
 
-impl<T: CacheContent> Debug for Cache<T> where T: Debug {
-   fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+impl<T: CacheContent> Debug for Cache<T>
+where
+   T: Debug
+{
+   fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
       let value = self.get();
       write!(f, "Cache({:?})", *value)
    }
@@ -110,10 +115,12 @@ impl<T: CacheContent> Clone for Cache<T> {
 }
 
 impl<T> Serialize for Cache<T>
-   where T: CacheContent + Serialize
+where
+   T: CacheContent + Serialize
 {
    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-      where S: Serializer
+   where
+      S: Serializer
    {
       use serde::ser::SerializeTuple;
       use crate::db::savable::Savable;
@@ -130,11 +137,159 @@ impl<T> Serialize for Cache<T>
    }
 }
 
-impl<'de, T: CacheContent> Deserialize<'de> for Cache<T> {
-   fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
-      where D: Deserializer<'de>
+#[cfg(not(feature = "jvm"))]
+impl<'de, T> Deserialize<'de> for Cache<T>
+where for<'content_de>
+   T: CacheContent + Deserialize<'content_de>
+{
+   fn deserialize<D>(deserializer: D) -> Result<Cache<T>, D::Error>
+   where
+      D: Deserializer<'de>,
    {
-      Err(serde::de::Error::custom("not implemented"))
+      use std::{any, mem};
+      use std::marker::PhantomData;
+      use serde::de::{SeqAccess, Visitor};
+      use crate::db::loader::{CacheDeserializer, Loader};
+
+      // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
+      if any::type_name::<D>() != any::type_name::<&mut CacheDeserializer>() {
+         panic!("Caches can be deserialized only with CacheDeserializer");
+      }
+
+      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
+
+      let deserializer: &mut CacheDeserializer = unsafe {
+         mem::transmute_copy(&deserializer)
+      };
+
+      struct CacheVisitor<'a, T: CacheContent> {
+         loader: &'a Loader,
+         _cache_content_type: PhantomData<T>
+      }
+
+      impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
+      where for<'content_de>
+         T: CacheContent + Deserialize<'content_de>
+      {
+         type Value = Cache<T>;
+
+         fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+            formatter.write_str("cache file path")
+         }
+
+         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+         where
+            A: SeqAccess<'de>
+         {
+            let repository_dir_path = seq.next_element::<PathBuf>()?
+               .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+            let file_path = seq.next_element::<PathBuf>()?
+               .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+
+            let cache = self.loader.load(&repository_dir_path, file_path)
+               .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
+
+            Ok(cache)
+         }
+      }
+
+      let CacheDeserializer { deserializer, loader } = deserializer;
+
+      let visitor = CacheVisitor::<T> {
+         loader: *loader,
+         _cache_content_type: PhantomData
+      };
+
+      debug_assert!(
+         size_of::<D::Error>()
+            == size_of::<<&mut CacheDeserializer as Deserializer>::Error>()
+      );
+
+      let result = deserializer.deserialize_seq(visitor);
+      let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
+      mem::forget(result);
+      force_transmuted_result
+   }
+}
+
+#[cfg(feature = "jvm")]
+impl<'de, T> Deserialize<'de> for Cache<T>
+   where for<'content_de,'local>
+      T: CacheContent
+         + Deserialize<'content_de>
+         + CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
+{
+   fn deserialize<D>(deserializer: D) -> Result<Cache<T>, D::Error>
+   where
+      D: Deserializer<'de>,
+   {
+      use std::{any, mem};
+      use std::marker::PhantomData;
+      use serde::de::{SeqAccess, Visitor};
+      use crate::db::loader::{CacheDeserializer, Loader};
+
+      // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
+      if any::type_name::<D>() != any::type_name::<&mut CacheDeserializer>() {
+         panic!("Caches can be deserialized only with CacheDeserializer");
+      }
+
+      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
+
+      let deserializer: &mut CacheDeserializer = unsafe {
+         mem::transmute_copy(&deserializer)
+      };
+
+      struct CacheVisitor<'a, T: CacheContent> {
+         loader: &'a Loader,
+         _cache_content_type: PhantomData<T>
+      }
+
+      impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
+      where for<'content_de, 'local>
+         T: CacheContent
+            + Deserialize<'content_de>
+            + CloneIntoJvm<'local, T::JvmType<'local>>
+            + CloneIntoJvmHelper
+      {
+         type Value = Cache<T>;
+
+         fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+            formatter.write_str("cache file path")
+         }
+
+         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+         where
+            A: SeqAccess<'de>
+         {
+            let repository_dir_path = seq.next_element::<PathBuf>()?
+               .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+            let file_path = seq.next_element::<PathBuf>()?
+               .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+
+            let cache = self.loader.load(&repository_dir_path, file_path)
+               .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
+
+            Ok(cache)
+         }
+      }
+
+      let CacheDeserializer { deserializer, loader } = deserializer;
+
+      let visitor = CacheVisitor::<T> {
+         loader: *loader,
+         _cache_content_type: PhantomData
+      };
+
+      debug_assert!(
+         size_of::<D::Error>()
+            == size_of::<<&mut CacheDeserializer as Deserializer>::Error>()
+      );
+
+      let result = deserializer.deserialize_seq(visitor);
+      let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
+      mem::forget(result);
+      force_transmuted_result
    }
 }
 
@@ -156,13 +311,13 @@ pub trait CacheContent: Send + Sync + 'static {
 #[cfg(all(test, not(feature = "jvm")))]
 mod tests {
    use std::path::{Path, PathBuf};
-   use serde::Serialize;
+   use serde::{Deserialize, Serialize};
    use crate::cache::CacheContent;
    use crate::db::saver::Saver;
    use crate::db::scheduler::DbScheduler;
    use super::Cache;
 
-   #[derive(Debug, PartialEq, Eq, Serialize)]
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
    struct CacheContentImpl(i32, i32);
 
    impl CacheContent for CacheContentImpl {
@@ -282,6 +437,71 @@ mod tests {
          &json
       );
    }
+
+   #[test]
+   fn deserialize() {
+      use std::fs::{self, File};
+      use std::io::BufReader;
+      use std::sync::{Arc, Mutex};
+      use scopeguard::defer;
+      use serde::Deserialize;
+      use serde_json::Deserializer;
+      use crate::db::loader::{CacheDeserializer, Loader};
+      use crate::repository::Repository;
+
+      fs::create_dir_all("test/CacheTest/deserialize").unwrap();
+      fs::write("test/CacheTest/deserialize/0", "[0,42]").unwrap();
+      fs::write(
+         "test/CacheTest/deserialize/container",
+         r#"["test/CacheTest/deserialize","test/CacheTest/deserialize/0"]"#
+      ).unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/CacheTest/deserialize").unwrap()
+      }
+
+      let loader = Arc::new(Loader::new());
+
+      let repository = Arc::new(Mutex::new(
+         Repository::<CacheContentImpl>::new_testable(
+            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::downgrade(&loader),
+            "test/CacheTest/deserialize",
+            /* drop_observer = */ || ()
+         )
+      ));
+
+      let dyn_repo = Arc::clone(&repository);
+      loader.push_repository(dyn_repo);
+
+      let mut deserializer = CacheDeserializer::new(
+         Deserializer::from_reader(BufReader::new(
+            File::open("test/CacheTest/deserialize/container").unwrap()
+         )),
+         &loader
+      );
+
+      let cache = Cache::<CacheContentImpl>::deserialize(&mut deserializer).unwrap();
+
+      assert_eq!(
+         CacheContentImpl(0, 42),
+         *cache.get()
+      );
+   }
+
+   #[test]
+   #[should_panic]
+   fn deserialize_invalid_deserializer() {
+      use serde::Deserialize;
+      use serde_json::Deserializer;
+
+      let mut deserializer = Deserializer::from_str(
+         r#"["test/CacheTest/deserialize_invalid_deserializer",\
+         "test/CacheTest/deserialize_invalid_deserializer/0"]"#
+      );
+
+      let _ = Cache::<CacheContentImpl>::deserialize(&mut deserializer);
+   }
 }
 
 #[cfg(feature = "jni-test")]
@@ -290,7 +510,7 @@ mod jni_tests {
    use std::sync::Mutex;
    use jni::JNIEnv;
    use jni::objects::JObject;
-   use serde::Serialize;
+   use serde::{Deserialize, Serialize};
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::scheduler::DbScheduler;
@@ -303,7 +523,7 @@ mod jni_tests {
       JvmCacheContentImpl,
    }
 
-   #[derive(Debug, PartialEq, Eq, Serialize)]
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
    struct CacheContentImpl(i32, i32);
 
    impl CacheContent for CacheContentImpl {
@@ -419,8 +639,8 @@ mod jni_tests {
       _env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      let repo_lock = saveGet_viaJni_repository.lock().unwrap();
-      let cache = repo_lock.as_ref().unwrap().load(&0);
+      let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
+      let cache = repo_lock.as_mut().unwrap().load(&0);
       assert_eq!(0, cache.unwrap().get().1);
    }
 
