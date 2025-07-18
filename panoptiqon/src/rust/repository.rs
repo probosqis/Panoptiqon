@@ -112,7 +112,7 @@ impl<T: CacheContent> Repository<T> {
    pub fn of<'local>(
       env: &mut JNIEnv<'local>,
       jvm_instance: &JvmRepository<'local, T::JvmType<'local>>
-   ) -> &'local mut Self {
+   ) -> &'local Mutex<Self> {
       let instance_repo_ptr = env.call_method(
          jvm_instance.j_object(),
          "getNativeRepositoryAddress",
@@ -120,7 +120,7 @@ impl<T: CacheContent> Repository<T> {
          &[]
       ).unwrap().j().unwrap();
 
-      unsafe { &mut *(instance_repo_ptr as *mut _) }
+      unsafe { &*(instance_repo_ptr as *const _) }
    }
 
    pub fn save(&mut self, value: T) -> Cache<T>
