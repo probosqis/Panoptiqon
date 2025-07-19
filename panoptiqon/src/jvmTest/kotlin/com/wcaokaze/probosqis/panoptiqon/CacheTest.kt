@@ -61,6 +61,8 @@ class CacheTest {
 
    data class CacheContentImpl(val key: Int, val value: Int)
 
+   data class CacheContainer(val key: Int, val cache: Cache<CacheContentImpl>)
+
    @Test
    external fun saveGet()
 
@@ -86,6 +88,12 @@ class CacheTest {
    private external fun `saveGet_viaJni$assert0`()
 
    @Test
+   external fun saveViaRepository_saveScheduled()
+
+   @Test
+   external fun saveViaCache_saveScheduled()
+
+   @Test
    external fun referenceCount_withoutJvmCache()
 
    @Test
@@ -102,4 +110,13 @@ class CacheTest {
 
    @Test
    external fun referenceCount_save()
+
+   @Test
+   fun deserialize() {
+      val cache = `deserialize$loadCache`()
+      assertEquals(0, cache.value.key)
+      assertEquals(CacheContentImpl(0, 42), cache.value.cache.value)
+   }
+
+   private external fun `deserialize$loadCache`(): Cache<CacheContainer>
 }

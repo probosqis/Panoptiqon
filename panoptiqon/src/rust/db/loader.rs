@@ -1,0 +1,436 @@
+/*
+ * Copyright 2025 wcaokaze
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+use std::fs::File;
+use std::io::BufReader;
+use std::path::Path;
+use std::sync::{Arc, MutexGuard, RwLock};
+use serde::de::Visitor;
+use serde::{Deserialize, Deserializer};
+use serde_json::de::IoRead;
+use crate::cache::{Cache, CacheContent};
+use crate::repository::{DynRepository, Repository};
+
+#[cfg(feature = "jvm")]
+use {
+   crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
+};
+
+pub struct CacheDeserializer<'a> {
+   pub(crate) deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+   pub(crate) loader: &'a Loader
+}
+
+impl<'a> CacheDeserializer<'a> {
+   pub(crate) fn new(
+      json_deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+      loader: &'a Loader
+   ) -> Self {
+      Self {
+         deserializer: json_deserializer,
+         loader
+      }
+   }
+}
+
+impl<'de, 'a> Deserializer<'de> for &mut CacheDeserializer<'a> {
+   type Error = serde_json::Error;
+
+   fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_any(visitor)
+   }
+
+   fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_bool(visitor)
+   }
+
+   fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_i8(visitor)
+   }
+
+   fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_i16(visitor)
+   }
+
+   fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_i32(visitor)
+   }
+
+   fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_i64(visitor)
+   }
+
+   fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_i128(visitor)
+   }
+
+   fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_u8(visitor)
+   }
+
+   fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_u16(visitor)
+   }
+
+   fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_u32(visitor)
+   }
+
+   fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_u64(visitor)
+   }
+
+   fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_u128(visitor)
+   }
+
+   fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_f32(visitor)
+   }
+
+   fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_f64(visitor)
+   }
+
+   fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_char(visitor)
+   }
+
+   fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_str(visitor)
+   }
+
+   fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_string(visitor)
+   }
+
+   fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_bytes(visitor)
+   }
+
+   fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_byte_buf(visitor)
+   }
+
+   fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_option(visitor)
+   }
+
+   fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_unit(visitor)
+   }
+
+   fn deserialize_unit_struct<V>(
+      self,
+      name: &'static str,
+      visitor: V,
+   ) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_unit_struct(name, visitor)
+   }
+
+   fn deserialize_newtype_struct<V>(
+      self,
+      name: &'static str,
+      visitor: V,
+   ) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_newtype_struct(name, visitor)
+   }
+
+   fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_seq(visitor)
+   }
+
+   fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_tuple(len, visitor)
+   }
+
+   fn deserialize_tuple_struct<V>(
+      self,
+      name: &'static str,
+      len: usize,
+      visitor: V,
+   ) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_tuple_struct(name, len, visitor)
+   }
+
+   fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_map(visitor)
+   }
+
+   fn deserialize_struct<V>(
+      self,
+      name: &'static str,
+      fields: &'static [&'static str],
+      visitor: V,
+   ) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_struct(name, fields, visitor)
+   }
+
+   fn deserialize_enum<V>(
+      self,
+      name: &'static str,
+      variants: &'static [&'static str],
+      visitor: V,
+   ) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_enum(name, variants, visitor)
+   }
+
+   fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_identifier(visitor)
+   }
+
+   fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+      where V: Visitor<'de>
+   {
+      self.deserializer.deserialize_ignored_any(visitor)
+   }
+}
+
+pub(crate) struct Loader {
+   repositories: RwLock<Vec<Arc<dyn DynRepository>>>
+}
+
+impl Loader {
+   pub(crate) fn new() -> Self {
+      Self {
+         repositories: RwLock::new(Vec::new())
+      }
+   }
+
+   pub(crate) fn push_repository(&self, repository: Arc<dyn DynRepository>) {
+      let mut lock = self.repositories.write().unwrap();
+      lock.push(repository);
+   }
+
+   fn find_repository<T: CacheContent>(
+      &self,
+      repository_dir_path: &Path
+   ) -> anyhow::Result<MutexGuard<Repository<T>>> {
+      use std::any::{self, TypeId};
+      use std::sync::Mutex;
+      use anyhow::Context;
+
+      let lock = self.repositories.read()
+         .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
+
+      let arc = lock.iter()
+         .find(|repo| repo.can_load(repository_dir_path, TypeId::of::<T>()))
+         .context(format!(
+            "Repository not found (repo dir: {}, content type: {})",
+            repository_dir_path.display(), any::type_name::<T>()
+         ))?;
+
+      let lock = unsafe {
+         let dyn_repository: *const dyn DynRepository = Arc::as_ptr(&arc);
+         let mutex_address = dyn_repository as *const Mutex<Repository<T>>;
+
+         (*mutex_address).lock()
+            .map_err(|_| anyhow::anyhow!("Repository is poisoned"))?
+      };
+
+      Ok(lock)
+   }
+
+   #[cfg(not(feature = "jvm"))]
+   pub(crate) fn load<T>(
+      &self,
+      repository_dir_path: impl AsRef<Path>,
+      file_path: impl AsRef<Path>
+   ) -> anyhow::Result<Cache<T>>
+      where for<'de> T: CacheContent + Deserialize<'de>
+   {
+      let mut repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      repository_lock.load_file(file_path)
+   }
+
+   #[cfg(feature = "jvm")]
+   pub(crate) fn load<T>(
+      &self,
+      repository_dir_path: impl AsRef<Path>,
+      file_path: impl AsRef<Path>
+   ) -> anyhow::Result<Cache<T>>
+      where for<'de, 'local> T: Deserialize<'de>
+            + CloneIntoJvm<'local, T::JvmType<'local>>
+            + CloneIntoJvmHelper
+   {
+      let mut repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      repository_lock.load_file(file_path)
+   }
+
+   #[cfg(test)]
+   pub(crate) fn repositories(&self) -> Vec<Arc<dyn DynRepository>> {
+      self.repositories.read().unwrap().clone()
+   }
+}
+
+#[cfg(all(test, not(feature = "jvm")))]
+mod test {
+   use std::path::{Path, PathBuf};
+   use serde::{Deserialize, Serialize};
+   use crate::cache::CacheContent;
+   use super::Loader;
+
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+   struct CacheContentImpl(i32, i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = i32;
+
+      fn key(&self) -> &i32 {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
+      }
+   }
+
+   #[test]
+   fn load() {
+      use std::fs;
+      use std::sync::{Arc, Mutex};
+      use scopeguard::defer;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
+
+      fs::create_dir_all("test/Loader/load").unwrap();
+      fs::write("test/Loader/load/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Loader/load").unwrap()
+      }
+
+      let loader = Arc::new(Loader::new());
+
+      let repository = Arc::new(Mutex::new(
+         Repository::<CacheContentImpl>::new(
+            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::downgrade(&loader),
+            "test/Loader/load"
+         )
+      ));
+
+      let dyn_repo = Arc::clone(&repository);
+      loader.push_repository(dyn_repo);
+
+      let cache = loader.load("test/Loader/load", "test/Loader/load/0").unwrap();
+
+      assert_eq!(
+         CacheContentImpl(0, 42),
+         *cache.get()
+      );
+   }
+
+   #[allow(non_snake_case)]
+   #[test]
+   fn load_repositoryNotFound() {
+      use std::fs;
+      use std::sync::{Arc, Mutex};
+      use scopeguard::defer;
+      use crate::cache::Cache;
+      use crate::db::saver::Saver;
+      use crate::db::scheduler::DbScheduler;
+      use crate::repository::Repository;
+
+      fs::create_dir_all("test/Loader/load_repositoryNotFound").unwrap();
+      fs::write("test/Loader/load_repositoryNotFound/0", "[0,42]").unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/Loader/load_repositoryNotFound").unwrap()
+      }
+
+      let loader = Arc::new(Loader::new());
+
+      let repository = Arc::new(Mutex::new(
+         Repository::<CacheContentImpl>::new(
+            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::downgrade(&loader),
+            "test/Loader/load_repositoryNotFound_dummy"
+         )
+      ));
+
+      let dyn_repo = Arc::clone(&repository);
+      loader.push_repository(dyn_repo);
+
+      let result: anyhow::Result<Cache<CacheContentImpl>> = loader.load(
+         "test/Loader/load_repositoryNotFound",
+         "test/Loader/load_repositoryNotFound/0"
+      );
+
+      assert!(result.is_err());
+   }
+}

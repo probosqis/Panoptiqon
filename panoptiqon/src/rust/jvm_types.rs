@@ -188,6 +188,23 @@ impl<'local, T: JvmType<'local>> JvmType<'local> for JvmCache<'local, T> {
    }
 }
 
+#[repr(transparent)]
+pub struct JvmRepository<'local, T: JvmType<'local>>(JObject<'local>, PhantomData<T>);
+
+impl<'local, T: JvmType<'local>> JvmType<'local> for JvmRepository<'local, T> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmRepository<'local, T> {
+      JvmRepository(j_object, PhantomData)
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0
+   }
+}
+
 jvm_type! {
    JvmBoolean,
    JvmByte,

@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
+use std::borrow::Borrow;
+use std::hash::Hash;
 use std::sync::Arc;
 use fnv::FnvHashMap;
+use serde::Serialize;
 use crate::cache::CacheContent;
+use crate::db::saver;
+use crate::db::scheduler::DbScheduler;
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature="jvm")]
@@ -31,23 +36,38 @@ use {
 pub(crate) struct UniqueCachePool<T: CacheContent> {
    jvm: JavaVM,
    jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
+   db_scheduler: Arc<DbScheduler>,
+   dir_path: saver::DirPath,
    map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct UniqueCachePool<T: CacheContent> {
+   db_scheduler: Arc<DbScheduler>,
+   dir_path: saver::DirPath,
    map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
 }
 
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn get(&self, key: T::Key) -> Option<Arc<UniqueCache<T>>> {
-      self.map.get(&key).map(|arc| arc.clone())
+   pub fn get<Q>(&self, key: &Q) -> Option<Arc<UniqueCache<T>>>
+      where T::Key: Borrow<Q>,
+            Q: Hash + Eq + ?Sized
+   {
+      self.map.get(key).map(|arc| arc.clone())
+   }
+
+   pub(crate) fn dir_path(&self) -> &saver::DirPath {
+      &self.dir_path
    }
 }
 
 #[cfg(feature="jvm")]
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn new(env: &mut JNIEnv) -> Self
+   pub fn new(
+      env: &mut JNIEnv,
+      db_scheduler: Arc<DbScheduler>,
+      dir_path: &saver::DirPath
+   ) -> Self
       where T: CloneIntoJvmHelper
    {
       let jvm = env.get_java_vm().unwrap();
@@ -55,12 +75,16 @@ impl<T: CacheContent> UniqueCachePool<T> {
       UniqueCachePool {
          jvm,
          jvm_unique_cache_refs: Arc::new(T::get_jvm_refs(env)),
+         db_scheduler,
+         dir_path: saver::DirPath::clone(dir_path),
          map: FnvHashMap::default()
       }
    }
 
    pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
-      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>> + CloneIntoJvmHelper
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+               + CloneIntoJvmHelper
+               + Serialize
    {
       use std::collections::hash_map::Entry;
 
@@ -73,10 +97,45 @@ impl<T: CacheContent> UniqueCachePool<T> {
             Arc::clone(arc)
          }
          Entry::Vacant(entry) => {
-            let arc = UniqueCache::new_arc(
-               &self.jvm, self.jvm_unique_cache_refs.clone(), value
+            let arc = UniqueCache::new_saved(
+               &self.jvm,
+               Arc::clone(&self.jvm_unique_cache_refs),
+               Arc::clone(&self.db_scheduler),
+               &self.dir_path,
+               value
             );
-            entry.insert(arc.clone());
+            entry.insert(Arc::clone(&arc));
+            arc
+         }
+      }
+   }
+
+   pub fn insert_if_vacant(
+      &mut self,
+      key: T::Key,
+      value: T
+   ) -> Arc<UniqueCache<T>>
+      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
+   {
+      use std::collections::hash_map::Entry;
+
+      let entry = self.map.entry(key);
+
+      match entry {
+         Entry::Occupied(entry) => {
+            let arc = entry.get();
+            Arc::clone(arc)
+         },
+         Entry::Vacant(entry) => {
+            let arc = UniqueCache::new_not_saved(
+               &self.jvm,
+               Arc::clone(&self.jvm_unique_cache_refs),
+               Arc::clone(&self.db_scheduler),
+               &self.dir_path,
+               value
+            );
+            entry.insert(Arc::clone(&arc));
             arc
          }
       }
@@ -85,13 +144,20 @@ impl<T: CacheContent> UniqueCachePool<T> {
 
 #[cfg(not(feature="jvm"))]
 impl<T: CacheContent> UniqueCachePool<T> {
-   pub fn new() -> Self {
+   pub fn new(
+      db_scheduler: Arc<DbScheduler>,
+      dir_path: &saver::DirPath
+   ) -> Self {
       UniqueCachePool {
+         db_scheduler,
+         dir_path: saver::DirPath::clone(dir_path),
          map: FnvHashMap::default()
       }
    }
 
-   pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>> {
+   pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
+      where T: Serialize
+   {
       use std::collections::hash_map::Entry;
 
       let entry = self.map.entry(key);
@@ -103,21 +169,113 @@ impl<T: CacheContent> UniqueCachePool<T> {
             Arc::clone(arc)
          }
          Entry::Vacant(entry) => {
-            let unique_cache = UniqueCache::new(value);
-            let arc = Arc::new(unique_cache);
-            entry.insert(arc.clone());
+            let arc = UniqueCache::new_saved(
+               Arc::clone(&self.db_scheduler),
+               &self.dir_path,
+               value
+            );
+            entry.insert(Arc::clone(&arc));
+            arc
+         }
+      }
+   }
+
+   /// 指定されたkeyがまだこのPool内に存在しない場合追加する。
+   /// すでに存在する場合はそのUniqueCacheを返却する。
+   ///
+   /// いずれの場合も、[Self::new]と異なり[DbScheduler]への
+   /// [push][DbScheduler::push]は行わない。
+   pub fn insert_if_vacant(
+      &mut self,
+      key: T::Key,
+      value: T
+   ) -> Arc<UniqueCache<T>> {
+      use std::collections::hash_map::Entry;
+
+      let entry = self.map.entry(key);
+
+      match entry {
+         Entry::Occupied(entry) => {
+            let arc = entry.get();
+            Arc::clone(arc)
+         },
+         Entry::Vacant(entry) => {
+            let arc = UniqueCache::new_not_saved(
+               Arc::clone(&self.db_scheduler),
+               &self.dir_path,
+               value
+            );
+            entry.insert(Arc::clone(&arc));
             arc
          }
       }
    }
 }
 
+#[cfg(all(test, not(feature = "jvm")))]
+mod test {
+   use std::path::{Path, PathBuf};
+   use serde::Serialize;
+   use crate::cache::CacheContent;
+
+   #[derive(Debug, PartialEq, Eq, Serialize)]
+   struct CacheContentImpl(String, i32);
+
+   impl CacheContent for CacheContentImpl {
+      type Key = String;
+
+      fn key(&self) -> &String {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &String) -> PathBuf {
+         dir_path.join(key)
+      }
+   }
+
+   #[test]
+   fn insert_if_vacant() {
+      use std::sync::Arc;
+      use crate::db::saver::{DirPath, Saver};
+      use crate::db::scheduler::DbScheduler;
+      use crate::pool::UniqueCachePool;
+
+      let mut pool = UniqueCachePool::new(
+         Arc::new(DbScheduler::new(Saver::new())),
+         &DirPath::new(PathBuf::from("test/UniqueCachePool/insert_if_vacant"))
+      );
+
+      assert!(pool.get("A").is_none());
+
+      let content = CacheContentImpl("A".to_string(), 0);
+      pool.insert_if_vacant("A".to_string(), content);
+
+      assert!(pool.get("A").is_some());
+      assert_eq!(
+         CacheContentImpl("A".to_string(), 0),
+         *pool.get("A").unwrap().get()
+      );
+
+      let content = CacheContentImpl("A".to_string(), 1);
+      pool.insert_if_vacant("A".to_string(), content);
+
+      assert!(pool.get("A").is_some());
+      assert_eq!(
+         CacheContentImpl("A".to_string(), 0),
+         *pool.get("A").unwrap().get()
+      );
+   }
+}
+
 #[cfg(feature="jni-test")]
 mod jni_tests {
+   use std::path::{Path, PathBuf};
    use jni::JNIEnv;
    use jni::objects::JObject;
+   use serde::Serialize;
    use crate::cache::CacheContent;
    use crate::convert_jvm::CloneIntoJvm;
+   use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
    use super::UniqueCachePool;
 
@@ -125,15 +283,19 @@ mod jni_tests {
       JvmContent,
    }
 
-   #[derive(Debug, PartialEq, Eq)]
+   #[derive(Debug, PartialEq, Eq, Serialize)]
    struct Content(String, i32);
 
    impl CacheContent for Content {
       type Key = String;
       type JvmType<'local> = JvmContent<'local>;
 
-      fn key(&self) -> String {
-         self.0.clone()
+      fn key(&self) -> &String {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &String) -> PathBuf {
+         dir_path.join(key)
       }
    }
 
@@ -151,7 +313,15 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = UniqueCachePool::new(&mut env);
+      use std::path::PathBuf;
+      use std::sync::Arc;
+      use crate::db::saver::{self, Saver};
+
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         &saver::DirPath::new(PathBuf::from("test/CachePoolTest/createCache"))
+      );
 
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));
       assert_eq!(Content("A".to_string(), 42), *unique_cache.get());
@@ -165,16 +335,24 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = UniqueCachePool::new(&mut env);
+      use std::path::PathBuf;
+      use std::sync::Arc;
+      use crate::db::saver::{self, Saver};
+
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         &saver::DirPath::new(PathBuf::from("test/CachePoolTest/getCache"))
+      );
 
       let _ = pool.update("A".to_string(), Content("A".to_string(), 42));
 
-      let unique_cache = pool.get("A".to_string());
+      let unique_cache = pool.get("A");
       assert!(unique_cache.is_some());
       let unique_cache = unique_cache.unwrap();
       assert_eq!(Content("A".to_string(), 42), *unique_cache.get());
 
-      let unique_cache = pool.get("B".to_string());
+      let unique_cache = pool.get("B");
       assert!(unique_cache.is_none());
    }
 
@@ -183,9 +361,15 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use std::path::PathBuf;
       use std::sync::Arc;
+      use crate::db::saver::{self, Saver};
 
-      let mut pool = UniqueCachePool::new(&mut env);
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         &saver::DirPath::new(PathBuf::from("test/CachePoolTest/pooling"))
+      );
       let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
       let cache2_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
       let cache3_ptr = Arc::as_ptr(&pool.update("B".to_string(), Content("B".to_string(), 42))) as *const _;
@@ -199,7 +383,15 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut pool = UniqueCachePool::new(&mut env);
+      use std::path::PathBuf;
+      use std::sync::Arc;
+      use crate::db::saver::{self, Saver};
+
+      let mut pool = UniqueCachePool::new(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         &saver::DirPath::new(PathBuf::from("test/CachePoolTest/save"))
+      );
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));
 
       assert_eq!(Content("A".to_string(), 42), *unique_cache.get());
