@@ -545,6 +545,7 @@ mod jni_tests {
 
    jvm_type! {
       JvmCacheContentImpl,
+      JvmCacheContainer,
    }
 
    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -593,6 +594,59 @@ mod jni_tests {
             .i().unwrap();
 
          CacheContentImpl(key, value)
+      }
+   }
+
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+   struct CacheContainer(i32, Cache<CacheContentImpl>);
+
+   impl CacheContent for CacheContainer {
+      type Key = i32;
+      type JvmType<'local> = JvmCacheContainer<'local>;
+
+      fn key(&self) -> &i32 {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
+      }
+   }
+
+   impl<'local> CloneIntoJvm<'local, JvmCacheContainer<'local>> for CacheContainer {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmCacheContainer<'local> {
+         use crate::jvm_type::JvmType;
+
+         let jvm_cache: JvmCache<JvmCacheContentImpl> = self.1.clone_into_jvm(env);
+
+         let j_object = env.new_object(
+            "Lcom/wcaokaze/probosqis/panoptiqon/CacheTest$CacheContainer;",
+            "(ILcom/wcaokaze/probosqis/panoptiqon/Cache;)V",
+            &[self.0.into(), jvm_cache.j_object().into()]
+         ).unwrap();
+
+         unsafe { JvmCacheContainer::from_j_object(j_object) }
+      }
+   }
+
+   impl<'local> CloneFromJvm<'local, JvmCacheContainer<'local>> for CacheContainer {
+      fn clone_from_jvm(
+         env: &mut JNIEnv<'local>,
+         jvm_instance: &JvmCacheContainer<'local>
+      ) -> CacheContainer {
+         use crate::jvm_type::JvmType;
+
+         let key = env
+            .call_method(jvm_instance.j_object(), "getKey", "()I", &[]).unwrap()
+            .i().unwrap();
+
+         let value = env
+            .call_method(jvm_instance.j_object(), "getCache", "()Lcom/wcaokaze/probosqis/panoptiqon/Cache;", &[]).unwrap()
+            .l().unwrap();
+
+         let jvm_cache = unsafe { &JvmCache::<JvmCacheContentImpl>::from_j_object(value) };
+         let cache = Cache::<CacheContentImpl>::clone_from_jvm(env, jvm_cache);
+         CacheContainer(key, cache)
       }
    }
 
@@ -875,5 +929,68 @@ mod jni_tests {
 
       // pool内、JVM、cache、SaveTask、SaveTask
       assert_eq!(5, Arc::strong_count(&cache.0));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_deserialize_00024loadCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmCache<'local, JvmCacheContainer<'local>> {
+      use std::fs;
+      use std::sync::Arc;
+      use scopeguard::defer;
+      use crate::db::loader::Loader;
+      use crate::db::saver::Saver;
+      use crate::repository::JvmRepositoryCreator;
+
+      fs::create_dir_all("test/CacheTest/deserialize/CacheContentImpl").unwrap();
+      fs::write("test/CacheTest/deserialize/CacheContentImpl/0", "[0,42]").unwrap();
+      fs::create_dir_all("test/CacheTest/deserialize/CacheContainer").unwrap();
+      fs::write(
+         "test/CacheTest/deserialize/CacheContainer/0",
+         r#"[0,["test/CacheTest/deserialize/CacheContentImpl","test/CacheTest/deserialize/CacheContentImpl/0"]]"#
+      ).unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/CacheTest/deserialize").unwrap()
+      }
+
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let loader = Arc::new(Loader::new());
+
+      let cache_content_repo = Arc::new(Mutex::new(
+         Repository::<CacheContentImpl>::new_testable(
+            &mut env,
+            Arc::clone(&db_scheduler),
+            Arc::downgrade(&loader),
+            "test/CacheTest/deserialize/CacheContentImpl",
+            /* drop_observer = */ || ()
+         )
+      ));
+
+      let cache_container_repo = Arc::new(Mutex::new(
+         Repository::<CacheContainer>::new_testable(
+            &mut env,
+            Arc::clone(&db_scheduler),
+            Arc::downgrade(&loader),
+            "test/CacheTest/deserialize/CacheContainer",
+            /* drop_observer = */ || ()
+         )
+      ));
+
+      let dyn_cache_content_repo = Arc::clone(&cache_content_repo);
+      loader.push_repository(dyn_cache_content_repo);
+      let dyn_cache_container_repo = Arc::clone(&cache_container_repo);
+      loader.push_repository(dyn_cache_container_repo);
+
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      repository_creator.create_jvm_wrapper(&mut env, Arc::clone(&cache_content_repo));
+      let jvm_cache_container_repository = repository_creator
+         .create_jvm_wrapper(&mut env, Arc::clone(&cache_container_repo));
+
+      Repository::<CacheContainer>::of(&mut env, &jvm_cache_container_repository)
+         .lock().unwrap()
+         .load(&0).unwrap()
+         .clone_into_jvm(&mut env)
    }
 }
