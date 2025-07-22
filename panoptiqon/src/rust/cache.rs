@@ -84,7 +84,7 @@ impl<T: CacheContent> Cache<T> {
       Cache::new(unique_cache)
    }
 
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    pub fn unique_cache_ptr(&self) -> *const UniqueCache<T> {
       Arc::as_ptr(&self.0)
    }

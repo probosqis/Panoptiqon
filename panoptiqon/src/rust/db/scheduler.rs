@@ -96,7 +96,7 @@ impl DbScheduler {
       sender.send(WorkerThreadMessage::SaveTask(task)).unwrap();
    }
 
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    pub(crate) fn stop(&self) -> Vec<SaveTask> {
       use std::ptr;
       use std::sync::atomic::Ordering;
@@ -174,13 +174,13 @@ impl WorkerThread {
       };
    }
 
-   #[cfg(not(any(test, feature = "jni-test")))]
+   #[cfg(not(any(test, feature = "testable")))]
    fn stop(&mut self) {
       let (result, _) = self._stop();
       result.unwrap();
    }
 
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    fn stop(&mut self) -> Vec<SaveTask> {
       let (result, saver) = self._stop();
       result.unwrap();

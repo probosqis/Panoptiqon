@@ -24,19 +24,19 @@ pub(crate) type DirPath = Arc<PathBuf>;
 pub(crate) type Serializer<'a> = &'a mut serde_json::Serializer<BufWriter<File>>;
 
 pub(crate) struct Saver {
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    received_tasks: Vec<SaveTask>
 }
 
 impl Saver {
    pub(crate) const fn new() -> Self {
       Self {
-         #[cfg(any(test, feature = "jni-test"))]
+         #[cfg(any(test, feature = "testable"))]
          received_tasks: Vec::new()
       }
    }
 
-   #[cfg(not(any(test, feature = "jni-test")))]
+   #[cfg(not(any(test, feature = "testable")))]
    pub(crate) fn save(&mut self, task: SaveTask) -> anyhow::Result<()> {
       self._save(task)
    }
@@ -64,13 +64,13 @@ impl Saver {
       Ok(())
    }
 
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    pub(crate) fn save(&mut self, task: SaveTask) -> anyhow::Result<()> {
       self.received_tasks.push(task);
       Ok(())
    }
 
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    pub(crate) fn clear_received_tasks(&mut self) -> Vec<SaveTask> {
       use std::mem;
       mem::replace(&mut self.received_tasks, Vec::new())

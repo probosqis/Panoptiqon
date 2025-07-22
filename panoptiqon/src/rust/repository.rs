@@ -38,7 +38,7 @@ use {
 pub struct Repository<T: CacheContent> {
    pool: UniqueCachePool<T>,
    loader: Weak<Loader>,
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    drop_observer: Box<dyn FnOnce() -> () + Send + Sync>
 }
 
@@ -64,7 +64,7 @@ impl<T: CacheContent> Repository<T> {
       Ok(cache_content)
    }
 
-   #[cfg(test)]
+   #[cfg(any(test, feature = "testable"))]
    pub(crate) fn loader(&self) -> &Weak<Loader> {
       &self.loader
    }
@@ -85,12 +85,12 @@ impl<T: CacheContent> Repository<T> {
       Repository {
          pool: UniqueCachePool::new(env, db_scheduler, &dir_path),
          loader,
-         #[cfg(any(test, feature = "jni-test"))]
+         #[cfg(any(test, feature = "testable"))]
          drop_observer: Box::new(|| ())
       }
    }
 
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    pub fn new_testable(
       env: &mut JNIEnv,
       db_scheduler: Arc<DbScheduler>,
@@ -274,12 +274,12 @@ impl<T: CacheContent> Repository<T> {
       Repository {
          pool: UniqueCachePool::new(db_scheduler, &dir_path),
          loader,
-         #[cfg(any(test, feature = "jni-test"))]
+         #[cfg(any(test, feature = "testable"))]
          drop_observer: Box::new(|| ())
       }
    }
 
-   #[cfg(any(test, feature = "jni-test"))]
+   #[cfg(any(test, feature = "testable"))]
    pub fn new_testable(
       db_scheduler: Arc<DbScheduler>,
       loader: Weak<Loader>,
@@ -335,7 +335,7 @@ impl<T: CacheContent> Repository<T> {
    }
 }
 
-#[cfg(any(test, feature = "jni-test"))]
+#[cfg(any(test, feature = "testable"))]
 impl<T: CacheContent> Drop for Repository<T> {
    fn drop(&mut self) {
       use std::mem;

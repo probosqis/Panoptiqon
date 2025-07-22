@@ -330,7 +330,7 @@ impl Loader {
       repository_lock.load_file(file_path)
    }
 
-   #[cfg(test)]
+   #[cfg(any(test, feature = "testable"))]
    pub(crate) fn repositories(&self) -> Vec<Arc<dyn DynRepository>> {
       self.repositories.read().unwrap().clone()
    }
