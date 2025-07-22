@@ -77,7 +77,7 @@ impl Saver {
    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "jvm")))]
 mod test {
    use std::path::Path;
 

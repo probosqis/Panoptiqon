@@ -211,7 +211,7 @@ impl WorkerThread {
    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "jvm")))]
 mod test {
    use std::path::{Path, PathBuf};
    use crate::db::savable::Savable;

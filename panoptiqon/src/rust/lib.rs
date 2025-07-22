@@ -107,13 +107,13 @@ impl Panoptiqon {
    }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "jvm")))]
 mod test {
    use std::path::{Path, PathBuf};
    use serde::Serialize;
    use crate::cache::CacheContent;
    use super::Panoptiqon;
-   
+
    #[derive(Debug, PartialEq, Eq, Serialize)]
    struct CacheContentImpl(i32, i32);
 
