@@ -16,7 +16,7 @@
 
 use std::any::TypeId;
 use std::path::Path;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
 use serde::{Deserialize, Serialize};
 use crate::cache::{Cache, CacheContent};
 use crate::db::loader::Loader;
@@ -112,7 +112,7 @@ impl<T: CacheContent> Repository<T> {
    pub fn of<'local>(
       env: &mut JNIEnv<'local>,
       jvm_instance: &JvmRepository<'local, T::JvmType<'local>>
-   ) -> &'local Mutex<Self> {
+   ) -> &'local Self {
       let instance_repo_ptr = env.call_method(
          jvm_instance.j_object(),
          "getNativeRepositoryAddress",
@@ -123,7 +123,7 @@ impl<T: CacheContent> Repository<T> {
       unsafe { &*(instance_repo_ptr as *const _) }
    }
 
-   pub fn save(&mut self, value: T) -> Cache<T>
+   pub fn save(&self, value: T) -> Cache<T>
       where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
                + Serialize
@@ -133,7 +133,7 @@ impl<T: CacheContent> Repository<T> {
       Cache::new(arc)
    }
 
-   pub fn load(&mut self, key: &T::Key) -> anyhow::Result<Cache<T>>
+   pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>>
       where for<'de, 'local> T: Deserialize<'de>
             + CloneIntoJvm<'local, T::JvmType<'local>>
             + CloneIntoJvmHelper
@@ -155,7 +155,7 @@ impl<T: CacheContent> Repository<T> {
    /// 実際のファイルへの書き込みは遅延するため、RepositoryにすでにCacheが
    /// 存在する場合そちらの方が新しいものである可能性が高いためである。
    pub(crate) fn load_file(
-      &mut self,
+      &self,
       file_path: impl AsRef<Path>
    ) -> anyhow::Result<Cache<T>>
       where for<'de, 'local> T: Deserialize<'de>
@@ -182,15 +182,13 @@ pub(crate) trait DynRepository: Send + Sync {
    unsafe fn decrement_arc(&self);
 }
 
-impl<T: CacheContent> DynRepository for Mutex<Repository<T>> {
+impl<T: CacheContent> DynRepository for Repository<T> {
    fn can_load(
       &self,
       dir_path: &Path,
       content_type_id: TypeId
    ) -> bool {
-      let lock = self.lock().unwrap();
-
-      lock.pool.dir_path().as_path() == dir_path
+      self.pool.dir_path().as_path() == dir_path
          && content_type_id == TypeId::of::<T>()
    }
 
@@ -224,7 +222,7 @@ impl<'local> JvmRepositoryCreator<'local> {
    pub fn create_jvm_wrapper<T>(
       &self,
       env: &mut JNIEnv<'local>,
-      repo: Arc<Mutex<Repository<T>>>,
+      repo: Arc<Repository<T>>,
    ) -> JvmRepository<'local, T::JvmType<'local>>
       where T: CloneIntoJvmHelper
    {
@@ -295,7 +293,7 @@ impl<T: CacheContent> Repository<T> {
       }
    }
 
-   pub fn save(&mut self, value: T) -> Cache<T>
+   pub fn save(&self, value: T) -> Cache<T>
       where T: Serialize
    {
       let key = T::Key::clone(value.key());
@@ -303,7 +301,7 @@ impl<T: CacheContent> Repository<T> {
       Cache::new(arc)
    }
 
-   pub fn load(&mut self, key: &T::Key) -> anyhow::Result<Cache<T>>
+   pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>>
       where for<'de> T: Deserialize<'de>
    {
       let Some(arc) = self.pool.get(key) else {
@@ -323,7 +321,7 @@ impl<T: CacheContent> Repository<T> {
    /// 実際のファイルへの書き込みは遅延するため、RepositoryにすでにCacheが
    /// 存在する場合そちらの方が新しいものである可能性が高いためである。
    pub(crate) fn load_file(
-      &mut self,
+      &self,
       file_path: impl AsRef<Path>
    ) -> anyhow::Result<Cache<T>>
       where for<'de> T: Deserialize<'de>
@@ -392,7 +390,7 @@ mod test {
    #[test]
    fn can_load() {
       use std::any::TypeId;
-      use std::sync::{Arc, Mutex, Weak};
+      use std::sync::{Arc, Weak};
       use crate::db::saver::{DirPath, Saver};
       use crate::db::scheduler::DbScheduler;
       use super::{DynRepository, Repository};
@@ -411,11 +409,11 @@ mod test {
          }
       }
 
-      let repository = Mutex::new(Repository::<CacheContentImpl>::new(
+      let repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
          "test/Repository/can_load"
-      ));
+      );
 
       let dyn_repository: &dyn DynRepository = &repository;
 
@@ -761,7 +759,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<OneWayConversionData>::new_testable(
+      let repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
          Arc::clone(&switchCacheClass_dbScheduler),
          /* loader = */ Weak::new(),
@@ -777,7 +775,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<TwoWayConversionData>::new_testable(
+      let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::clone(&switchCacheClass_dbScheduler),
          /* loader = */ Weak::new(),
@@ -793,7 +791,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new_testable(
+      let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -824,7 +822,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new_testable(
+      let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -841,7 +839,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new_testable(
+      let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -868,7 +866,7 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
-      let mut repository = Repository::<TwoWayConversionData>::new_testable(
+      let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -896,7 +894,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<OneWayConversionData>::new_testable(
+      let repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -912,7 +910,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
-      let mut repository = Repository::<TwoWayConversionData>::new_testable(
+      let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -1150,7 +1148,7 @@ mod jni_tests {
       use super::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let repo = Arc::new(Mutex::new(
+      let repo = Arc::new(
          Repository::<TwoWayConversionData>::new_testable(
             &mut env,
             Arc::new(DbScheduler::new(Saver::new())),
@@ -1158,7 +1156,7 @@ mod jni_tests {
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || ()
          )
-      ));
+      );
       let jvm_repository = repository_creator
          .create_jvm_wrapper(&mut env, Arc::clone(&repo));
 
@@ -1194,7 +1192,7 @@ mod jni_tests {
       use super::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let repo = Arc::new(Mutex::new(
+      let repo = Arc::new(
          Repository::<TwoWayConversionData>::new_testable(
             &mut env,
             Arc::new(DbScheduler::new(Saver::new())),
@@ -1205,7 +1203,7 @@ mod jni_tests {
                *lock = false;
             }
          )
-      ));
+      );
       let jvm_repository = repository_creator.create_jvm_wrapper(&mut env, repo);
 
       let mut lock = gc_dropNativeRepository_repoExists.lock().unwrap();

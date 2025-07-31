@@ -278,9 +278,8 @@ impl Loader {
    fn find_repository<T: CacheContent>(
       &self,
       repository_dir_path: &Path
-   ) -> anyhow::Result<MutexGuard<Repository<T>>> {
+   ) -> anyhow::Result<&Repository<T>> {
       use std::any::{self, TypeId};
-      use std::sync::Mutex;
       use anyhow::Context;
 
       let lock = self.repositories.read()
@@ -293,15 +292,13 @@ impl Loader {
             repository_dir_path.display(), any::type_name::<T>()
          ))?;
 
-      let lock = unsafe {
+      let repository = unsafe {
          let dyn_repository: *const dyn DynRepository = Arc::as_ptr(&arc);
-         let mutex_address = dyn_repository as *const Mutex<Repository<T>>;
-
-         (*mutex_address).lock()
-            .map_err(|_| anyhow::anyhow!("Repository is poisoned"))?
+         let repository_address = dyn_repository as *const Repository<T>;
+         &*repository_address
       };
 
-      Ok(lock)
+      Ok(repository)
    }
 
    #[cfg(not(feature = "jvm"))]
@@ -312,7 +309,7 @@ impl Loader {
    ) -> anyhow::Result<Cache<T>>
       where for<'de> T: CacheContent + Deserialize<'de>
    {
-      let mut repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      let repository_lock = self.find_repository(repository_dir_path.as_ref())?;
       repository_lock.load_file(file_path)
    }
 
@@ -326,7 +323,7 @@ impl Loader {
             + CloneIntoJvm<'local, T::JvmType<'local>>
             + CloneIntoJvmHelper
    {
-      let mut repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      let repository_lock = self.find_repository(repository_dir_path.as_ref())?;
       repository_lock.load_file(file_path)
    }
 
@@ -361,7 +358,7 @@ mod test {
    #[test]
    fn load() {
       use std::fs;
-      use std::sync::{Arc, Mutex};
+      use std::sync::Arc;
       use scopeguard::defer;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
@@ -376,13 +373,13 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let repository = Arc::new(Mutex::new(
+      let repository = Arc::new(
          Repository::<CacheContentImpl>::new(
             Arc::new(DbScheduler::new(Saver::new())),
             Arc::downgrade(&loader),
             "test/Loader/load"
          )
-      ));
+      );
 
       let dyn_repo = Arc::clone(&repository);
       loader.push_repository(dyn_repo);
@@ -399,7 +396,7 @@ mod test {
    #[test]
    fn load_repositoryNotFound() {
       use std::fs;
-      use std::sync::{Arc, Mutex};
+      use std::sync::Arc;
       use scopeguard::defer;
       use crate::cache::Cache;
       use crate::db::saver::Saver;
@@ -415,13 +412,13 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let repository = Arc::new(Mutex::new(
+      let repository = Arc::new(
          Repository::<CacheContentImpl>::new(
             Arc::new(DbScheduler::new(Saver::new())),
             Arc::downgrade(&loader),
             "test/Loader/load_repositoryNotFound_dummy"
          )
-      ));
+      );
 
       let dyn_repo = Arc::clone(&repository);
       loader.push_repository(dyn_repo);

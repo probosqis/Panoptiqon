@@ -16,7 +16,7 @@
 
 use std::borrow::Borrow;
 use std::hash::Hash;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use fnv::FnvHashMap;
 use serde::Serialize;
 use crate::cache::CacheContent;
@@ -38,14 +38,14 @@ pub(crate) struct UniqueCachePool<T: CacheContent> {
    jvm_unique_cache_refs: Arc<JvmUniqueCacheRefs>,
    db_scheduler: Arc<DbScheduler>,
    dir_path: saver::DirPath,
-   map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
+   map: Mutex<FnvHashMap<T::Key, Arc<UniqueCache<T>>>>
 }
 
 #[cfg(not(feature="jvm"))]
 pub(crate) struct UniqueCachePool<T: CacheContent> {
    db_scheduler: Arc<DbScheduler>,
    dir_path: saver::DirPath,
-   map: FnvHashMap<T::Key, Arc<UniqueCache<T>>>
+   map: Mutex<FnvHashMap<T::Key, Arc<UniqueCache<T>>>>
 }
 
 impl<T: CacheContent> UniqueCachePool<T> {
@@ -53,7 +53,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
       where T::Key: Borrow<Q>,
             Q: Hash + Eq + ?Sized
    {
-      self.map.get(key).map(|arc| arc.clone())
+      self.map.lock().ok()?.get(key).map(|arc| arc.clone())
    }
 
    pub(crate) fn dir_path(&self) -> &saver::DirPath {
@@ -77,18 +77,19 @@ impl<T: CacheContent> UniqueCachePool<T> {
          jvm_unique_cache_refs: Arc::new(T::get_jvm_refs(env)),
          db_scheduler,
          dir_path: saver::DirPath::clone(dir_path),
-         map: FnvHashMap::default()
+         map: Mutex::new(FnvHashMap::default())
       }
    }
 
-   pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
+   pub fn update(&self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
       where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
                + CloneIntoJvmHelper
                + Serialize
    {
       use std::collections::hash_map::Entry;
 
-      let entry = self.map.entry(key);
+      let mut lock = self.map.lock().expect("Cache pool was poisoned");
+      let entry = lock.entry(key);
 
       match entry {
          Entry::Occupied(entry) => {
@@ -111,7 +112,7 @@ impl<T: CacheContent> UniqueCachePool<T> {
    }
 
    pub fn insert_if_vacant(
-      &mut self,
+      &self,
       key: T::Key,
       value: T
    ) -> Arc<UniqueCache<T>>
@@ -120,7 +121,8 @@ impl<T: CacheContent> UniqueCachePool<T> {
    {
       use std::collections::hash_map::Entry;
 
-      let entry = self.map.entry(key);
+      let mut lock = self.map.lock().expect("Cache pool was poisoned");
+      let entry = lock.entry(key);
 
       match entry {
          Entry::Occupied(entry) => {
@@ -151,16 +153,17 @@ impl<T: CacheContent> UniqueCachePool<T> {
       UniqueCachePool {
          db_scheduler,
          dir_path: saver::DirPath::clone(dir_path),
-         map: FnvHashMap::default()
+         map: Mutex::new(FnvHashMap::default())
       }
    }
 
-   pub fn update(&mut self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
+   pub fn update(&self, key: T::Key, value: T) -> Arc<UniqueCache<T>>
       where T: Serialize
    {
       use std::collections::hash_map::Entry;
 
-      let entry = self.map.entry(key);
+      let mut lock = self.map.lock().expect("Cache pool was poisoned");
+      let entry = lock.entry(key);
 
       match entry {
          Entry::Occupied(entry) => {
@@ -186,13 +189,14 @@ impl<T: CacheContent> UniqueCachePool<T> {
    /// いずれの場合も、[Self::new]と異なり[DbScheduler]への
    /// [push][DbScheduler::push]は行わない。
    pub fn insert_if_vacant(
-      &mut self,
+      &self,
       key: T::Key,
       value: T
    ) -> Arc<UniqueCache<T>> {
       use std::collections::hash_map::Entry;
 
-      let entry = self.map.entry(key);
+      let mut lock = self.map.lock().expect("Cache pool was poisoned");
+      let entry = lock.entry(key);
 
       match entry {
          Entry::Occupied(entry) => {
@@ -317,7 +321,7 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::db::saver::{self, Saver};
 
-      let mut pool = UniqueCachePool::new(
+      let pool = UniqueCachePool::new(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/createCache"))
@@ -339,7 +343,7 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::db::saver::{self, Saver};
 
-      let mut pool = UniqueCachePool::new(
+      let pool = UniqueCachePool::new(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/getCache"))
@@ -365,7 +369,7 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::db::saver::{self, Saver};
 
-      let mut pool = UniqueCachePool::new(
+      let pool = UniqueCachePool::new(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/pooling"))
@@ -387,7 +391,7 @@ mod jni_tests {
       use std::sync::Arc;
       use crate::db::saver::{self, Saver};
 
-      let mut pool = UniqueCachePool::new(
+      let pool = UniqueCachePool::new(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/save"))
