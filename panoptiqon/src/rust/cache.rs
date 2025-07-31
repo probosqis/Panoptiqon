@@ -482,7 +482,7 @@ mod tests {
    fn deserialize() {
       use std::fs::{self, File};
       use std::io::BufReader;
-      use std::sync::{Arc, Mutex};
+      use std::sync::Arc;
       use scopeguard::defer;
       use serde::Deserialize;
       use serde_json::Deserializer;
@@ -502,14 +502,14 @@ mod tests {
 
       let loader = Arc::new(Loader::new());
 
-      let repository = Arc::new(Mutex::new(
+      let repository = Arc::new(
          Repository::<CacheContentImpl>::new_testable(
             Arc::new(DbScheduler::new(Saver::new())),
             Arc::downgrade(&loader),
             "test/CacheTest/deserialize",
             /* drop_observer = */ || ()
          )
-      ));
+      );
 
       let dyn_repo = Arc::clone(&repository);
       loader.push_repository(dyn_repo);
@@ -675,7 +675,7 @@ mod jni_tests {
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -750,7 +750,7 @@ mod jni_tests {
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::clone(&db_scheduler),
          /* loader = */ Weak::new(),
@@ -778,7 +778,7 @@ mod jni_tests {
 
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::clone(&db_scheduler),
          /* loader = */ Weak::new(),
@@ -808,7 +808,7 @@ mod jni_tests {
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -830,7 +830,7 @@ mod jni_tests {
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -854,7 +854,7 @@ mod jni_tests {
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -879,7 +879,7 @@ mod jni_tests {
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -905,7 +905,7 @@ mod jni_tests {
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -932,7 +932,7 @@ mod jni_tests {
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
@@ -974,7 +974,7 @@ mod jni_tests {
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
       let loader = Arc::new(Loader::new());
 
-      let cache_content_repo = Arc::new(Mutex::new(
+      let cache_content_repo = Arc::new(
          Repository::<CacheContentImpl>::new_testable(
             &mut env,
             Arc::clone(&db_scheduler),
@@ -982,9 +982,9 @@ mod jni_tests {
             "test/CacheTest/deserialize/CacheContentImpl",
             /* drop_observer = */ || ()
          )
-      ));
+      );
 
-      let cache_container_repo = Arc::new(Mutex::new(
+      let cache_container_repo = Arc::new(
          Repository::<CacheContainer>::new_testable(
             &mut env,
             Arc::clone(&db_scheduler),
@@ -992,7 +992,7 @@ mod jni_tests {
             "test/CacheTest/deserialize/CacheContainer",
             /* drop_observer = */ || ()
          )
-      ));
+      );
 
       let dyn_cache_content_repo = Arc::clone(&cache_content_repo);
       loader.push_repository(dyn_cache_content_repo);
@@ -1005,7 +1005,6 @@ mod jni_tests {
          .create_jvm_wrapper(&mut env, Arc::clone(&cache_container_repo));
 
       Repository::<CacheContainer>::of(&mut env, &jvm_cache_container_repository)
-         .lock().unwrap()
          .load(&0).unwrap()
          .clone_into_jvm(&mut env)
    }
