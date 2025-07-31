@@ -542,6 +542,65 @@ mod tests {
 
       let _ = Cache::<CacheContentImpl>::deserialize(&mut deserializer);
    }
+
+   #[test]
+   fn deserialize_recursive() {
+      use std::fs;
+      use std::sync::Arc;
+      use scopeguard::defer;
+      use serde::Deserialize;
+      use crate::db::loader::Loader;
+      use crate::repository::Repository;
+
+      #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+      struct RecursiveCacheContent(i32, Option<Cache<RecursiveCacheContent>>);
+
+      impl CacheContent for RecursiveCacheContent {
+         type Key = i32;
+
+         fn key(&self) -> &i32 {
+            &self.0
+         }
+
+         fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+            dir_path.join(key.to_string())
+         }
+      }
+
+      fs::create_dir_all("test/CacheTest/deserialize_recursive").unwrap();
+      fs::write("test/CacheTest/deserialize_recursive/0", "[0,null]").unwrap();
+      fs::write(
+         "test/CacheTest/deserialize_recursive/1",
+         r#"[1,["test/CacheTest/deserialize_recursive","test/CacheTest/deserialize_recursive/0"]]"#
+      ).unwrap();
+
+      defer! {
+         fs::remove_dir_all("test/CacheTest/deserialize_recursive").unwrap()
+      }
+
+      let loader = Arc::new(Loader::new());
+
+      let repository = Arc::new(
+         Repository::<RecursiveCacheContent>::new_testable(
+            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::downgrade(&loader),
+            "test/CacheTest/deserialize_recursive",
+            /* drop_observer = */ || ()
+         )
+      );
+
+      let dyn_repo = Arc::clone(&repository);
+      loader.push_repository(dyn_repo);
+
+      let cache = repository.load(&1).unwrap();
+
+      assert_eq!(1, cache.get().0);
+      assert!(cache.get().1.is_some());
+
+      let inner_cache = cache.get().1.as_ref().unwrap().get();
+      assert_eq!(0, inner_cache.0);
+      assert!(inner_cache.1.is_none());
+   }
 }
 
 #[cfg(feature = "jni-test")]
