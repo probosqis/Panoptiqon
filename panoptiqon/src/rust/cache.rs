@@ -147,20 +147,40 @@ where for<'content_de>
       D: Deserializer<'de>,
    {
       use std::{any, mem};
+      use std::fs::File;
+      use std::io::BufReader;
       use std::marker::PhantomData;
       use serde::de::{SeqAccess, Visitor};
+      use serde_json::de::IoRead;
       use crate::db::loader::{CacheDeserializer, Loader};
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
-      if any::type_name::<D>() != any::type_name::<&mut CacheDeserializer>() {
-         panic!("Caches can be deserialized only with CacheDeserializer");
-      }
+      let deserializer: &mut CacheDeserializer
+         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer>() {
+            unsafe { mem::transmute_copy(&deserializer) }
+         } else if any::type_name::<D>()
+            == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
+         {
+            // CacheSerializer::deserialize_structがserde_json::Deserializerに
+            // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
+            // CacheSerializerではなくserde_json::Deserializerが渡される。
+            // この場合deserializerのアドレスから
+            // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
+            // CacheSerializerのアドレスを逆算する。
+            unsafe {
+               let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
+
+               let cache_deserializer_ptr
+                  = json_deserializer_ptr
+                  - mem::offset_of!(CacheDeserializer, deserializer);
+
+               &mut *(cache_deserializer_ptr as *mut CacheDeserializer)
+            }
+         } else {
+            panic!("Caches can be deserialized only with CacheDeserializer");
+         };
 
       debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
-
-      let deserializer: &mut CacheDeserializer = unsafe {
-         mem::transmute_copy(&deserializer)
-      };
 
       struct CacheVisitor<'a, T: CacheContent> {
          loader: &'a Loader,
@@ -259,10 +279,6 @@ impl<'de, T> Deserialize<'de> for Cache<T>
          };
 
       debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
-
-      let deserializer: &mut CacheDeserializer = unsafe {
-         mem::transmute_copy(&deserializer)
-      };
 
       struct CacheVisitor<'a, T: CacheContent> {
          loader: &'a Loader,
