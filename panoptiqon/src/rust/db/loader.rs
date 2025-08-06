@@ -17,12 +17,13 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::sync::{Arc, MutexGuard, RwLock};
+use std::sync::{Arc, RwLock};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer};
 use serde_json::de::IoRead;
 use crate::cache::{Cache, CacheContent};
-use crate::repository::{DynRepository, Repository};
+use crate::dyn_repository::DynRepository;
+use crate::Repository;
 
 #[cfg(feature = "jvm")]
 use {

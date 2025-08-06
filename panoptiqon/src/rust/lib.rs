@@ -37,11 +37,14 @@ pub mod cache;
 pub mod repository;
 
 pub(crate) mod db;
+pub(crate) mod dyn_repository;
 mod pool;
 mod unique_cache;
 
 #[cfg(feature = "jvm")]
 pub mod convert_jvm;
+#[cfg(feature = "jvm")]
+pub mod jvm_repository_creator;
 #[cfg(feature = "jvm")]
 pub mod jvm_type;
 #[cfg(feature = "jvm")]

@@ -1016,7 +1016,7 @@ mod jni_tests {
       use scopeguard::defer;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
-      use crate::repository::JvmRepositoryCreator;
+      use crate::jvm_repository_creator::JvmRepositoryCreator;
 
       fs::create_dir_all("test/CacheTest/deserialize/CacheContentImpl").unwrap();
       fs::write("test/CacheTest/deserialize/CacheContentImpl/0", "[0,42]").unwrap();
