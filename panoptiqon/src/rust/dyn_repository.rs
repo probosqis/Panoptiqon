@@ -15,16 +15,18 @@
  */
 
 use std::any::TypeId;
-use std::path::Path;
 use crate::cache::CacheContent;
 use crate::repository::Repository;
 
+#[cfg(feature = "jvm")]
+use {
+   std::sync::Arc,
+   jni::JNIEnv,
+   jni::sys::jlong,
+};
+
 pub(crate) trait DynRepository: Send + Sync {
-   fn can_load(
-      &self,
-      dir_path: &Path,
-      content_type_id: TypeId
-   ) -> bool;
+   fn content_type_id(&self) -> TypeId;
 
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
    /// 解放されている可能性がある
@@ -33,19 +35,72 @@ pub(crate) trait DynRepository: Send + Sync {
 }
 
 impl<T: CacheContent> DynRepository for Repository<T> {
-   fn can_load(
-      &self,
-      dir_path: &Path,
-      content_type_id: TypeId
-   ) -> bool {
-      self.pool.dir_path().as_path() == dir_path
-         && content_type_id == TypeId::of::<T>()
+   fn content_type_id(&self) -> TypeId {
+      TypeId::of::<T>()
    }
 
    #[cfg(feature = "jvm")]
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
       drop(arc);
+   }
+}
+
+impl dyn DynRepository {
+   pub(crate) fn downcast<T: CacheContent>(&self) -> Option<&Repository<T>> {
+      if self.content_type_id() != TypeId::of::<T>() { return None; }
+
+      let repository_ref = unsafe {
+         let dyn_repository = self as *const dyn DynRepository;
+         let repository_address = dyn_repository as *const Repository<T>;
+         &*repository_address
+      };
+
+      Some(repository_ref)
+   }
+}
+
+/// Arcの参照カウンタを *デクリメントせずに* 消費し、そのトレイトオブジェクトを
+/// RepositoryのアドレスとVTableのアドレスに分解する。すなわち、
+/// 後に[from_addresses]で復元されることを期待し、Arcを生きたまま分解する。
+#[cfg(feature = "jvm")]
+pub(crate) fn addresses_as_jlong<T: CacheContent>(
+   repo: Arc<Repository<T>>
+) -> (jlong, jlong) {
+   use std::{mem, ptr};
+   use crate::dyn_repository::DynRepository;
+
+   let dyn_repository: *const dyn DynRepository = Arc::into_raw(repo);
+   let repo_address = dyn_repository as *const Repository<T>;
+
+   let trait_object_metadata = ptr::metadata(dyn_repository);
+   let vtable_address: *const () = unsafe {
+      mem::transmute(trait_object_metadata)
+   };
+
+   (repo_address as jlong, vtable_address as jlong)
+}
+
+/// RepositoryのアドレスとVTableのアドレスから&dyn DynRepositoryを復元する。
+/// [addresses_as_jlong]の逆演算
+#[cfg(feature = "jvm")]
+pub(crate) fn from_addresses<'local>(
+   _env: JNIEnv<'local>,
+   repo_address: jlong,
+   vtable_address: jlong
+) -> &'local dyn DynRepository {
+   use std::{mem, ptr};
+   use crate::dyn_repository::DynRepository;
+
+   unsafe {
+      let vtable_address = vtable_address as *const ();
+      let dyn_metadata = mem::transmute(vtable_address);
+
+      let dyn_repository: *const dyn DynRepository = ptr::from_raw_parts(
+         repo_address as *const (), dyn_metadata
+      );
+
+      &*dyn_repository
    }
 }
 
@@ -83,14 +138,13 @@ mod test {
    }
 
    #[test]
-   fn can_load() {
-      use std::any::TypeId;
+   fn downcast() {
+      use std::ptr;
       use std::sync::{Arc, Weak};
-      use crate::db::saver::{DirPath, Saver};
+      use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
       use super::DynRepository;
-
 
       let repository = Repository::<CacheContentA>::new(
          Arc::new(DbScheduler::new(Saver::new())),
@@ -100,36 +154,15 @@ mod test {
 
       let dyn_repository: &dyn DynRepository = &repository;
 
-      assert_eq!(
-         true,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("test/Repository/can_load")),
-            TypeId::of::<CacheContentA>()
+      assert!(
+         ptr::eq(
+            &repository,
+            dyn_repository.downcast::<CacheContentA>().unwrap()
          )
       );
 
-      assert_eq!(
-         false,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("unmatched/dir/path")),
-            TypeId::of::<CacheContentA>()
-         )
-      );
-
-      assert_eq!(
-         false,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("test/Repository/can_load")),
-            TypeId::of::<CacheContentB>()
-         )
-      );
-
-      assert_eq!(
-         false,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("unmatched/dir/path")),
-            TypeId::of::<CacheContentB>()
-         )
+      assert!(
+         dyn_repository.downcast::<CacheContentB>().is_none()
       );
    }
 }

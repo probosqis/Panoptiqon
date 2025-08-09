@@ -35,7 +35,7 @@ use {
 };
 
 pub struct Repository<T: CacheContent> {
-   pub(crate) pool: UniqueCachePool<T>,
+   pool: UniqueCachePool<T>,
    loader: Weak<Loader>,
    #[cfg(any(test, feature = "testable"))]
    drop_observer: Box<dyn FnOnce() -> () + Send + Sync>
@@ -61,6 +61,10 @@ impl<T: CacheContent> Repository<T> {
 
       let cache_content = T::deserialize(&mut deserializer)?;
       Ok(cache_content)
+   }
+
+   pub(crate) fn dir_path(&self) -> &Path {
+      self.pool.dir_path()
    }
 
    #[cfg(any(test, feature = "testable"))]
@@ -254,24 +258,17 @@ impl<T: CacheContent> Drop for Repository<T> {
 #[cfg(feature = "jvm")]
 #[no_mangle]
 extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeRepository<'local>(
-   _env: JNIEnv<'local>,
+   env: JNIEnv<'local>,
    _obj: JObject<'local>,
    native_repository_address: jlong,
    vtable_address: jlong
 ) {
-   use std::{mem, ptr};
-   use crate::dyn_repository::DynRepository;
+   use crate::dyn_repository;
 
    unsafe {
-      let vtable_address = vtable_address as *const ();
-      let dyn_metadata = mem::transmute(vtable_address);
-
-      let dyn_repository: *const dyn DynRepository = ptr::from_raw_parts(
-         native_repository_address as *const (), dyn_metadata
-      );
-
-      (&*dyn_repository).decrement_arc();
-   };
+      dyn_repository::from_addresses(env, native_repository_address, vtable_address)
+         .decrement_arc();
+   }
 }
 
 #[cfg(all(test, not(feature = "jvm")))]

@@ -18,7 +18,6 @@
 use std::sync::Arc;
 use jni::JNIEnv;
 use jni::objects::{JClass, JMethodID};
-use jni::sys::jlong;
 use crate::convert_jvm::CloneIntoJvmHelper;
 use crate::jvm_types::JvmRepository;
 use crate::repository::Repository;
@@ -49,9 +48,8 @@ impl<'local> JvmRepositoryCreator<'local> {
    where
       T: CloneIntoJvmHelper
    {
-      use std::{mem, ptr};
       use jni::objects::JValue;
-      use crate::dyn_repository::DynRepository;
+      use crate::dyn_repository;
       use crate::jvm_type::JvmType;
 
       /*
@@ -62,21 +60,15 @@ impl<'local> JvmRepositoryCreator<'local> {
        * それを復元し、動的ディスパッチでArcをデクリメントさせる。
        */
 
-      let dyn_repository: *const dyn DynRepository = Arc::into_raw(repo);
-      let repo_address = dyn_repository as *const Repository<T>;
-
-      let trait_object_metadata = ptr::metadata(dyn_repository);
-      let vtable_address: *const () = unsafe {
-         mem::transmute(trait_object_metadata)
-      };
+      let (repo_address, vtable_address) = dyn_repository::addresses_as_jlong(repo);
 
       let j_object = unsafe {
          env.new_object_unchecked(
             &self.repository_class,
             self.constructor_id,
             &[
-               JValue::Long(repo_address   as jlong).as_jni(),
-               JValue::Long(vtable_address as jlong).as_jni(),
+               JValue::Long(repo_address  ).as_jni(),
+               JValue::Long(vtable_address).as_jni(),
             ]
          ).unwrap()
       };
