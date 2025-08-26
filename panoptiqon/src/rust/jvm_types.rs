@@ -87,10 +87,13 @@ impl<'local> JvmType<'local> for JvmException<'local> {
 pub struct JvmNullable<'local, T>(
    T,
    PhantomData<&'local ()>
-) where T: JvmType<'local> + 'local;
+)
+where
+   T: JvmType<'local> + 'local;
 
 impl<'local, T> JvmType<'local> for JvmNullable<'local, T>
-   where T: JvmType<'local>
+where
+   T: JvmType<'local>
 {
    unsafe fn from_j_object(j_object: JObject<'local>) -> JvmNullable<'local, T> {
       JvmNullable(
@@ -127,12 +130,14 @@ impl<'local, T: JvmType<'local>> JvmType<'local> for JvmList<'local, T> {
 
 #[repr(transparent)]
 pub struct JvmPair<'local, A, B>(JObject<'local>, PhantomData<(A, B)>)
-   where A: JvmType<'local>,
-         B: JvmType<'local>;
+where
+   A: JvmType<'local>,
+   B: JvmType<'local>;
 
 impl<'local, A, B> JvmType<'local> for JvmPair<'local, A, B>
-   where A: JvmType<'local>,
-         B: JvmType<'local>
+where
+   A: JvmType<'local>,
+   B: JvmType<'local>
 {
    unsafe fn from_j_object(j_object: JObject<'local>) -> JvmPair<'local, A, B> {
       JvmPair(j_object, PhantomData)
@@ -149,14 +154,16 @@ impl<'local, A, B> JvmType<'local> for JvmPair<'local, A, B>
 
 #[repr(transparent)]
 pub struct JvmTriple<'local, A, B, C>(JObject<'local>, PhantomData<(A, B, C)>)
-   where A: JvmType<'local>,
-         B: JvmType<'local>,
-         C: JvmType<'local>;
+where
+   A: JvmType<'local>,
+   B: JvmType<'local>,
+   C: JvmType<'local>;
 
 impl<'local, A, B, C> JvmType<'local> for JvmTriple<'local, A, B, C>
-   where A: JvmType<'local>,
-         B: JvmType<'local>,
-         C: JvmType<'local>
+where
+   A: JvmType<'local>,
+   B: JvmType<'local>,
+   C: JvmType<'local>
 {
    unsafe fn from_j_object(j_object: JObject<'local>) -> JvmTriple<'local, A, B, C> {
       JvmTriple(j_object, PhantomData)
@@ -194,6 +201,27 @@ pub struct JvmRepository<'local, T: JvmType<'local>>(JObject<'local>, PhantomDat
 impl<'local, T: JvmType<'local>> JvmType<'local> for JvmRepository<'local, T> {
    unsafe fn from_j_object(j_object: JObject<'local>) -> JvmRepository<'local, T> {
       JvmRepository(j_object, PhantomData)
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0
+   }
+}
+
+/// Kotlinファイル上でなんらかの仮型引数が当てられていて、JNI呼び出し時には
+/// 型情報が消去されているもの
+#[repr(transparent)]
+pub(crate) struct JvmErased<'local>(
+   JObject<'local>
+);
+
+impl<'local> JvmType<'local> for JvmErased<'local> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmErased<'local> {
+      JvmErased(j_object)
    }
 
    fn j_object(&self) -> &JObject<'local> {
