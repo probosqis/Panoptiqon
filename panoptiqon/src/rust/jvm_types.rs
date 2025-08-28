@@ -241,5 +241,10 @@ jvm_type! {
    JvmLong,
    JvmFloat,
    JvmDouble,
+   JvmAny,
    JvmUnit,
+   // Nothing型のインスタンスが存在することはありえないが、仮にNothing型が
+   // 期待される場所になんらかのj_objectの値が存在した場合、それはJvmNothingと
+   // して扱えるべきであるため、他のJvmTypeと同様の実装とする
+   JvmNothing,
 }
