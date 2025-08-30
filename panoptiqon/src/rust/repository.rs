@@ -497,7 +497,7 @@ mod jni_tests {
    use crate::db::saver::Saver;
    use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
-   use crate::jvm_types::JvmRepository;
+   use crate::jvm_types::{JvmRepository, JvmString};
    use super::Repository;
 
    jvm_type! {
@@ -510,6 +510,7 @@ mod jni_tests {
 
    impl CacheContent for OneWayConversionData {
       type Key = String;
+      type JvmKey<'local> = JvmString<'local>;
       type JvmType<'local> = JvmOneWayConversionData<'local>;
 
       fn key(&self) -> &String {
@@ -543,6 +544,7 @@ mod jni_tests {
 
    impl CacheContent for TwoWayConversionData {
       type Key = String;
+      type JvmKey<'local> = JvmString<'local>;
       type JvmType<'local> = JvmTwoWayConversionData<'local>;
 
       fn key(&self) -> &String {

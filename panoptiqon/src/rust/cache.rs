@@ -337,6 +337,9 @@ pub trait CacheContent: Send + Sync + 'static {
    type Key: Clone + Hash + Eq + Send + Sync + 'static;
 
    #[cfg(feature = "jvm")]
+   type JvmKey<'local>: JvmType<'local>;
+
+   #[cfg(feature = "jvm")]
    type JvmType<'local>: JvmType<'local>;
 
    fn key(&self) -> &Self::Key;
@@ -614,7 +617,7 @@ mod jni_tests {
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
-   use crate::jvm_types::JvmCache;
+   use crate::jvm_types::{JvmCache, JvmInteger};
    use crate::repository::Repository;
    use super::Cache;
 
@@ -628,6 +631,7 @@ mod jni_tests {
 
    impl CacheContent for CacheContentImpl {
       type Key = i32;
+      type JvmKey<'local> = JvmInteger<'local>;
       type JvmType<'local> = JvmCacheContentImpl<'local>;
 
       fn key(&self) -> &i32 {
@@ -677,6 +681,7 @@ mod jni_tests {
 
    impl CacheContent for CacheContainer {
       type Key = i32;
+      type JvmKey<'local> = JvmInteger<'local>;
       type JvmType<'local> = JvmCacheContainer<'local>;
 
       fn key(&self) -> &i32 {
