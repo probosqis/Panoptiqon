@@ -16,7 +16,7 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
-class Repository<@Suppress("UNUSED_PARAMETER") T>(
+class Repository<K, @Suppress("UNUSED_PARAMETER") T>(
    @get:JvmName("getNativeRepositoryAddress")
    internal val nativeRepositoryAddress: Long,
    private val vtableAddress: Long

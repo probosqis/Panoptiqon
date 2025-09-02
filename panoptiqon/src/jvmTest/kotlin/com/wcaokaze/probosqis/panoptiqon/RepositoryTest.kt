@@ -27,8 +27,8 @@ class RepositoryTest {
       `restoreNativeRepositoryBorrow$assertPtr`(repository)
    }
 
-   private external fun `restoreNativeRepositoryBorrow$createRepository`(): Repository<TwoWayConversionData>
-   private external fun `restoreNativeRepositoryBorrow$assertPtr`(repository: Repository<TwoWayConversionData>)
+   private external fun `restoreNativeRepositoryBorrow$createRepository`(): Repository<String, TwoWayConversionData>
+   private external fun `restoreNativeRepositoryBorrow$assertPtr`(repository: Repository<String, TwoWayConversionData>)
 
    @Test
    fun gc_dropNativeRepository() {
@@ -40,6 +40,6 @@ class RepositoryTest {
       `gc_dropNativeRepository$assertDropped`()
    }
 
-   private external fun `gc_dropNativeRepository$createRepository`(): Repository<TwoWayConversionData>
+   private external fun `gc_dropNativeRepository$createRepository`(): Repository<String, TwoWayConversionData>
    private external fun `gc_dropNativeRepository$assertDropped`()
 }
