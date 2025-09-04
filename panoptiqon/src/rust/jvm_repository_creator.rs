@@ -18,7 +18,8 @@
 use std::sync::Arc;
 use jni::JNIEnv;
 use jni::objects::{JClass, JMethodID};
-use crate::convert_jvm::CloneIntoJvmHelper;
+use serde::Deserialize;
+use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper};
 use crate::jvm_types::JvmRepository;
 use crate::repository::Repository;
 
@@ -47,6 +48,9 @@ impl<'local> JvmRepositoryCreator<'local> {
    ) -> JvmRepository<'local, T::JvmType<'local>>
    where
       T: CloneIntoJvmHelper
+         + for<'de> Deserialize<'de>
+         + for<'a> CloneIntoJvm<'a, T::JvmType<'a>>,
+      T::Key: for<'a> CloneFromJvm<'a, T::JvmKey<'a>>
    {
       use jni::objects::JValue;
       use crate::dyn_repository;

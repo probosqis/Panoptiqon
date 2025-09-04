@@ -23,10 +23,20 @@ use {
    std::sync::Arc,
    jni::JNIEnv,
    jni::sys::jlong,
+   serde::Deserialize,
+   crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
+   crate::jvm_types::{JvmCache, JvmErased},
 };
 
 pub(crate) trait DynRepository: Send + Sync {
    fn content_type_id(&self) -> TypeId;
+
+   #[cfg(feature = "jvm")]
+   fn load_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      key: JvmErased<'local>
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>>;
 
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
    /// 解放されている可能性がある
@@ -34,15 +44,49 @@ pub(crate) trait DynRepository: Send + Sync {
    unsafe fn decrement_arc(&self);
 }
 
-impl<T: CacheContent> DynRepository for Repository<T> {
+#[cfg(feature = "jvm")]
+impl<T> DynRepository for Repository<T>
+where
+   T: CacheContent
+      + for<'de> Deserialize<'de>
+      + for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+      + CloneIntoJvmHelper,
+   T::Key: for<'local> CloneFromJvm<'local, T::JvmKey<'local>>
+{
    fn content_type_id(&self) -> TypeId {
       TypeId::of::<T>()
    }
 
-   #[cfg(feature = "jvm")]
+   fn load_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      key: JvmErased<'local>
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>> {
+      use crate::jvm_type::JvmType;
+
+      let key = unsafe {
+         let j_object = key.into_j_object();
+         T::JvmKey::from_j_object(j_object)
+      };
+      let key = T::Key::clone_from_jvm(env, &key);
+      let cache = &self.load(&key)?;
+
+      Ok(cache.clone_into_jvm(env))
+   }
+
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
       drop(arc);
+   }
+}
+
+#[cfg(not(feature = "jvm"))]
+impl<T> DynRepository for Repository<T>
+where
+   T: CacheContent
+{
+   fn content_type_id(&self) -> TypeId {
+      TypeId::of::<T>()
    }
 }
 
@@ -64,9 +108,16 @@ impl dyn DynRepository {
 /// RepositoryのアドレスとVTableのアドレスに分解する。すなわち、
 /// 後に[from_addresses]で復元されることを期待し、Arcを生きたまま分解する。
 #[cfg(feature = "jvm")]
-pub(crate) fn addresses_as_jlong<T: CacheContent>(
+pub(crate) fn addresses_as_jlong<T>(
    repo: Arc<Repository<T>>
-) -> (jlong, jlong) {
+) -> (jlong, jlong)
+where
+   T: CacheContent
+      + for<'de> Deserialize<'de>
+      + for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+      + CloneIntoJvmHelper,
+   T::Key: for<'local> CloneFromJvm<'local, T::JvmKey<'local>>
+{
    use std::{mem, ptr};
    use crate::dyn_repository::DynRepository;
 
@@ -85,7 +136,7 @@ pub(crate) fn addresses_as_jlong<T: CacheContent>(
 /// [addresses_as_jlong]の逆演算
 #[cfg(feature = "jvm")]
 pub(crate) fn from_addresses<'local>(
-   _env: JNIEnv<'local>,
+   _env: &JNIEnv<'local>,
    repo_address: jlong,
    vtable_address: jlong
 ) -> &'local dyn DynRepository {

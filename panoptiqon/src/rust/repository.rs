@@ -26,12 +26,11 @@ use crate::pool::UniqueCachePool;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
-   jni::objects::JObject,
+   jni::objects::{JObject, JThrowable},
    jni::sys::jlong,
-   crate::convert_jvm::CloneIntoJvm,
-   crate::convert_jvm::CloneIntoJvmHelper,
+   crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
    crate::jvm_type::JvmType,
-   crate::jvm_types::JvmRepository,
+   crate::jvm_types::{JvmCache, JvmErased, JvmRepository},
 };
 
 pub struct Repository<T: CacheContent> {
@@ -43,7 +42,8 @@ pub struct Repository<T: CacheContent> {
 
 impl<T: CacheContent> Repository<T> {
    fn _load_file(&self, file_path: impl AsRef<Path>) -> anyhow::Result<T>
-      where for<'de> T: Deserialize<'de>
+   where for<'de>
+      T: Deserialize<'de>
    {
       use std::fs::File;
       use std::io::BufReader;
@@ -81,7 +81,8 @@ impl<T: CacheContent> Repository<T> {
       loader: Weak<Loader>,
       dir_path: impl AsRef<Path>
    ) -> Self
-      where T: CloneIntoJvmHelper
+   where
+      T: CloneIntoJvmHelper
    {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
@@ -101,7 +102,8 @@ impl<T: CacheContent> Repository<T> {
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self
-      where T: CloneIntoJvmHelper
+   where
+      T: CloneIntoJvmHelper
    {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
@@ -127,9 +129,10 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn save(&self, value: T) -> Cache<T>
-      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
-               + CloneIntoJvmHelper
-               + Serialize
+   where
+      T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
+         + Serialize
    {
       let key = T::Key::clone(value.key());
       let arc = self.pool.update(key, value);
@@ -137,9 +140,10 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>>
-      where for<'de, 'local> T: Deserialize<'de>
-            + CloneIntoJvm<'local, T::JvmType<'local>>
-            + CloneIntoJvmHelper
+   where
+      T: for<'de> Deserialize<'de>
+         + for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
    {
       let Some(arc) = self.pool.get(key) else {
          let file_path = T::file_path_for_key(self.pool.dir_path(), key);
@@ -161,9 +165,10 @@ impl<T: CacheContent> Repository<T> {
       &self,
       file_path: impl AsRef<Path>
    ) -> anyhow::Result<Cache<T>>
-      where for<'de, 'local> T: Deserialize<'de>
-            + CloneIntoJvm<'local, T::JvmType<'local>>
-            + CloneIntoJvmHelper
+   where for<'de, 'local>
+      T: Deserialize<'de>
+         + CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
    {
       let cache_content = self._load_file(file_path)?;
       let key = T::Key::clone(cache_content.key());
@@ -206,7 +211,8 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn save(&self, value: T) -> Cache<T>
-      where T: Serialize
+   where
+      T: Serialize
    {
       let key = T::Key::clone(value.key());
       let arc = self.pool.update(key, value);
@@ -214,7 +220,8 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>>
-      where for<'de> T: Deserialize<'de>
+   where
+      T: for<'de> Deserialize<'de>
    {
       let Some(arc) = self.pool.get(key) else {
          let file_path = T::file_path_for_key(self.pool.dir_path(), key);
@@ -236,7 +243,8 @@ impl<T: CacheContent> Repository<T> {
       &self,
       file_path: impl AsRef<Path>
    ) -> anyhow::Result<Cache<T>>
-      where for<'de> T: Deserialize<'de>
+   where
+      T: for<'de> Deserialize<'de>
    {
       let cache_content = self._load_file(file_path)?;
       let key = T::Key::clone(cache_content.key());
@@ -266,8 +274,38 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeReposi
    use crate::dyn_repository;
 
    unsafe {
-      dyn_repository::from_addresses(env, native_repository_address, vtable_address)
+      dyn_repository::from_addresses(&env, native_repository_address, vtable_address)
          .decrement_arc();
+   }
+}
+
+#[cfg(feature = "jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_load<'local>(
+   mut env: JNIEnv<'local>,
+   _obj: JvmRepository<'local, JvmErased<'local>>,
+   key: JvmErased<'local>,
+   native_repository_address: jlong,
+   vtable_address: jlong
+) -> JvmCache<'local, JvmErased<'local>> {
+   use crate::dyn_repository;
+
+   let result = dyn_repository::from_addresses(&env, native_repository_address, vtable_address)
+      .load_jvm(&mut env, key);
+
+   match result {
+      Ok(repo) => repo,
+      Err(e) => {
+         let message = e.to_string().clone_into_jvm(&mut env);
+         let exception = JThrowable::from(
+            env.new_object(
+               "java/io/IOException", "(Ljava/lang/String;)V",
+               &[message.j_string().into()]
+            ).unwrap()
+         );
+         env.throw(exception).unwrap();
+         unsafe { JvmCache::from_j_object(JObject::null()) }
+      }
    }
 }
 
@@ -492,12 +530,14 @@ mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::JObject;
    use serde::{Deserialize, Serialize};
-   use crate::cache::CacheContent;
+   use crate::cache::{Cache, CacheContent};
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::saver::Saver;
    use crate::db::scheduler::DbScheduler;
+   use crate::jvm_repository_creator::JvmRepositoryCreator;
    use crate::jvm_type;
-   use crate::jvm_types::{JvmRepository, JvmString};
+   use crate::jvm_type::JvmType;
+   use crate::jvm_types::{JvmCache, JvmRepository, JvmString};
    use super::Repository;
 
    jvm_type! {
@@ -1064,5 +1104,71 @@ mod jni_tests {
    ) {
       let lock = gc_dropNativeRepository_repoExists.lock().unwrap();
       assert!(!*lock);
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_load_1viaJvmRepository_00024createRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let repo = Arc::new(Repository::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/NativeRepositoryTest/load_viaJvmRepository",
+         /* drop_observer = */ || ()
+      ));
+
+      repo.save(
+         TwoWayConversionData("A".to_string(), 42)
+      );
+
+      repository_creator.create_jvm_wrapper(&mut env, Arc::clone(&repo))
+   }
+
+   #[allow(non_upper_case_globals)]
+   static load_viaJvmRepository_sameCache_repository: Mutex<Option<Arc<Repository<TwoWayConversionData>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_load_1viaJvmRepository_1sameCache_00024createRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let repo = Arc::new(Repository::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/NativeRepositoryTest/load_viaJvmRepository",
+         /* drop_observer = */ || ()
+      ));
+
+      *load_viaJvmRepository_sameCache_repository.lock().unwrap() = Some(Arc::clone(&repo));
+
+      repo.save(
+         TwoWayConversionData("A".to_string(), 42)
+      );
+
+      repository_creator.create_jvm_wrapper(&mut env, Arc::clone(&repo))
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_load_1viaJvmRepository_1sameCache_00024assertSameCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      cache: JvmCache<'local, JvmTwoWayConversionData<'local>>
+   ) {
+      let jvm_cache = unsafe {
+         Cache::from_jvm_instance(&mut env, cache.j_object())
+      };
+
+      let lock = load_viaJvmRepository_sameCache_repository.lock().unwrap();
+      let cache = lock.as_ref().unwrap().load(&"A".to_string()).unwrap();
+
+      assert_eq!(
+         cache    .unique_cache_ptr(),
+         jvm_cache.unique_cache_ptr()
+      );
    }
 }
