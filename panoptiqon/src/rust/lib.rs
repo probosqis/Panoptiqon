@@ -30,18 +30,22 @@ use crate::repository::Repository;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
-   crate::convert_jvm::CloneIntoJvmHelper,
+   serde::Deserialize,
+   crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
 };
 
 pub mod cache;
 pub mod repository;
 
 pub(crate) mod db;
+pub(crate) mod dyn_repository;
 mod pool;
 mod unique_cache;
 
 #[cfg(feature = "jvm")]
 pub mod convert_jvm;
+#[cfg(feature = "jvm")]
+pub mod jvm_repository_creator;
 #[cfg(feature = "jvm")]
 pub mod jvm_type;
 #[cfg(feature = "jvm")]
@@ -67,7 +71,8 @@ impl Panoptiqon {
       &self,
       dir_path: impl AsRef<Path>
    ) -> Arc<Repository<T>>
-      where T: CacheContent
+   where
+      T: CacheContent
    {
       let repository = Arc::new(
          Repository::new(
@@ -89,7 +94,12 @@ impl Panoptiqon {
       env: &mut JNIEnv,
       dir_path: impl AsRef<Path>
    ) -> Arc<Repository<T>>
-      where T: CacheContent + CloneIntoJvmHelper
+   where
+      T: CacheContent
+         + CloneIntoJvmHelper
+         + for<'de> Deserialize<'de>
+         + for<'a> CloneIntoJvm<'a, T::JvmType<'a>>,
+      T::Key: for<'a> CloneFromJvm<'a, T::JvmKey<'a>>
    {
       let repository = Arc::new(
          Repository::new(

@@ -16,7 +16,7 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
-class Repository<@Suppress("UNUSED_PARAMETER") T>(
+class Repository<K, T>(
    @get:JvmName("getNativeRepositoryAddress")
    internal val nativeRepositoryAddress: Long,
    private val vtableAddress: Long
@@ -25,6 +25,16 @@ class Repository<@Suppress("UNUSED_PARAMETER") T>(
       nativeRepositoryAddress: Long,
       vtableAddress: Long
    )
+
+   fun load(key: K): Cache<T> {
+      return load(key, nativeRepositoryAddress, vtableAddress)
+   }
+
+   private external fun load(
+      key: K,
+      nativeRepositoryAddress: Long,
+      vtableAddress: Long
+   ): Cache<T>
 
    @Deprecated("")
    override fun finalize() {

@@ -281,6 +281,7 @@ mod jni_tests {
    use crate::convert_jvm::CloneIntoJvm;
    use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
+   use crate::jvm_types::JvmString;
    use super::UniqueCachePool;
 
    jvm_type! {
@@ -292,6 +293,7 @@ mod jni_tests {
 
    impl CacheContent for Content {
       type Key = String;
+      type JvmKey<'local> = JvmString<'local>;
       type JvmType<'local> = JvmContent<'local>;
 
       fn key(&self) -> &String {

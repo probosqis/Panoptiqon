@@ -17,12 +17,13 @@
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::sync::{Arc, MutexGuard, RwLock};
+use std::sync::{Arc, RwLock};
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer};
 use serde_json::de::IoRead;
 use crate::cache::{Cache, CacheContent};
-use crate::repository::{DynRepository, Repository};
+use crate::dyn_repository::DynRepository;
+use crate::Repository;
 
 #[cfg(feature = "jvm")]
 use {
@@ -275,28 +276,20 @@ impl Loader {
       lock.push(repository);
    }
 
-   fn find_repository<T: CacheContent>(
-      &self,
+   fn find_repository<'a, T: CacheContent>(
+      repositories: &'a [Arc<dyn DynRepository>],
       repository_dir_path: &Path
-   ) -> anyhow::Result<&Repository<T>> {
-      use std::any::{self, TypeId};
+   ) -> anyhow::Result<&'a Repository<T>> {
+      use std::any;
       use anyhow::Context;
 
-      let lock = self.repositories.read()
-         .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
-
-      let arc = lock.iter()
-         .find(|repo| repo.can_load(repository_dir_path, TypeId::of::<T>()))
+      let repository = repositories.iter()
+         .filter_map(|repo| repo.downcast::<T>())
+         .find(|repo| repo.dir_path() == repository_dir_path)
          .context(format!(
             "Repository not found (repo dir: {}, content type: {})",
             repository_dir_path.display(), any::type_name::<T>()
          ))?;
-
-      let repository = unsafe {
-         let dyn_repository: *const dyn DynRepository = Arc::as_ptr(&arc);
-         let repository_address = dyn_repository as *const Repository<T>;
-         &*repository_address
-      };
 
       Ok(repository)
    }
@@ -309,7 +302,9 @@ impl Loader {
    ) -> anyhow::Result<Cache<T>>
       where for<'de> T: CacheContent + Deserialize<'de>
    {
-      let repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      let lock = self.repositories.read()
+         .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
+      let repository_lock = Self::find_repository(&*lock, repository_dir_path.as_ref())?;
       repository_lock.load_file(file_path)
    }
 
@@ -323,7 +318,9 @@ impl Loader {
             + CloneIntoJvm<'local, T::JvmType<'local>>
             + CloneIntoJvmHelper
    {
-      let repository_lock = self.find_repository(repository_dir_path.as_ref())?;
+      let lock = self.repositories.read()
+         .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
+      let repository_lock = Self::find_repository(&*lock, repository_dir_path.as_ref())?;
       repository_lock.load_file(file_path)
    }
 

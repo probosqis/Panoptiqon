@@ -17,18 +17,23 @@
 package com.wcaokaze.probosqis.panoptiqon
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 private typealias TwoWayConversionData = NativeRepositoryTest.TwoWayConversionData
 
 class RepositoryTest {
+   init {
+      loadNativeLib()
+   }
+
    @Test
    fun restoreNativeRepositoryBorrow() {
       val repository = `restoreNativeRepositoryBorrow$createRepository`()
       `restoreNativeRepositoryBorrow$assertPtr`(repository)
    }
 
-   private external fun `restoreNativeRepositoryBorrow$createRepository`(): Repository<TwoWayConversionData>
-   private external fun `restoreNativeRepositoryBorrow$assertPtr`(repository: Repository<TwoWayConversionData>)
+   private external fun `restoreNativeRepositoryBorrow$createRepository`(): Repository<String, TwoWayConversionData>
+   private external fun `restoreNativeRepositoryBorrow$assertPtr`(repository: Repository<String, TwoWayConversionData>)
 
    @Test
    fun gc_dropNativeRepository() {
@@ -40,6 +45,29 @@ class RepositoryTest {
       `gc_dropNativeRepository$assertDropped`()
    }
 
-   private external fun `gc_dropNativeRepository$createRepository`(): Repository<TwoWayConversionData>
+   private external fun `gc_dropNativeRepository$createRepository`(): Repository<String, TwoWayConversionData>
    private external fun `gc_dropNativeRepository$assertDropped`()
+
+   @Test
+   fun load_viaJvmRepository() {
+      val repository = `load_viaJvmRepository$createRepository`()
+
+      assertEquals(
+         TwoWayConversionData("A", 42),
+         repository.load("A").value
+      )
+   }
+
+   private external fun `load_viaJvmRepository$createRepository`(): Repository<String, TwoWayConversionData>
+
+   @Test
+   fun load_viaJvmRepository_sameCache() {
+      val repository = `load_viaJvmRepository_sameCache$createRepository`()
+      val cache = repository.load("A")
+
+      `load_viaJvmRepository_sameCache$assertSameCache`(cache)
+   }
+
+   private external fun `load_viaJvmRepository_sameCache$createRepository`(): Repository<String, TwoWayConversionData>
+   private external fun `load_viaJvmRepository_sameCache$assertSameCache`(cache: Cache<TwoWayConversionData>)
 }

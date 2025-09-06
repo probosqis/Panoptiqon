@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-use std::any::TypeId;
 use std::path::Path;
 use std::sync::{Arc, Weak};
 use serde::{Deserialize, Serialize};
@@ -27,12 +26,11 @@ use crate::pool::UniqueCachePool;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
-   jni::objects::{JClass, JMethodID, JObject},
+   jni::objects::{JObject, JThrowable},
    jni::sys::jlong,
-   crate::convert_jvm::CloneIntoJvm,
-   crate::convert_jvm::CloneIntoJvmHelper,
+   crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
    crate::jvm_type::JvmType,
-   crate::jvm_types::JvmRepository,
+   crate::jvm_types::{JvmCache, JvmErased, JvmRepository},
 };
 
 pub struct Repository<T: CacheContent> {
@@ -44,7 +42,8 @@ pub struct Repository<T: CacheContent> {
 
 impl<T: CacheContent> Repository<T> {
    fn _load_file(&self, file_path: impl AsRef<Path>) -> anyhow::Result<T>
-      where for<'de> T: Deserialize<'de>
+   where for<'de>
+      T: Deserialize<'de>
    {
       use std::fs::File;
       use std::io::BufReader;
@@ -64,6 +63,10 @@ impl<T: CacheContent> Repository<T> {
       Ok(cache_content)
    }
 
+   pub(crate) fn dir_path(&self) -> &Path {
+      self.pool.dir_path()
+   }
+
    #[cfg(any(test, feature = "testable"))]
    pub(crate) fn loader(&self) -> &Weak<Loader> {
       &self.loader
@@ -78,7 +81,8 @@ impl<T: CacheContent> Repository<T> {
       loader: Weak<Loader>,
       dir_path: impl AsRef<Path>
    ) -> Self
-      where T: CloneIntoJvmHelper
+   where
+      T: CloneIntoJvmHelper
    {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
@@ -98,7 +102,8 @@ impl<T: CacheContent> Repository<T> {
       dir_path: impl AsRef<Path>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self
-      where T: CloneIntoJvmHelper
+   where
+      T: CloneIntoJvmHelper
    {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
@@ -124,9 +129,10 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn save(&self, value: T) -> Cache<T>
-      where T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
-               + CloneIntoJvmHelper
-               + Serialize
+   where
+      T: for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
+         + Serialize
    {
       let key = T::Key::clone(value.key());
       let arc = self.pool.update(key, value);
@@ -134,9 +140,10 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>>
-      where for<'de, 'local> T: Deserialize<'de>
-            + CloneIntoJvm<'local, T::JvmType<'local>>
-            + CloneIntoJvmHelper
+   where
+      T: for<'de> Deserialize<'de>
+         + for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
    {
       let Some(arc) = self.pool.get(key) else {
          let file_path = T::file_path_for_key(self.pool.dir_path(), key);
@@ -158,105 +165,15 @@ impl<T: CacheContent> Repository<T> {
       &self,
       file_path: impl AsRef<Path>
    ) -> anyhow::Result<Cache<T>>
-      where for<'de, 'local> T: Deserialize<'de>
-            + CloneIntoJvm<'local, T::JvmType<'local>>
-            + CloneIntoJvmHelper
+   where for<'de, 'local>
+      T: Deserialize<'de>
+         + CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
    {
       let cache_content = self._load_file(file_path)?;
       let key = T::Key::clone(cache_content.key());
       let unique_cache = self.pool.insert_if_vacant(key, cache_content);
       Ok(Cache::new(unique_cache))
-   }
-}
-
-pub(crate) trait DynRepository: Send + Sync {
-   fn can_load(
-      &self,
-      dir_path: &Path,
-      content_type_id: TypeId
-   ) -> bool;
-
-   /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
-   /// 解放されている可能性がある
-   #[cfg(feature = "jvm")]
-   unsafe fn decrement_arc(&self);
-}
-
-impl<T: CacheContent> DynRepository for Repository<T> {
-   fn can_load(
-      &self,
-      dir_path: &Path,
-      content_type_id: TypeId
-   ) -> bool {
-      self.pool.dir_path().as_path() == dir_path
-         && content_type_id == TypeId::of::<T>()
-   }
-
-   #[cfg(feature = "jvm")]
-   unsafe fn decrement_arc(&self) {
-      let arc = Arc::from_raw(self as *const _);
-      drop(arc);
-   }
-}
-
-#[cfg(feature = "jvm")]
-pub struct JvmRepositoryCreator<'local> {
-   repository_class: JClass<'local>,
-   constructor_id: JMethodID
-}
-
-#[cfg(feature = "jvm")]
-impl<'local> JvmRepositoryCreator<'local> {
-   pub fn new(env: &mut JNIEnv<'local>) -> Self {
-      let repository_class =
-         env.find_class("com/wcaokaze/probosqis/panoptiqon/Repository").unwrap();
-      let constructor_id =
-         env.get_method_id(&repository_class, "<init>", "(JJ)V").unwrap();
-
-      Self {
-         repository_class,
-         constructor_id
-      }
-   }
-
-   pub fn create_jvm_wrapper<T>(
-      &self,
-      env: &mut JNIEnv<'local>,
-      repo: Arc<Repository<T>>,
-   ) -> JvmRepository<'local, T::JvmType<'local>>
-      where T: CloneIntoJvmHelper
-   {
-      use std::{mem, ptr};
-      use jni::objects::JValue;
-
-      /*
-       * JVMインスタンスのfinalizeでArcの参照カウントをデクリメントする必要が
-       * あるが、一度JVMインスタンスに管理させることで参照先の
-       * 型情報(Repository<T>)が失われ、アドレスから元の構造体を復元できなくなる。
-       * そのため、DynRepositoryのトレイトオブジェクトを生成し、finalize時にも
-       * それを復元し、動的ディスパッチでArcをデクリメントさせる。
-       */
-
-      let dyn_repository: *const dyn DynRepository = Arc::into_raw(repo);
-      let repo_address = dyn_repository as *const Repository<T>;
-
-      let trait_object_metadata = ptr::metadata(dyn_repository);
-      let vtable_address: *const () = unsafe {
-         mem::transmute(trait_object_metadata)
-      };
-
-      let j_object = unsafe {
-         env.new_object_unchecked(
-            &self.repository_class,
-            self.constructor_id,
-            &[
-               JValue::Long(repo_address   as jlong).as_jni(),
-               JValue::Long(vtable_address as jlong).as_jni(),
-            ]
-         ).unwrap()
-      };
-
-      unsafe { JvmRepository::from_j_object(j_object) }
    }
 }
 
@@ -294,7 +211,8 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn save(&self, value: T) -> Cache<T>
-      where T: Serialize
+   where
+      T: Serialize
    {
       let key = T::Key::clone(value.key());
       let arc = self.pool.update(key, value);
@@ -302,7 +220,8 @@ impl<T: CacheContent> Repository<T> {
    }
 
    pub fn load(&self, key: &T::Key) -> anyhow::Result<Cache<T>>
-      where for<'de> T: Deserialize<'de>
+   where
+      T: for<'de> Deserialize<'de>
    {
       let Some(arc) = self.pool.get(key) else {
          let file_path = T::file_path_for_key(self.pool.dir_path(), key);
@@ -324,7 +243,8 @@ impl<T: CacheContent> Repository<T> {
       &self,
       file_path: impl AsRef<Path>
    ) -> anyhow::Result<Cache<T>>
-      where for<'de> T: Deserialize<'de>
+   where
+      T: for<'de> Deserialize<'de>
    {
       let cache_content = self._load_file(file_path)?;
       let key = T::Key::clone(cache_content.key());
@@ -346,23 +266,47 @@ impl<T: CacheContent> Drop for Repository<T> {
 #[cfg(feature = "jvm")]
 #[no_mangle]
 extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_dropNativeRepository<'local>(
-   _env: JNIEnv<'local>,
+   env: JNIEnv<'local>,
    _obj: JObject<'local>,
    native_repository_address: jlong,
    vtable_address: jlong
 ) {
-   use std::{mem, ptr};
+   use crate::dyn_repository;
 
    unsafe {
-      let vtable_address = vtable_address as *const ();
-      let dyn_metadata = mem::transmute(vtable_address);
+      dyn_repository::from_addresses(&env, native_repository_address, vtable_address)
+         .decrement_arc();
+   }
+}
 
-      let dyn_repository: *const dyn DynRepository = ptr::from_raw_parts(
-         native_repository_address as *const (), dyn_metadata
-      );
+#[cfg(feature = "jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_load<'local>(
+   mut env: JNIEnv<'local>,
+   _obj: JvmRepository<'local, JvmErased<'local>>,
+   key: JvmErased<'local>,
+   native_repository_address: jlong,
+   vtable_address: jlong
+) -> JvmCache<'local, JvmErased<'local>> {
+   use crate::dyn_repository;
 
-      (&*dyn_repository).decrement_arc();
-   };
+   let result = dyn_repository::from_addresses(&env, native_repository_address, vtable_address)
+      .load_jvm(&mut env, key);
+
+   match result {
+      Ok(repo) => repo,
+      Err(e) => {
+         let message = e.to_string().clone_into_jvm(&mut env);
+         let exception = JThrowable::from(
+            env.new_object(
+               "java/io/IOException", "(Ljava/lang/String;)V",
+               &[message.j_string().into()]
+            ).unwrap()
+         );
+         env.throw(exception).unwrap();
+         unsafe { JvmCache::from_j_object(JObject::null()) }
+      }
+   }
 }
 
 #[cfg(all(test, not(feature = "jvm")))]
@@ -385,69 +329,6 @@ mod test {
       fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
          dir_path.join(key.to_string())
       }
-   }
-
-   #[test]
-   fn can_load() {
-      use std::any::TypeId;
-      use std::sync::{Arc, Weak};
-      use crate::db::saver::{DirPath, Saver};
-      use crate::db::scheduler::DbScheduler;
-      use super::{DynRepository, Repository};
-
-      struct AnotherCacheContentImpl(i32, i32);
-
-      impl CacheContent for AnotherCacheContentImpl {
-         type Key = i32;
-
-         fn key(&self) -> &i32 {
-            &self.0
-         }
-
-         fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
-            dir_path.join(key.to_string())
-         }
-      }
-
-      let repository = Repository::<CacheContentImpl>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
-         /* loader = */ Weak::new(),
-         "test/Repository/can_load"
-      );
-
-      let dyn_repository: &dyn DynRepository = &repository;
-
-      assert_eq!(
-         true,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("test/Repository/can_load")),
-            TypeId::of::<CacheContentImpl>()
-         )
-      );
-
-      assert_eq!(
-         false,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("unmatched/dir/path")),
-            TypeId::of::<CacheContentImpl>()
-         )
-      );
-
-      assert_eq!(
-         false,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("test/Repository/can_load")),
-            TypeId::of::<AnotherCacheContentImpl>()
-         )
-      );
-
-      assert_eq!(
-         false,
-         dyn_repository.can_load(
-            &DirPath::new(PathBuf::from("unmatched/dir/path")),
-            TypeId::of::<AnotherCacheContentImpl>()
-         )
-      );
    }
 
    #[allow(non_snake_case)]
@@ -649,12 +530,14 @@ mod jni_tests {
    use jni::JNIEnv;
    use jni::objects::JObject;
    use serde::{Deserialize, Serialize};
-   use crate::cache::CacheContent;
+   use crate::cache::{Cache, CacheContent};
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
    use crate::db::saver::Saver;
    use crate::db::scheduler::DbScheduler;
+   use crate::jvm_repository_creator::JvmRepositoryCreator;
    use crate::jvm_type;
-   use crate::jvm_types::JvmRepository;
+   use crate::jvm_type::JvmType;
+   use crate::jvm_types::{JvmCache, JvmRepository, JvmString};
    use super::Repository;
 
    jvm_type! {
@@ -667,6 +550,7 @@ mod jni_tests {
 
    impl CacheContent for OneWayConversionData {
       type Key = String;
+      type JvmKey<'local> = JvmString<'local>;
       type JvmType<'local> = JvmOneWayConversionData<'local>;
 
       fn key(&self) -> &String {
@@ -700,6 +584,7 @@ mod jni_tests {
 
    impl CacheContent for TwoWayConversionData {
       type Key = String;
+      type JvmKey<'local> = JvmString<'local>;
       type JvmType<'local> = JvmTwoWayConversionData<'local>;
 
       fn key(&self) -> &String {
@@ -1145,7 +1030,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
-      use super::JvmRepositoryCreator;
+      use crate::jvm_repository_creator::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
       let repo = Arc::new(
@@ -1189,7 +1074,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
-      use super::JvmRepositoryCreator;
+      use crate::jvm_repository_creator::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
       let repo = Arc::new(
@@ -1219,5 +1104,71 @@ mod jni_tests {
    ) {
       let lock = gc_dropNativeRepository_repoExists.lock().unwrap();
       assert!(!*lock);
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_load_1viaJvmRepository_00024createRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let repo = Arc::new(Repository::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/NativeRepositoryTest/load_viaJvmRepository",
+         /* drop_observer = */ || ()
+      ));
+
+      repo.save(
+         TwoWayConversionData("A".to_string(), 42)
+      );
+
+      repository_creator.create_jvm_wrapper(&mut env, Arc::clone(&repo))
+   }
+
+   #[allow(non_upper_case_globals)]
+   static load_viaJvmRepository_sameCache_repository: Mutex<Option<Arc<Repository<TwoWayConversionData>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_load_1viaJvmRepository_1sameCache_00024createRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let repo = Arc::new(Repository::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/NativeRepositoryTest/load_viaJvmRepository",
+         /* drop_observer = */ || ()
+      ));
+
+      *load_viaJvmRepository_sameCache_repository.lock().unwrap() = Some(Arc::clone(&repo));
+
+      repo.save(
+         TwoWayConversionData("A".to_string(), 42)
+      );
+
+      repository_creator.create_jvm_wrapper(&mut env, Arc::clone(&repo))
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_load_1viaJvmRepository_1sameCache_00024assertSameCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      cache: JvmCache<'local, JvmTwoWayConversionData<'local>>
+   ) {
+      let jvm_cache = unsafe {
+         Cache::from_jvm_instance(&mut env, cache.j_object())
+      };
+
+      let lock = load_viaJvmRepository_sameCache_repository.lock().unwrap();
+      let cache = lock.as_ref().unwrap().load(&"A".to_string()).unwrap();
+
+      assert_eq!(
+         cache    .unique_cache_ptr(),
+         jvm_cache.unique_cache_ptr()
+      );
    }
 }
