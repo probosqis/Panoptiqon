@@ -69,5 +69,5 @@ class RepositoryTest {
    }
 
    private external fun `load_viaJvmRepository_sameCache$createRepository`(): Repository<String, TwoWayConversionData>
-   private external fun `load_viaJvmRepository_sameCache$assertSameCache`(cache: Cache<TwoWayConversionData>)
+   private external fun `load_viaJvmRepository_sameCache$assertSameCache`(cache: WritableCache<TwoWayConversionData>)
 }

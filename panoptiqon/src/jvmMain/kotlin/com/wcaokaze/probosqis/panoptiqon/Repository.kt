@@ -26,7 +26,7 @@ class Repository<K, T>(
       vtableAddress: Long
    )
 
-   fun load(key: K): Cache<T> {
+   fun load(key: K): WritableCache<T> {
       return load(key, nativeRepositoryAddress, vtableAddress)
    }
 
@@ -34,7 +34,7 @@ class Repository<K, T>(
       key: K,
       nativeRepositoryAddress: Long,
       vtableAddress: Long
-   ): Cache<T>
+   ): WritableCache<T>
 
    @Deprecated("")
    override fun finalize() {
