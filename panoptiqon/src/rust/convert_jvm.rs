@@ -22,8 +22,8 @@ use jni::sys::jvalue;
 use crate::cache::{Cache, CacheContent};
 use crate::jvm_type::JvmType;
 use crate::jvm_types::{
-   JvmBoolean, JvmByte, JvmCache, JvmDouble, JvmFloat, JvmInteger, JvmList,
-   JvmLong, JvmNullable, JvmPair, JvmShort, JvmString, JvmTriple, JvmUnit,
+   JvmBoolean, JvmByte, JvmByteArray, JvmCache, JvmDouble, JvmFloat, JvmInteger,
+   JvmList, JvmLong, JvmNullable, JvmPair, JvmShort, JvmString, JvmTriple, JvmUnit,
 };
 use crate::unique_cache::{
    DynOneWayUniqueCache, DynTwoWayUniqueCache, JvmUniqueCacheRefs, UniqueCache,
@@ -432,6 +432,29 @@ impl<'local> CloneFromJvm<'local, JvmDouble<'local>> for f64 {
       env.call_method(
          java_instance.j_object(), "doubleValue", "()D", &[]
       ).unwrap().d().unwrap()
+   }
+}
+
+/// byte[]
+impl<'local> CloneIntoJvm<'local, JvmByteArray<'local>> for [u8] {
+   fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmByteArray<'local> {
+      let j_byte_array = env.byte_array_from_slice(&self).unwrap();
+      JvmByteArray::from_j_byte_array(j_byte_array)
+   }
+}
+
+impl<'local> CloneIntoJvm<'local, JvmByteArray<'local>> for Vec<u8> {
+   fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmByteArray<'local> {
+      (&self as &[u8]).clone_into_jvm(env)
+   }
+}
+
+impl<'local> CloneFromJvm<'local, JvmByteArray<'local>> for Vec<u8> {
+   fn clone_from_jvm(
+      env: &mut JNIEnv<'local>,
+      java_instance: &JvmByteArray<'local>
+   ) -> Vec<u8> {
+      env.convert_byte_array(java_instance.j_byte_array()).unwrap()
    }
 }
 

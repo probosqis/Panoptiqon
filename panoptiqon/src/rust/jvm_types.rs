@@ -17,7 +17,7 @@
 #![cfg(feature = "jvm")]
 
 use std::marker::PhantomData;
-use jni::objects::{JObject, JString, JThrowable};
+use jni::objects::{JByteArray, JObject, JString, JThrowable};
 use crate::jvm_type;
 use crate::jvm_type::JvmType;
 
@@ -41,6 +41,37 @@ impl<'local> JvmString<'local> {
 impl<'local> JvmType<'local> for JvmString<'local> {
    unsafe fn from_j_object(j_object: JObject<'local>) -> JvmString<'local> {
       JvmString(j_object.into())
+   }
+
+   fn j_object(&self) -> &JObject<'local> {
+      &self.0
+   }
+
+   fn into_j_object(self) -> JObject<'local> {
+      self.0.into()
+   }
+}
+
+#[repr(transparent)]
+pub struct JvmByteArray<'local>(JByteArray<'local>);
+
+impl<'local> JvmByteArray<'local> {
+   pub fn from_j_byte_array(j_byte_array: JByteArray<'local>) -> JvmByteArray<'local> {
+      JvmByteArray(j_byte_array)
+   }
+
+   pub fn j_byte_array(&self) -> &JByteArray<'local> {
+      &self.0
+   }
+
+   pub fn into_j_byte_array(self) -> JByteArray<'local> {
+      self.0
+   }
+}
+
+impl<'local> JvmType<'local> for JvmByteArray<'local> {
+   unsafe fn from_j_object(j_object: JObject<'local>) -> JvmByteArray<'local> {
+      JvmByteArray(j_object.into())
    }
 
    fn j_object(&self) -> &JObject<'local> {
