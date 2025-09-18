@@ -293,10 +293,35 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_load<'local>(
    let result = dyn_repository::from_addresses(&env, native_repository_address, vtable_address)
       .load_jvm(&mut env, key);
 
+   unwrap_or_throw(&mut env, result)
+}
+
+#[cfg(feature = "jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_Repository_save<'local>(
+   mut env: JNIEnv<'local>,
+   _obj: JvmRepository<'local, JvmErased<'local>>,
+   value: JvmErased<'local>,
+   native_repository_address: jlong,
+   vtable_address: jlong
+) -> JvmCache<'local, JvmErased<'local>> {
+   use crate::dyn_repository;
+
+   let result = dyn_repository::from_addresses(&env, native_repository_address, vtable_address)
+      .save_jvm(&mut env, value);
+
+   unwrap_or_throw(&mut env, result)
+}
+
+#[cfg(feature = "jvm")]
+fn unwrap_or_throw<'local>(
+   env: &mut JNIEnv<'local>,
+   result: anyhow::Result<JvmCache<'local, JvmErased<'local>>>
+) -> JvmCache<'local, JvmErased<'local>> {
    match result {
-      Ok(repo) => repo,
+      Ok(cache) => cache,
       Err(e) => {
-         let message = e.to_string().clone_into_jvm(&mut env);
+         let message = e.to_string().clone_into_jvm(env);
          let exception = JThrowable::from(
             env.new_object(
                "java/io/IOException", "(Ljava/lang/String;)V",
@@ -1140,7 +1165,7 @@ mod jni_tests {
          &mut env,
          Arc::new(DbScheduler::new(Saver::new())),
          /* loader = */ Weak::new(),
-         "test/NativeRepositoryTest/load_viaJvmRepository",
+         "test/NativeRepositoryTest/load_viaJvmRepository_sameCache",
          /* drop_observer = */ || ()
       ));
 
@@ -1164,6 +1189,83 @@ mod jni_tests {
       };
 
       let lock = load_viaJvmRepository_sameCache_repository.lock().unwrap();
+      let cache = lock.as_ref().unwrap().load(&"A".to_string()).unwrap();
+
+      assert_eq!(
+         cache    .unique_cache_ptr(),
+         jvm_cache.unique_cache_ptr()
+      );
+   }
+
+   #[allow(non_upper_case_globals)]
+   static save_viaJvmRepository_repository: Mutex<Option<Arc<Repository<TwoWayConversionData>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_save_1viaJvmRepository_00024createRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let repo = Arc::new(Repository::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/NativeRepositoryTest/save_viaJvmRepository",
+         /* drop_observer = */ || ()
+      ));
+
+      *save_viaJvmRepository_repository.lock().unwrap() = Some(Arc::clone(&repo));
+
+      repository_creator.create_jvm_wrapper(&mut env, Arc::clone(&repo))
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_save_1viaJvmRepository_00024assert<'local>(
+      _env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      let lock = save_viaJvmRepository_repository.lock().unwrap();
+      let cache = lock.as_ref().unwrap().load(&"A".to_string()).unwrap();
+
+      assert_eq!(
+         TwoWayConversionData("A".to_string(), 42),
+         *cache.get()
+      );
+   }
+
+   #[allow(non_upper_case_globals)]
+   static save_viaJvmRepository_sameCache_repository: Mutex<Option<Arc<Repository<TwoWayConversionData>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_save_1viaJvmRepository_1sameCache_00024createRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let repo = Arc::new(Repository::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* saveer = */ Weak::new(),
+         "test/NativeRepositoryTest/save_viaJvmRepository_sameCache",
+         /* drop_observer = */ || ()
+      ));
+
+      *save_viaJvmRepository_sameCache_repository.lock().unwrap() = Some(Arc::clone(&repo));
+
+      repository_creator.create_jvm_wrapper(&mut env, Arc::clone(&repo))
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_RepositoryTest_save_1viaJvmRepository_1sameCache_00024assertSameCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      cache: JvmCache<'local, JvmTwoWayConversionData<'local>>
+   ) {
+      let jvm_cache = unsafe {
+         Cache::from_jvm_instance(&mut env, cache.j_object())
+      };
+
+      let lock = save_viaJvmRepository_sameCache_repository.lock().unwrap();
       let cache = lock.as_ref().unwrap().load(&"A".to_string()).unwrap();
 
       assert_eq!(

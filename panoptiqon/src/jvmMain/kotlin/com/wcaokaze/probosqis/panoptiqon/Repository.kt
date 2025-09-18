@@ -36,6 +36,16 @@ class Repository<K, T>(
       vtableAddress: Long
    ): WritableCache<T>
 
+   fun save(value: T): WritableCache<T> {
+      return save(value, nativeRepositoryAddress, vtableAddress)
+   }
+
+   private external fun save(
+      value: T,
+      nativeRepositoryAddress: Long,
+      vtableAddress: Long
+   ): WritableCache<T>
+
    @Deprecated("")
    override fun finalize() {
       dropNativeRepository(nativeRepositoryAddress, vtableAddress)
