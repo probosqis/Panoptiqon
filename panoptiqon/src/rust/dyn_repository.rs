@@ -23,7 +23,7 @@ use {
    std::sync::Arc,
    jni::JNIEnv,
    jni::sys::jlong,
-   serde::Deserialize,
+   serde::{Deserialize, Serialize},
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
    crate::jvm_types::{JvmCache, JvmErased},
 };
@@ -38,6 +38,13 @@ pub(crate) trait DynRepository: Send + Sync {
       key: JvmErased<'local>
    ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>>;
 
+   #[cfg(feature = "jvm")]
+   fn save_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      value: JvmErased<'local>
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>>;
+
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
    /// 解放されている可能性がある
    #[cfg(feature = "jvm")]
@@ -48,8 +55,10 @@ pub(crate) trait DynRepository: Send + Sync {
 impl<T> DynRepository for Repository<T>
 where
    T: CacheContent
+      + Serialize
       + for<'de> Deserialize<'de>
       + for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+      + for<'local> CloneFromJvm<'local, T::JvmType<'local>>
       + CloneIntoJvmHelper,
    T::Key: for<'local> CloneFromJvm<'local, T::JvmKey<'local>>
 {
@@ -70,6 +79,23 @@ where
       };
       let key = T::Key::clone_from_jvm(env, &key);
       let cache = &self.load(&key)?;
+
+      Ok(cache.clone_into_jvm(env))
+   }
+
+   fn save_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      value: JvmErased<'local>
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>> {
+      use crate::jvm_type::JvmType;
+
+      let value = unsafe {
+         let j_object = value.into_j_object();
+         T::JvmType::from_j_object(j_object)
+      };
+      let value = T::clone_from_jvm(env, &value);
+      let cache = self.save(value);
 
       Ok(cache.clone_into_jvm(env))
    }
@@ -113,8 +139,10 @@ pub(crate) fn addresses_as_jlong<T>(
 ) -> (jlong, jlong)
 where
    T: CacheContent
+      + Serialize
       + for<'de> Deserialize<'de>
       + for<'local> CloneIntoJvm<'local, T::JvmType<'local>>
+      + for<'local> CloneFromJvm<'local, T::JvmType<'local>>
       + CloneIntoJvmHelper,
    T::Key: for<'local> CloneFromJvm<'local, T::JvmKey<'local>>
 {

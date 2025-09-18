@@ -70,4 +70,28 @@ class RepositoryTest {
 
    private external fun `load_viaJvmRepository_sameCache$createRepository`(): Repository<String, TwoWayConversionData>
    private external fun `load_viaJvmRepository_sameCache$assertSameCache`(cache: WritableCache<TwoWayConversionData>)
+
+   @Test
+   fun save_viaJvmRepository() {
+      val repository = `save_viaJvmRepository$createRepository`()
+      repository.save(
+         TwoWayConversionData("A", 42)
+      )
+      `save_viaJvmRepository$assert`()
+   }
+
+   private external fun `save_viaJvmRepository$createRepository`(): Repository<String, TwoWayConversionData>
+   private external fun `save_viaJvmRepository$assert`(): Repository<String, TwoWayConversionData>
+
+   @Test
+   fun save_viaJvmRepository_sameCache() {
+      val repository = `save_viaJvmRepository_sameCache$createRepository`()
+      val cache = repository.save(
+         TwoWayConversionData("A", 42)
+      )
+      `save_viaJvmRepository_sameCache$assertSameCache`(cache)
+   }
+
+   private external fun `save_viaJvmRepository_sameCache$createRepository`(): Repository<String, TwoWayConversionData>
+   private external fun `save_viaJvmRepository_sameCache$assertSameCache`(cache: WritableCache<TwoWayConversionData>)
 }

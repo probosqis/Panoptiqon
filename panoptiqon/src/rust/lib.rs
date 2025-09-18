@@ -30,7 +30,7 @@ use crate::repository::Repository;
 #[cfg(feature = "jvm")]
 use {
    jni::JNIEnv,
-   serde::Deserialize,
+   serde::{Deserialize, Serialize},
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
 };
 
@@ -97,8 +97,10 @@ impl Panoptiqon {
    where
       T: CacheContent
          + CloneIntoJvmHelper
+         + Serialize
          + for<'de> Deserialize<'de>
-         + for<'a> CloneIntoJvm<'a, T::JvmType<'a>>,
+         + for<'a> CloneIntoJvm<'a, T::JvmType<'a>>
+         + for<'a> CloneFromJvm<'a, T::JvmType<'a>>,
       T::Key: for<'a> CloneFromJvm<'a, T::JvmKey<'a>>
    {
       let repository = Arc::new(
