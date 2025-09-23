@@ -29,6 +29,12 @@ use {
    crate::jvm_type::JvmType,
 };
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheId {
+   repository_dir_path: PathBuf,
+   file_path: PathBuf
+}
+
 pub struct Cache<T: CacheContent>(Arc<UniqueCache<T>>);
 
 impl<T: CacheContent> Cache<T> {
@@ -60,6 +66,18 @@ impl<T: CacheContent> Cache<T> {
    #[cfg(feature = "jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       self.0.create_jvm_cache(env)
+   }
+
+   pub fn id(&self) -> CacheId
+   where
+      T: Serialize
+   {
+      use crate::db::savable::Savable;
+
+      CacheId {
+         repository_dir_path: self.0.repository_dir_path().to_path_buf(),
+         file_path: self.0.file_path()
+      }
    }
 
    /// RepositoryCacheのインスタンスからCacheを生成する。
@@ -603,6 +621,29 @@ mod tests {
       let inner_cache = cache.get().1.as_ref().unwrap().get();
       assert_eq!(0, inner_cache.0);
       assert!(inner_cache.1.is_none());
+   }
+
+   #[test]
+   fn id() {
+      use std::sync::{Arc, Weak};
+      use crate::repository::Repository;
+      use super::CacheId;
+
+      let repository = Repository::<CacheContentImpl>::new_testable(
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/CacheTest/id",
+         /* drop_observer = */ || ()
+      );
+      let cache = repository.save(CacheContentImpl(0, 42));
+
+      assert_eq!(
+         CacheId {
+            repository_dir_path: PathBuf::from("test/CacheTest/id"),
+            file_path: PathBuf::from("test/CacheTest/id/0")
+         },
+         cache.id()
+      );
    }
 }
 
