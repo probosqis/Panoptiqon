@@ -31,8 +31,8 @@ use {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CacheId {
-   repository_dir_path: PathBuf,
-   file_path: PathBuf
+   pub(crate) repository_dir_path: PathBuf,
+   pub(crate) file_path: PathBuf
 }
 
 pub struct Cache<T: CacheContent>(Arc<UniqueCache<T>>);
@@ -68,16 +68,8 @@ impl<T: CacheContent> Cache<T> {
       self.0.create_jvm_cache(env)
    }
 
-   pub fn id(&self) -> CacheId
-   where
-      T: Serialize
-   {
-      use crate::db::savable::Savable;
-
-      CacheId {
-         repository_dir_path: self.0.repository_dir_path().to_path_buf(),
-         file_path: self.0.file_path()
-      }
+   pub fn id(&self) -> CacheId {
+      self.0.id()
    }
 
    /// RepositoryCacheのインスタンスからCacheを生成する。

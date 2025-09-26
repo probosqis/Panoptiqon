@@ -17,7 +17,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use serde::Serialize;
-use crate::cache::CacheContent;
+use crate::cache::{CacheContent, CacheId};
+use crate::db::savable::Savable;
 use crate::db::saver;
 use crate::db::scheduler::DbScheduler;
 
@@ -28,7 +29,6 @@ use {
    jni::sys::jlong,
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
 };
-use crate::db::savable::Savable;
 
 #[cfg(feature = "jvm")]
 pub(crate) struct JvmUniqueCacheRefs {
@@ -156,6 +156,13 @@ impl<T: CacheContent> UniqueCache<T> {
       self.db_scheduler.push(SaveTask::new(task_cache));
    }
 
+   pub(crate) fn id(&self) -> CacheId {
+      CacheId {
+         repository_dir_path: self.dir_path.to_path_buf(),
+         file_path: self.get().file_path(&self.dir_path)
+      }
+   }
+
    pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       use jni::objects::JValueGen;
 
@@ -276,6 +283,13 @@ impl<T: CacheContent> UniqueCache<T> {
       let task_cache = Arc::clone(self);
       self.db_scheduler.push(SaveTask::new(task_cache));
    }
+
+   pub(crate) fn id(&self) -> CacheId {
+      CacheId {
+         repository_dir_path: self.dir_path.to_path_buf(),
+         file_path: self.get().file_path(&self.dir_path)
+      }
+   }
 }
 
 #[cfg(feature = "jvm")]
@@ -313,7 +327,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNative
    }
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 #[no_mangle]
 extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decrementNativeReferenceCount<'local>(
    _env: JNIEnv<'local>,
@@ -330,7 +344,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decreme
    }
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 fn get_dyn_one_way_unique_cache(
    address: jlong,
    vtable_address: jlong
@@ -346,7 +360,7 @@ fn get_dyn_one_way_unique_cache(
    }
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 fn get_dyn_two_way_unique_cache<'local>(
    address: jlong,
    vtable_address: jlong
