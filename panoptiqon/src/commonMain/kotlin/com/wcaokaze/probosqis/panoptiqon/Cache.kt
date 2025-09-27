@@ -21,6 +21,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import java.nio.charset.Charset
 
 @RequiresOptIn
 annotation class InternalCacheApi
@@ -45,7 +46,15 @@ interface Cache<out T> {
              && filePath         .contentEquals(other.filePath)
       }
 
-      override fun toString() = "CacheId(repo=$repositoryDirPath, file=$filePath)"
+      override fun toString() = buildString {
+         append("CacheId(")
+         append("repo=")
+         append(String(repositoryDirPath, Charset.defaultCharset()))
+         append(",")
+         append("file=")
+         append(String(filePath, Charset.defaultCharset()))
+         append(")")
+      }
    }
 
    val value: T
