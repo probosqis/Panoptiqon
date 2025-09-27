@@ -1,5 +1,5 @@
 /*
- * Copyright 2023-2024 wcaokaze
+ * Copyright 2023-2025 wcaokaze
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,28 @@ import androidx.compose.runtime.setValue
 annotation class InternalCacheApi
 
 interface Cache<out T> {
+   class Id
+      internal constructor (
+         private val repositoryDirPath: ByteArray,
+         private val filePath: ByteArray
+      )
+   {
+      override fun hashCode(): Int {
+         var h = 1
+         h = h * 31 + repositoryDirPath.contentHashCode()
+         h = h * 31 + filePath         .contentHashCode()
+         return h
+      }
+
+      override fun equals(other: Any?): Boolean {
+         return other is Id
+             && repositoryDirPath.contentEquals(other.repositoryDirPath)
+             && filePath         .contentEquals(other.filePath)
+      }
+
+      override fun toString() = "CacheId(repo=$repositoryDirPath, file=$filePath)"
+   }
+
    val value: T
 
    @InternalCacheApi
