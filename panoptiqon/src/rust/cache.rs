@@ -1105,4 +1105,23 @@ mod jni_tests {
          .load(&0).unwrap()
          .clone_into_jvm(&mut env)
    }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_id_00024createCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmCache<'local, JvmCacheContentImpl<'local>> {
+      use std::sync::{Arc, Weak};
+      use crate::db::saver::Saver;
+      use crate::repository::Repository;
+
+      let repository = Repository::<CacheContentImpl>::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/CacheTest/referenceCount_clone",
+         /* drop_observer = */ || ()
+      );
+      repository.save(CacheContentImpl(0, 42)).clone_into_jvm(&mut env)
+   }
 }

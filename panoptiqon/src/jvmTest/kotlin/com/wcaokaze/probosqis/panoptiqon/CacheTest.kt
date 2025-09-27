@@ -16,6 +16,7 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
+import java.nio.charset.Charset
 import kotlin.test.Ignore
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -119,4 +120,20 @@ class CacheTest {
    }
 
    private external fun `deserialize$loadCache`(): Cache<CacheContainer>
+
+   @Test
+   fun id() {
+      val cache = `id$createCache`()
+
+      val systemCharset = Charset.defaultCharset()
+      assertEquals(
+         Cache.Id(
+            "test/CacheTest/referenceCount_clone"  .toByteArray(systemCharset),
+            "test/CacheTest/referenceCount_clone/0".toByteArray(systemCharset)
+         ),
+         cache.id
+      )
+   }
+
+   private external fun `id$createCache`(): Cache<CacheContentImpl>
 }

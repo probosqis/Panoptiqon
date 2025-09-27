@@ -57,6 +57,7 @@ interface Cache<out T> {
       }
    }
 
+   val id: Id
    val value: T
 
    @InternalCacheApi
@@ -84,6 +85,9 @@ inline fun <T> WritableCache<T>.update(update: (T) -> T) {
 
 private class CacheImpl<T>(initialValue: T) : Cache<T>, WritableCache<T> {
    private val _state = mutableStateOf(initialValue)
+
+   override val id: Cache.Id
+      get() = throw UnsupportedOperationException("This Cache isn't saved into any file.")
 
    @InternalCacheApi
    override val state get() = _state
