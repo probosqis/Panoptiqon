@@ -19,11 +19,12 @@ use std::sync::Arc;
 use jni::JNIEnv;
 use jni::objects::JObject;
 use jni::sys::jvalue;
-use crate::cache::{Cache, CacheContent};
+use crate::cache::{Cache, CacheContent, CacheId};
 use crate::jvm_type::JvmType;
 use crate::jvm_types::{
-   JvmBoolean, JvmByte, JvmByteArray, JvmCache, JvmDouble, JvmFloat, JvmInteger,
-   JvmList, JvmLong, JvmNullable, JvmPair, JvmShort, JvmString, JvmTriple, JvmUnit,
+   JvmBoolean, JvmByte, JvmByteArray, JvmCache, JvmCacheId, JvmDouble, JvmFloat,
+   JvmInteger, JvmList, JvmLong, JvmNullable, JvmPair, JvmShort, JvmString,
+   JvmTriple, JvmUnit,
 };
 use crate::unique_cache::{
    DynOneWayUniqueCache, DynTwoWayUniqueCache, JvmUniqueCacheRefs, UniqueCache,
@@ -149,6 +150,60 @@ pub trait CloneFromJvm<'local, J: JvmType<'local>>
       let j_object_clone = JObject::from_raw(j_object.as_raw());
       let j = J::from_j_object(j_object_clone);
       Self::clone_from_jvm(env, &j)
+   }
+}
+
+/// Cache.Id
+impl<'local> CloneIntoJvm<'local, JvmCacheId<'local>> for CacheId {
+   fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmCacheId<'local> {
+      let repository_dir_path = env.byte_array_from_slice(
+         self.repository_dir_path.as_os_str().as_encoded_bytes()
+      ).unwrap();
+      let file_path = env.byte_array_from_slice(
+         self.file_path.as_os_str().as_encoded_bytes()
+      ).unwrap();
+
+      let j_object = env.new_object(
+         "com/wcaokaze/probosqis/panoptiqon/Cache$Id", "([B[B)V",
+         &[(&*repository_dir_path).into(), (&*file_path).into()]
+      ).unwrap();
+
+      unsafe { JvmCacheId::from_j_object(j_object) }
+   }
+}
+
+impl<'local> CloneFromJvm<'local, JvmCacheId<'local>> for CacheId {
+   fn clone_from_jvm(
+      env: &mut JNIEnv<'local>,
+      jvm_instance: &JvmCacheId
+   ) -> CacheId {
+      use std::ffi::OsStr;
+      use jni::objects::JByteArray;
+
+      let repository_dir_path_jvm_array = env
+         .call_method(jvm_instance.j_object(), "getRepositoryDirPath", "()[B", &[])
+         .unwrap().l().unwrap();
+      let repository_dir_path_bytes = env
+         .convert_byte_array(JByteArray::from(repository_dir_path_jvm_array))
+         .unwrap();
+      let repository_dir_path_os_str = unsafe {
+         OsStr::from_encoded_bytes_unchecked(&repository_dir_path_bytes)
+      };
+
+      let file_path_jvm_array = env
+         .call_method(jvm_instance.j_object(), "getFilePath", "()[B", &[])
+         .unwrap().l().unwrap();
+      let file_path_bytes = env
+         .convert_byte_array(JByteArray::from(file_path_jvm_array))
+         .unwrap();
+      let file_path_os_str = unsafe {
+         OsStr::from_encoded_bytes_unchecked(&file_path_bytes)
+      };
+
+      CacheId {
+         repository_dir_path: repository_dir_path_os_str.into(),
+         file_path: file_path_os_str.into()
+      }
    }
 }
 
