@@ -17,7 +17,8 @@
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use serde::Serialize;
-use crate::cache::CacheContent;
+use crate::cache::{CacheContent, CacheId};
+use crate::db::savable::Savable;
 use crate::db::saver;
 use crate::db::scheduler::DbScheduler;
 
@@ -27,8 +28,8 @@ use {
    jni::objects::{GlobalRef, JMethodID, JObject},
    jni::sys::jlong,
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
+   crate::jvm_types::JvmCacheId,
 };
-use crate::db::savable::Savable;
 
 #[cfg(feature = "jvm")]
 pub(crate) struct JvmUniqueCacheRefs {
@@ -156,6 +157,13 @@ impl<T: CacheContent> UniqueCache<T> {
       self.db_scheduler.push(SaveTask::new(task_cache));
    }
 
+   pub(crate) fn id(&self) -> CacheId {
+      CacheId {
+         repository_dir_path: self.dir_path.to_path_buf(),
+         file_path: self.get().file_path(&self.dir_path)
+      }
+   }
+
    pub(crate) fn create_jvm_cache<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       use jni::objects::JValueGen;
 
@@ -276,6 +284,13 @@ impl<T: CacheContent> UniqueCache<T> {
       let task_cache = Arc::clone(self);
       self.db_scheduler.push(SaveTask::new(task_cache));
    }
+
+   pub(crate) fn id(&self) -> CacheId {
+      CacheId {
+         repository_dir_path: self.dir_path.to_path_buf(),
+         file_path: self.get().file_path(&self.dir_path)
+      }
+   }
 }
 
 #[cfg(feature = "jvm")]
@@ -313,7 +328,7 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_decrementNative
    }
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 #[no_mangle]
 extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decrementNativeReferenceCount<'local>(
    _env: JNIEnv<'local>,
@@ -330,7 +345,41 @@ extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_decreme
    }
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_UniqueCache_getCacheId<'local>(
+   mut env: JNIEnv<'local>,
+   _obj: JObject<'local>,
+   unique_cache_address: jlong,
+   unique_cache_vtable_address: jlong
+) -> JvmCacheId<'local> {
+   let dyn_unique_cache = get_dyn_one_way_unique_cache(
+      unique_cache_address, unique_cache_vtable_address
+   );
+
+   unsafe {
+      (&*dyn_unique_cache).id().clone_into_jvm(&mut env)
+   }
+}
+
+#[cfg(feature = "jvm")]
+#[no_mangle]
+extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_WritableUniqueCache_getCacheId<'local>(
+   mut env: JNIEnv<'local>,
+   _obj: JObject<'local>,
+   unique_cache_address: jlong,
+   unique_cache_vtable_address: jlong
+) -> JvmCacheId<'local> {
+   let dyn_unique_cache = get_dyn_two_way_unique_cache(
+      unique_cache_address, unique_cache_vtable_address
+   );
+
+   unsafe {
+      (&*dyn_unique_cache).id().clone_into_jvm(&mut env)
+   }
+}
+
+#[cfg(feature = "jvm")]
 fn get_dyn_one_way_unique_cache(
    address: jlong,
    vtable_address: jlong
@@ -346,7 +395,7 @@ fn get_dyn_one_way_unique_cache(
    }
 }
 
-#[cfg(feature="jvm")]
+#[cfg(feature = "jvm")]
 fn get_dyn_two_way_unique_cache<'local>(
    address: jlong,
    vtable_address: jlong
@@ -367,6 +416,8 @@ pub(crate) trait DynOneWayUniqueCache {
    /// 実装の都合上&selfを受け取るが、呼び出し後参照先のメモリ領域は
    /// 解放されている可能性がある
    unsafe fn decrement_arc(&self);
+
+   fn id(&self) -> CacheId;
 }
 
 #[cfg(feature = "jvm")]
@@ -378,6 +429,8 @@ pub(crate) trait DynTwoWayUniqueCache<'local> {
    );
 
    unsafe fn decrement_arc(&self);
+
+   fn id(&self) -> CacheId;
 }
 
 #[cfg(feature = "jvm")]
@@ -387,6 +440,10 @@ impl<T> DynOneWayUniqueCache for UniqueCache<T>
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
       drop(arc);
+   }
+
+   fn id(&self) -> CacheId {
+      UniqueCache::id(&self)
    }
 }
 
@@ -411,5 +468,9 @@ impl<'local, T> DynTwoWayUniqueCache<'local> for UniqueCache<T>
    unsafe fn decrement_arc(&self) {
       let arc = Arc::from_raw(self as *const _);
       drop(arc);
+   }
+
+   fn id(&self) -> CacheId {
+      UniqueCache::id(&self)
    }
 }

@@ -29,6 +29,12 @@ use {
    crate::jvm_type::JvmType,
 };
 
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CacheId {
+   pub(crate) repository_dir_path: PathBuf,
+   pub(crate) file_path: PathBuf
+}
+
 pub struct Cache<T: CacheContent>(Arc<UniqueCache<T>>);
 
 impl<T: CacheContent> Cache<T> {
@@ -60,6 +66,10 @@ impl<T: CacheContent> Cache<T> {
    #[cfg(feature = "jvm")]
    pub fn create_jvm_instance<'local>(&self, env: &mut JNIEnv<'local>) -> JObject<'local> {
       self.0.create_jvm_cache(env)
+   }
+
+   pub fn id(&self) -> CacheId {
+      self.0.id()
    }
 
    /// RepositoryCacheのインスタンスからCacheを生成する。
@@ -604,6 +614,29 @@ mod tests {
       assert_eq!(0, inner_cache.0);
       assert!(inner_cache.1.is_none());
    }
+
+   #[test]
+   fn id() {
+      use std::sync::{Arc, Weak};
+      use crate::repository::Repository;
+      use super::CacheId;
+
+      let repository = Repository::<CacheContentImpl>::new_testable(
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/CacheTest/id",
+         /* drop_observer = */ || ()
+      );
+      let cache = repository.save(CacheContentImpl(0, 42));
+
+      assert_eq!(
+         CacheId {
+            repository_dir_path: PathBuf::from("test/CacheTest/id"),
+            file_path: PathBuf::from("test/CacheTest/id/0")
+         },
+         cache.id()
+      );
+   }
 }
 
 #[cfg(feature = "jni-test")]
@@ -1071,5 +1104,24 @@ mod jni_tests {
       Repository::<CacheContainer>::of(&mut env, &jvm_cache_container_repository)
          .load(&0).unwrap()
          .clone_into_jvm(&mut env)
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_id_00024createCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmCache<'local, JvmCacheContentImpl<'local>> {
+      use std::sync::{Arc, Weak};
+      use crate::db::saver::Saver;
+      use crate::repository::Repository;
+
+      let repository = Repository::<CacheContentImpl>::new_testable(
+         &mut env,
+         Arc::new(DbScheduler::new(Saver::new())),
+         /* loader = */ Weak::new(),
+         "test/CacheTest/referenceCount_clone",
+         /* drop_observer = */ || ()
+      );
+      repository.save(CacheContentImpl(0, 42)).clone_into_jvm(&mut env)
    }
 }

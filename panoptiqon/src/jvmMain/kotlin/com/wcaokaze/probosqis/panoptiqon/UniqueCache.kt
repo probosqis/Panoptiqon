@@ -28,6 +28,9 @@ internal class UniqueCache<T>(
 
    val value: T
       get() = state.value
+   
+   val id: Cache.Id
+      get() = getCacheId(nativeStateAddress, nativeStateVTableAddress)
 
    // XXX: ネイティブ側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
    // ネイティブ側とJVM側が同時にアクセスされた場合には不整合が起こる可能性がある
@@ -39,6 +42,11 @@ internal class UniqueCache<T>(
       rustStateAddress: Long,
       rustStateVTableAddress: Long
    )
+   
+   private external fun getCacheId(
+      rustStateAddress: Long,
+      rustStateVTableAddress: Long
+   ): Cache.Id
 
    @Deprecated("")
    override fun finalize() {
@@ -61,6 +69,9 @@ internal class WritableUniqueCache<T>(
          updateNativeState(nativeStateAddress, nativeStateVTableAddress, value)
       }
 
+   val id: Cache.Id
+      get() = getCacheId(nativeStateAddress, nativeStateVTableAddress)
+
    // XXX: ネイティブ側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
    // ネイティブ側とJVM側が同時にアクセスされた場合には不整合が起こる可能性がある
    private fun updateStateFromNative(value: T) {
@@ -77,6 +88,11 @@ internal class WritableUniqueCache<T>(
       rustStateAddress: Long,
       rustStateVTableAddress: Long
    )
+
+   private external fun getCacheId(
+      rustStateAddress: Long,
+      rustStateVTableAddress: Long
+   ): Cache.Id
 
    @Deprecated("")
    override fun finalize() {
