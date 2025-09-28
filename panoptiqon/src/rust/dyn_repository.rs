@@ -15,6 +15,7 @@
  */
 
 use std::any::TypeId;
+use std::path::Path;
 use crate::cache::CacheContent;
 use crate::repository::Repository;
 
@@ -30,6 +31,8 @@ use {
 
 pub(crate) trait DynRepository: Send + Sync {
    fn content_type_id(&self) -> TypeId;
+
+   fn dir_path(&self) -> &Path;
 
    #[cfg(feature = "jvm")]
    fn load_jvm<'local>(
@@ -49,6 +52,13 @@ pub(crate) trait DynRepository: Send + Sync {
    /// 解放されている可能性がある
    #[cfg(feature = "jvm")]
    unsafe fn decrement_arc(&self);
+
+   #[cfg(feature = "jvm")]
+   fn load_file_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      file_path: &Path
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>>;
 }
 
 #[cfg(feature = "jvm")]
@@ -64,6 +74,10 @@ where
 {
    fn content_type_id(&self) -> TypeId {
       TypeId::of::<T>()
+   }
+
+   fn dir_path(&self) -> &Path {
+      Repository::dir_path(&self)
    }
 
    fn load_jvm<'local>(
@@ -104,6 +118,16 @@ where
       let arc = Arc::from_raw(self as *const _);
       drop(arc);
    }
+
+   #[cfg(feature = "jvm")]
+   fn load_file_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      file_path: &Path
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>> {
+      let cache = self.load_file(file_path)?;
+      Ok(cache.clone_into_jvm(env))
+   }
 }
 
 #[cfg(not(feature = "jvm"))]
@@ -113,6 +137,10 @@ where
 {
    fn content_type_id(&self) -> TypeId {
       TypeId::of::<T>()
+   }
+
+   fn dir_path(&self) -> &Path {
+      Repository::dir_path(&self)
    }
 }
 

@@ -32,6 +32,7 @@ use {
    jni::JNIEnv,
    serde::{Deserialize, Serialize},
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
+   crate::jvm_types::{JvmCache, JvmCacheId, JvmErased},
 };
 
 pub mod cache;
@@ -116,6 +117,15 @@ impl Panoptiqon {
       self.loader.push_repository(dyn_repository);
 
       repository
+   }
+
+   #[cfg(feature = "jvm")]
+   pub fn load_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      cache_id: &JvmCacheId<'local>
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>> {
+      self.loader.load_jvm(env, cache_id)
    }
 }
 

@@ -27,7 +27,9 @@ use crate::Repository;
 
 #[cfg(feature = "jvm")]
 use {
+   jni::JNIEnv,
    crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
+   crate::jvm_types::{JvmCache, JvmCacheId, JvmErased},
 };
 
 pub struct CacheDeserializer<'a> {
@@ -322,6 +324,29 @@ impl Loader {
          .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
       let repository_lock = Self::find_repository(&*lock, repository_dir_path.as_ref())?;
       repository_lock.load_file(file_path)
+   }
+
+   #[cfg(feature = "jvm")]
+   pub(crate) fn load_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      cache_id: &JvmCacheId<'local>
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>> {
+      use anyhow::Context;
+      use crate::cache::CacheId;
+      use crate::convert_jvm::CloneFromJvm;
+
+      let cache_id = CacheId::clone_from_jvm(env, cache_id);
+
+      let lock = self.repositories.read()
+         .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
+      let repository = lock.iter()
+         .find(|repo| repo.dir_path() == cache_id.repository_dir_path)
+         .context(format!(
+            "Repository not found (repo dir: {})",
+            cache_id.repository_dir_path.display()
+         ))?;
+      repository.load_file_jvm(env, &cache_id.file_path)
    }
 
    #[cfg(any(test, feature = "testable"))]
