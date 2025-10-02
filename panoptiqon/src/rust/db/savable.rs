@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use crate::db::saver;
 
@@ -23,9 +24,9 @@ pub(crate) trait Savable: Send + Sync + 'static {
 
    fn serialize(
       &self,
-      serializer: saver::Serializer
+      serializer: saver::Serializer<File>
    ) -> anyhow::Result<
-      <saver::Serializer as serde::Serializer>::Ok,
-      <saver::Serializer as serde::Serializer>::Error
+      <saver::Serializer<File> as serde::Serializer>::Ok,
+      <saver::Serializer<File> as serde::Serializer>::Error
    >;
 }

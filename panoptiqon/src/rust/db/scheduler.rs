@@ -213,6 +213,7 @@ impl WorkerThread {
 
 #[cfg(all(test, not(feature = "jvm")))]
 mod test {
+   use std::fs::File;
    use std::path::{Path, PathBuf};
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
@@ -231,10 +232,10 @@ mod test {
 
       fn serialize(
          &self,
-         _serializer: saver::Serializer
+         _serializer: saver::Serializer<File>
       ) -> anyhow::Result<
-         <saver::Serializer as serde::Serializer>::Ok,
-         <saver::Serializer as serde::Serializer>::Error
+         <saver::Serializer<File> as serde::Serializer>::Ok,
+         <saver::Serializer<File> as serde::Serializer>::Error
       > {
          unimplemented!();
       }

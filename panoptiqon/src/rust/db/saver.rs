@@ -21,7 +21,7 @@ use std::sync::Arc;
 use crate::db::save_task::SaveTask;
 
 pub(crate) type DirPath = Arc<PathBuf>;
-pub(crate) type Serializer<'a> = &'a mut serde_json::Serializer<BufWriter<File>>;
+pub(crate) type Serializer<'a, W: Write> = &'a mut serde_json::Serializer<BufWriter<W>>;
 
 pub(crate) struct Saver {
    #[cfg(any(test, feature = "testable"))]
@@ -83,7 +83,7 @@ mod test {
 
    #[test]
    fn save() {
-      use std::fs;
+      use std::fs::{self, File};
       use std::path::PathBuf;
       use std::sync::Arc;
       use scopeguard::defer;
@@ -110,10 +110,10 @@ mod test {
 
          fn serialize(
             &self,
-            serializer: Serializer
+            serializer: Serializer<File>
          ) -> anyhow::Result<
-            <Serializer as serde::Serializer>::Ok,
-            <Serializer as serde::Serializer>::Error
+            <Serializer<File> as serde::Serializer>::Ok,
+            <Serializer<File> as serde::Serializer>::Error
          > {
             Serialize::serialize(self, serializer)
          }
@@ -143,7 +143,7 @@ mod test {
 
    #[test]
    fn save_mkdir() {
-      use std::fs;
+      use std::fs::{self, File};
       use std::path::PathBuf;
       use std::sync::Arc;
       use scopeguard::defer;
@@ -170,10 +170,10 @@ mod test {
 
          fn serialize(
             &self,
-            serializer: Serializer
+            serializer: Serializer<File>
          ) -> anyhow::Result<
-            <Serializer as serde::Serializer>::Ok,
-            <Serializer as serde::Serializer>::Error
+            <Serializer<File> as serde::Serializer>::Ok,
+            <Serializer<File> as serde::Serializer>::Error
          > {
             Serialize::serialize(self, serializer)
          }
