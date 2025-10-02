@@ -29,4 +29,13 @@ pub(crate) trait Savable: Send + Sync + 'static {
       <saver::Serializer<File> as serde::Serializer>::Ok,
       <saver::Serializer<File> as serde::Serializer>::Error
    >;
+
+   #[cfg(any(test, feature = "testable"))]
+   fn serialize_in_memory(
+      &self,
+      serializer: saver::Serializer<&mut Vec<u8>>
+   ) -> anyhow::Result<
+      <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Ok,
+      <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Error
+   >;
 }

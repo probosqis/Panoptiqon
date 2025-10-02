@@ -239,6 +239,16 @@ mod test {
       > {
          unimplemented!();
       }
+
+      fn serialize_in_memory(
+         &self,
+         serializer: saver::Serializer<&mut Vec<u8>>
+      ) -> anyhow::Result<
+         <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Ok,
+         <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Error
+      > {
+         unimplemented!();
+      }
    }
 
    #[allow(non_snake_case)]

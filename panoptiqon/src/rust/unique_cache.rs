@@ -234,6 +234,17 @@ impl<T> Savable for UniqueCache<T>
    > {
       self.get().serialize(serializer)
    }
+
+   #[cfg(any(test, feature = "testable"))]
+   fn serialize_in_memory(
+      &self,
+      serializer: saver::Serializer<&mut Vec<u8>>
+   ) -> anyhow::Result<
+      <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Ok,
+      <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Error
+   > {
+      self.get().serialize(serializer)
+   }
 }
 
 #[cfg(not(feature = "jvm"))]

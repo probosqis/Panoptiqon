@@ -117,6 +117,16 @@ mod test {
          > {
             Serialize::serialize(self, serializer)
          }
+
+         fn serialize_in_memory(
+            &self,
+            serializer: Serializer<&mut Vec<u8>>
+         ) -> anyhow::Result<
+            <Serializer<&mut Vec<u8>> as serde::Serializer>::Ok,
+            <Serializer<&mut Vec<u8>> as serde::Serializer>::Error
+         > {
+            Serialize::serialize(self, serializer)
+         }
       }
 
       let savable = SavableImpl {
@@ -174,6 +184,16 @@ mod test {
          ) -> anyhow::Result<
             <Serializer<File> as serde::Serializer>::Ok,
             <Serializer<File> as serde::Serializer>::Error
+         > {
+            Serialize::serialize(self, serializer)
+         }
+
+         fn serialize_in_memory(
+            &self,
+            serializer: Serializer<&mut Vec<u8>>
+         ) -> anyhow::Result<
+            <Serializer<&mut Vec<u8>> as serde::Serializer>::Ok,
+            <Serializer<&mut Vec<u8>> as serde::Serializer>::Error
          > {
             Serialize::serialize(self, serializer)
          }
