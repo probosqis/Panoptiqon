@@ -61,9 +61,27 @@ impl Panoptiqon {
    pub fn new() -> Self {
       use crate::db::saver::Saver;
 
-      Panoptiqon {
-         db_scheduler: Arc::new(DbScheduler::new(Saver::new())),
-         loader: Arc::new(Loader::new())
+      #[cfg(any(test, feature = "testable"))]
+      {
+         use {
+            std::sync::Mutex,
+            crate::db::in_memory_db::InMemoryDb,
+         };
+
+         let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+         let saver = Saver::new(Arc::clone(&in_memory_db));
+         Panoptiqon {
+            db_scheduler: Arc::new(DbScheduler::new(saver)),
+            loader: Arc::new(Loader::new())
+         }
+      }
+
+      #[cfg(not(any(test, feature = "testable")))]
+      {
+         Panoptiqon {
+            db_scheduler: Arc::new(DbScheduler::new(Saver::new())),
+            loader: Arc::new(Loader::new())
+         }
       }
    }
 

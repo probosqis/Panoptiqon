@@ -239,13 +239,15 @@ mod test {
 
    #[test]
    fn insert_if_vacant() {
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{DirPath, Saver};
       use crate::db::scheduler::DbScheduler;
       use crate::pool::UniqueCachePool;
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let mut pool = UniqueCachePool::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          &DirPath::new(PathBuf::from("test/UniqueCachePool/insert_if_vacant"))
       );
 
@@ -320,12 +322,15 @@ mod jni_tests {
       _obj: JObject
    ) {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         db_scheduler,
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/createCache"))
       );
 
@@ -342,12 +347,15 @@ mod jni_tests {
       _obj: JObject
    ) {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         db_scheduler,
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/getCache"))
       );
 
@@ -368,12 +376,15 @@ mod jni_tests {
       _obj: JObject
    ) {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         db_scheduler,
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/pooling"))
       );
       let cache1_ptr = Arc::as_ptr(&pool.update("A".to_string(), Content("A".to_string(), 42))) as *const _;
@@ -390,12 +401,15 @@ mod jni_tests {
       _obj: JObject
    ) {
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         db_scheduler,
          &saver::DirPath::new(PathBuf::from("test/CachePoolTest/save"))
       );
       let unique_cache = pool.update("A".to_string(), Content("A".to_string(), 42));

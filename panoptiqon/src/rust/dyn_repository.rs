@@ -247,14 +247,16 @@ mod test {
    #[test]
    fn downcast() {
       use std::ptr;
-      use std::sync::{Arc, Weak};
+      use std::sync::{Arc, Mutex, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
       use super::DynRepository;
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Repository::<CacheContentA>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/Repository/can_load"
       );

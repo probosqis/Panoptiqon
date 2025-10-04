@@ -337,8 +337,10 @@ fn unwrap_or_throw<'local>(
 #[cfg(all(test, not(feature = "jvm")))]
 mod test {
    use std::path::{Path, PathBuf};
+   use std::sync::Mutex;
    use serde::{Deserialize, Serialize};
    use crate::cache::CacheContent;
+   use crate::db::in_memory_db::InMemoryDb;
    use super::Repository;
 
    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -375,8 +377,9 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let mut repository = Repository::<CacheContentImpl>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          Arc::downgrade(&loader),
          "test/Repository/loadFile"
       );
@@ -410,8 +413,9 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let mut repository = Repository::<CacheContentImpl>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          Arc::downgrade(&loader),
          "test/Repository/loadFile_viaLoad"
       );
@@ -442,8 +446,9 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let mut repository = Repository::<CacheContentImpl>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          Arc::downgrade(&loader),
          "test/Repository/loadFile_loaderDropped"
       );
@@ -472,8 +477,9 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let mut repository = Repository::<CacheContentImpl>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          Arc::downgrade(&loader),
          "test/Repository/loadFile_deserializeErr"
       );
@@ -501,8 +507,9 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let mut repository = Repository::<CacheContentImpl>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          Arc::downgrade(&loader),
          "test/Repository/loadFile_fileNotFound"
       );
@@ -530,8 +537,9 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
-      let mut repository = Repository::<CacheContentImpl>::new(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let repository = Repository::<CacheContentImpl>::new(
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          Arc::downgrade(&loader),
          "test/Repository/loadFile_cacheAlreadyExists"
       );
@@ -595,7 +603,7 @@ mod jni_tests {
          let second = self.1;
 
          let j_object = env.new_object(
-            "Lcom/wcaokaze/probosqis/panoptiqon/NativeRepositoryTest$OneWayConversionData;",
+            "com/wcaokaze/probosqis/panoptiqon/NativeRepositoryTest$OneWayConversionData",
             "(Ljava/lang/String;I)V",
             &[first.j_string().into(), second.into()]
          ).unwrap();
@@ -629,7 +637,7 @@ mod jni_tests {
          let second = self.1;
 
          let j_object = env.new_object(
-            "Lcom/wcaokaze/probosqis/panoptiqon/NativeRepositoryTest$TwoWayConversionData;",
+            "com/wcaokaze/probosqis/panoptiqon/NativeRepositoryTest$TwoWayConversionData",
             "(Ljava/lang/String;I)V",
             &[first.j_string().into(), second.into()]
          ).unwrap();
@@ -661,8 +669,12 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static switchCacheClass_dbScheduler: LazyLock<Arc<DbScheduler>>
-      = LazyLock::new(|| Arc::new(DbScheduler::new(Saver::new())));
+   static switchCacheClass_dbScheduler: LazyLock<Arc<DbScheduler>> = LazyLock::new(|| {
+      use crate::db::in_memory_db::InMemoryDb;
+
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      Arc::new(DbScheduler::new(Saver::new(in_memory_db)))
+   });
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_NativeRepositoryTest_switchCacheClass_00024saveOneWayData<'local>(
@@ -701,9 +713,12 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use crate::db::in_memory_db::InMemoryDb;
+
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/saveLoad",
          /* drop_observer = */ || ()
@@ -732,9 +747,12 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use crate::db::in_memory_db::InMemoryDb;
+
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/load_noSuchCache",
          /* drop_observer = */ || ()
@@ -749,9 +767,12 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use crate::db::in_memory_db::InMemoryDb;
+
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/save_viaCache",
          /* drop_observer = */ || ()
@@ -776,9 +797,12 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use crate::db::in_memory_db::InMemoryDb;
+
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/save_affectAnotherCache",
          /* drop_observer = */ || ()
@@ -804,9 +828,12 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
+      use crate::db::in_memory_db::InMemoryDb;
+
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/oneWay_jvmCache_getCache",
          /* drop_observer = */ || ()
@@ -820,9 +847,12 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
+      use crate::db::in_memory_db::InMemoryDb;
+
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/twoWay_jvmCache_getCache",
          /* drop_observer = */ || ()
@@ -839,10 +869,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let mut repo_lock = oneWay_valueChangeFromNative_repository.lock().unwrap();
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/oneWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
@@ -868,10 +901,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let mut repo_lock = twoWay_valueChangeFromNative_repository.lock().unwrap();
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChangeFromNative_getCache",
          /* drop_observer = */ || ()
@@ -897,10 +933,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JObject<'local> {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/jvmCache_valueChangeFromJvm_getCache",
          /* drop_observer = */ || ()
@@ -929,10 +968,13 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let mut repo_lock = oneWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
@@ -986,10 +1028,13 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let mut repo_lock = twoWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/twoWay_jvmCache_valueChange_doesntAffectOtherKeyCaches_createRepository",
          /* drop_observer = */ || ()
@@ -1055,13 +1100,15 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::jvm_repository_creator::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repo = Arc::new(
          Repository::<TwoWayConversionData>::new_testable(
             &mut env,
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
             /* loader = */ Weak::new(),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || ()
@@ -1099,13 +1146,15 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::jvm_repository_creator::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repo = Arc::new(
          Repository::<TwoWayConversionData>::new_testable(
             &mut env,
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
             /* loader = */ Weak::new(),
             "test/RepositoryTest/restoreNativeRepositoryBorrow",
             /* drop_observer = */ || {
@@ -1136,10 +1185,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repo = Arc::new(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/load_viaJvmRepository",
          /* drop_observer = */ || ()
@@ -1160,10 +1212,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repo = Arc::new(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/load_viaJvmRepository_sameCache",
          /* drop_observer = */ || ()
@@ -1205,10 +1260,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repo = Arc::new(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* loader = */ Weak::new(),
          "test/NativeRepositoryTest/save_viaJvmRepository",
          /* drop_observer = */ || ()
@@ -1241,10 +1299,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmRepository<'local, JvmTwoWayConversionData<'local>> {
+      use crate::db::in_memory_db::InMemoryDb;
+
       let repository_creator = JvmRepositoryCreator::new(&mut env);
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repo = Arc::new(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          /* saveer = */ Weak::new(),
          "test/NativeRepositoryTest/save_viaJvmRepository_sameCache",
          /* drop_observer = */ || ()

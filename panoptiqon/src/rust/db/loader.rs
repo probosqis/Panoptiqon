@@ -380,8 +380,9 @@ mod test {
    #[test]
    fn load() {
       use std::fs;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
       use scopeguard::defer;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
@@ -395,9 +396,10 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Arc::new(
          Repository::<CacheContentImpl>::new(
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
             Arc::downgrade(&loader),
             "test/Loader/load"
          )
@@ -418,9 +420,10 @@ mod test {
    #[test]
    fn load_repositoryNotFound() {
       use std::fs;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
       use scopeguard::defer;
       use crate::cache::Cache;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
@@ -434,9 +437,10 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
       let repository = Arc::new(
          Repository::<CacheContentImpl>::new(
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
             Arc::downgrade(&loader),
             "test/Loader/load_repositoryNotFound_dummy"
          )

@@ -15,24 +15,37 @@
  */
 
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use crate::db::save_task::SaveTask;
+
+#[cfg(any(test, feature = "testable"))]
+use {
+   crate::db::in_memory_db::InMemoryDb,
+};
 
 pub(crate) type DirPath = Arc<PathBuf>;
 pub(crate) type Serializer<'a, W: Write> = &'a mut serde_json::Serializer<BufWriter<W>>;
 
 pub(crate) struct Saver {
    #[cfg(any(test, feature = "testable"))]
-   received_tasks: Vec<SaveTask>
+   received_tasks: Vec<SaveTask>,
+   #[cfg(any(test, feature = "testable"))]
+   in_memory_db: Arc<Mutex<InMemoryDb>>
 }
 
 impl Saver {
-   pub(crate) const fn new() -> Self {
-      Self {
-         #[cfg(any(test, feature = "testable"))]
-         received_tasks: Vec::new()
+   #[cfg(not(any(test, feature = "testable")))]
+   pub(crate) const fn new() -> Saver {
+      Saver {}
+   }
+
+   #[cfg(any(test, feature = "testable"))]
+   pub(crate) const fn new(in_memory_db: Arc<Mutex<InMemoryDb>>) -> Saver {
+      Saver {
+         received_tasks: Vec::new(),
+         in_memory_db
       }
    }
 
@@ -66,6 +79,14 @@ impl Saver {
 
    #[cfg(any(test, feature = "testable"))]
    pub(crate) fn save(&mut self, task: SaveTask) -> anyhow::Result<()> {
+      let mut db_lock = self.in_memory_db.lock()
+         .map_err(|_| anyhow::anyhow!("In memory DB was poisoned"))?;
+
+      let file = db_lock.write(task.file_path());
+      let writer = BufWriter::new(file);
+      let mut serializer = serde_json::Serializer::new(writer);
+      task.cache.serialize_in_memory(&mut serializer)?;
+
       self.received_tasks.push(task);
       Ok(())
    }
@@ -85,9 +106,10 @@ mod test {
    fn save() {
       use std::fs::{self, File};
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
       use scopeguard::defer;
       use serde::Serialize;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::savable::Savable;
       use crate::db::save_task::SaveTask;
       use super::{Saver, Serializer};
@@ -134,7 +156,8 @@ mod test {
          value: "value".to_string()
       };
 
-      let mut saver = Saver::new();
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let mut saver = Saver::new(in_memory_db);
       let task = SaveTask::new(Arc::new(savable));
       let result = saver._save(task);
       assert!(result.is_ok());
@@ -155,9 +178,10 @@ mod test {
    fn save_mkdir() {
       use std::fs::{self, File};
       use std::path::PathBuf;
-      use std::sync::Arc;
+      use std::sync::{Arc, Mutex};
       use scopeguard::defer;
       use serde::Serialize;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::savable::Savable;
       use crate::db::save_task::SaveTask;
       use super::{Saver, Serializer};
@@ -208,7 +232,8 @@ mod test {
          value: "value".to_string()
       };
 
-      let mut saver = Saver::new();
+      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let mut saver = Saver::new(in_memory_db);
       let task = SaveTask::new(Arc::new(savable));
       saver._save(task).unwrap();
 
