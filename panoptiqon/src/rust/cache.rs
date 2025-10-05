@@ -16,9 +16,11 @@
 
 use std::fmt::{self, Debug, Formatter};
 use std::hash::Hash;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::db::loader::CacheDeserializer;
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature = "jvm")]
@@ -159,10 +161,7 @@ where for<'content_de>
       use std::{any, mem};
       use std::fs::File;
       use std::io::BufReader;
-      use std::marker::PhantomData;
-      use serde::de::{SeqAccess, Visitor};
       use serde_json::de::IoRead;
-      use crate::db::loader::{CacheDeserializer, Loader};
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
       let deserializer: &mut CacheDeserializer<File>
@@ -192,54 +191,73 @@ where for<'content_de>
 
       debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
 
-      struct CacheVisitor<'a, T: CacheContent> {
-         loader: &'a Loader,
-         _cache_content_type: PhantomData<T>
-      }
-
-      impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
-      where for<'content_de>
-         T: CacheContent + Deserialize<'content_de>
-      {
-         type Value = Cache<T>;
-
-         fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-            formatter.write_str("cache file path")
-         }
-
-         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-         where
-            A: SeqAccess<'de>
-         {
-            let repository_dir_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-            let file_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-
-            let cache = self.loader.load(&repository_dir_path, file_path)
-               .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
-
-            Ok(cache)
-         }
-      }
-
-      let CacheDeserializer { deserializer, loader } = deserializer;
-
-      let visitor = CacheVisitor::<T> {
-         loader: *loader,
-         _cache_content_type: PhantomData
-      };
-
-      debug_assert!(
-         size_of::<D::Error>()
-            == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
-      );
-
-      let result = deserializer.deserialize_seq(visitor);
-      let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
-      mem::forget(result);
-      force_transmuted_result
+      deserialize(deserializer)
    }
+}
+
+#[cfg(not(feature = "jvm"))]
+fn deserialize<T, R, E>(
+   deserializer: &mut CacheDeserializer<R>
+) -> Result<Cache<T>, E>
+where for<'content_de, 'local>
+   T: CacheContent
+      + Deserialize<'content_de>,
+   R: Read
+{
+   use std::fs::File;
+   use std::marker::PhantomData;
+   use std::mem;
+   use serde::de::{SeqAccess, Visitor};
+   use crate::db::loader::Loader;
+
+   struct CacheVisitor<'a, T: CacheContent> {
+      loader: &'a Loader,
+      _cache_content_type: PhantomData<T>
+   }
+
+   impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
+   where for<'content_de>
+      T: CacheContent
+         + Deserialize<'content_de>
+   {
+      type Value = Cache<T>;
+
+      fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+         formatter.write_str("cache file path")
+      }
+
+      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+      where
+         A: SeqAccess<'de>
+      {
+         let repository_dir_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+         let file_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+
+         let cache = self.loader.load(&repository_dir_path, file_path)
+            .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
+
+         Ok(cache)
+      }
+   }
+
+   let CacheDeserializer { deserializer, loader } = deserializer;
+
+   let visitor = CacheVisitor::<T> {
+      loader: *loader,
+      _cache_content_type: PhantomData
+   };
+
+   debug_assert!(
+      size_of::<E>()
+         == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
+   );
+
+   let result = deserializer.deserialize_seq(visitor);
+   let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
+   mem::forget(result);
+   force_transmuted_result
 }
 
 #[cfg(feature = "jvm")]
@@ -257,10 +275,7 @@ impl<'de, T> Deserialize<'de> for Cache<T>
       use std::{any, mem};
       use std::fs::File;
       use std::io::BufReader;
-      use std::marker::PhantomData;
-      use serde::de::{SeqAccess, Visitor};
       use serde_json::de::IoRead;
-      use crate::db::loader::{CacheDeserializer, Loader};
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
       let deserializer: &mut CacheDeserializer<File>
@@ -290,57 +305,77 @@ impl<'de, T> Deserialize<'de> for Cache<T>
 
       debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
 
-      struct CacheVisitor<'a, T: CacheContent> {
-         loader: &'a Loader,
-         _cache_content_type: PhantomData<T>
-      }
-
-      impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
-      where for<'content_de, 'local>
-         T: CacheContent
-            + Deserialize<'content_de>
-            + CloneIntoJvm<'local, T::JvmType<'local>>
-            + CloneIntoJvmHelper
-      {
-         type Value = Cache<T>;
-
-         fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-            formatter.write_str("cache file path")
-         }
-
-         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-         where
-            A: SeqAccess<'de>
-         {
-            let repository_dir_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-            let file_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
-
-            let cache = self.loader.load(&repository_dir_path, file_path)
-               .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
-
-            Ok(cache)
-         }
-      }
-
-      let CacheDeserializer { deserializer, loader } = deserializer;
-
-      let visitor = CacheVisitor::<T> {
-         loader: *loader,
-         _cache_content_type: PhantomData
-      };
-
-      debug_assert!(
-         size_of::<D::Error>()
-            == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
-      );
-
-      let result = deserializer.deserialize_seq(visitor);
-      let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
-      mem::forget(result);
-      force_transmuted_result
+      deserialize(deserializer)
    }
+}
+
+#[cfg(feature = "jvm")]
+fn deserialize<T, R, E>(
+   deserializer: &mut CacheDeserializer<R>
+) -> Result<Cache<T>, E>
+where for<'content_de, 'local>
+   T: CacheContent
+      + Deserialize<'content_de>
+      + CloneIntoJvm<'local, T::JvmType<'local>>
+      + CloneIntoJvmHelper,
+   R: Read
+{
+   use std::fs::File;
+   use std::marker::PhantomData;
+   use std::mem;
+   use serde::de::{SeqAccess, Visitor};
+   use crate::db::loader::Loader;
+
+   struct CacheVisitor<'a, T: CacheContent> {
+      loader: &'a Loader,
+      _cache_content_type: PhantomData<T>
+   }
+
+   impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
+   where for<'content_de, 'local>
+      T: CacheContent
+         + Deserialize<'content_de>
+         + CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
+   {
+      type Value = Cache<T>;
+
+      fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+         formatter.write_str("cache file path")
+      }
+
+      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+      where
+         A: SeqAccess<'de>
+      {
+         let repository_dir_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+         let file_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+
+         let cache = self.loader.load(&repository_dir_path, file_path)
+            .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
+
+         Ok(cache)
+      }
+   }
+
+   let CacheDeserializer { deserializer, loader } = deserializer;
+
+   let visitor = CacheVisitor::<T> {
+      loader: *loader,
+      _cache_content_type: PhantomData
+   };
+
+   debug_assert!(
+      size_of::<E>()
+         == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
+   );
+
+   let result = deserializer.deserialize_seq(visitor);
+   let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
+   mem::forget(result);
+   force_transmuted_result
 }
 
 pub trait CacheContent: Send + Sync + 'static {
