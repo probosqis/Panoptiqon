@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use serde::de::Visitor;
@@ -32,14 +31,14 @@ use {
    crate::jvm_types::{JvmCache, JvmCacheId, JvmErased},
 };
 
-pub struct CacheDeserializer<'a> {
-   pub(crate) deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+pub struct CacheDeserializer<'a, R: Read> {
+   pub(crate) deserializer: serde_json::Deserializer<IoRead<BufReader<R>>>,
    pub(crate) loader: &'a Loader
 }
 
-impl<'a> CacheDeserializer<'a> {
+impl<'a, R: Read> CacheDeserializer<'a, R> {
    pub(crate) fn new(
-      json_deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+      json_deserializer: serde_json::Deserializer<IoRead<BufReader<R>>>,
       loader: &'a Loader
    ) -> Self {
       Self {
@@ -49,7 +48,7 @@ impl<'a> CacheDeserializer<'a> {
    }
 }
 
-impl<'de, 'a> Deserializer<'de> for &mut CacheDeserializer<'a> {
+impl<'de, 'a, R: Read> Deserializer<'de> for &mut CacheDeserializer<'a, R> {
    type Error = serde_json::Error;
 
    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>

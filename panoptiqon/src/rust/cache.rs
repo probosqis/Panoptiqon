@@ -165,8 +165,8 @@ where for<'content_de>
       use crate::db::loader::{CacheDeserializer, Loader};
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
-      let deserializer: &mut CacheDeserializer
-         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer>() {
+      let deserializer: &mut CacheDeserializer<File>
+         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
             unsafe { mem::transmute_copy(&deserializer) }
          } else if any::type_name::<D>()
             == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
@@ -182,15 +182,15 @@ where for<'content_de>
 
                let cache_deserializer_ptr
                   = json_deserializer_ptr
-                  - mem::offset_of!(CacheDeserializer, deserializer);
+                  - mem::offset_of!(CacheDeserializer<File>, deserializer);
 
-               &mut *(cache_deserializer_ptr as *mut CacheDeserializer)
+               &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
             }
          } else {
             panic!("Caches can be deserialized only with CacheDeserializer");
          };
 
-      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
+      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
 
       struct CacheVisitor<'a, T: CacheContent> {
          loader: &'a Loader,
@@ -232,7 +232,7 @@ where for<'content_de>
 
       debug_assert!(
          size_of::<D::Error>()
-            == size_of::<<&mut CacheDeserializer as Deserializer>::Error>()
+            == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
       );
 
       let result = deserializer.deserialize_seq(visitor);
@@ -263,8 +263,8 @@ impl<'de, T> Deserialize<'de> for Cache<T>
       use crate::db::loader::{CacheDeserializer, Loader};
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
-      let deserializer: &mut CacheDeserializer
-         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer>() {
+      let deserializer: &mut CacheDeserializer<File>
+         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
             unsafe { mem::transmute_copy(&deserializer) }
          } else if any::type_name::<D>()
             == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
@@ -280,15 +280,15 @@ impl<'de, T> Deserialize<'de> for Cache<T>
 
                let cache_deserializer_ptr
                   = json_deserializer_ptr
-                  - mem::offset_of!(CacheDeserializer, deserializer);
+                  - mem::offset_of!(CacheDeserializer<File>, deserializer);
 
-               &mut *(cache_deserializer_ptr as *mut CacheDeserializer)
+               &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
             }
          } else {
             panic!("Caches can be deserialized only with CacheDeserializer");
          };
 
-      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
+      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
 
       struct CacheVisitor<'a, T: CacheContent> {
          loader: &'a Loader,
@@ -333,7 +333,7 @@ impl<'de, T> Deserialize<'de> for Cache<T>
 
       debug_assert!(
          size_of::<D::Error>()
-            == size_of::<<&mut CacheDeserializer as Deserializer>::Error>()
+            == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
       );
 
       let result = deserializer.deserialize_seq(visitor);
