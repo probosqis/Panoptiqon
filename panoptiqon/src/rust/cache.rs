@@ -164,34 +164,55 @@ where for<'content_de>
       use serde_json::de::IoRead;
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
-      let deserializer: &mut CacheDeserializer<File>
-         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
-            unsafe { mem::transmute_copy(&deserializer) }
-         } else if any::type_name::<D>()
-            == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
-         {
-            // CacheSerializer::deserialize_structがserde_json::Deserializerに
-            // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
-            // CacheSerializerではなくserde_json::Deserializerが渡される。
-            // この場合deserializerのアドレスから
-            // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
-            // CacheSerializerのアドレスを逆算する。
-            unsafe {
-               let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
-
-               let cache_deserializer_ptr
-                  = json_deserializer_ptr
-                  - mem::offset_of!(CacheDeserializer<File>, deserializer);
-
-               &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
-            }
-         } else {
-            panic!("Caches can be deserialized only with CacheDeserializer");
+      if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
+         let deserializer: &mut CacheDeserializer<File> = unsafe {
+            mem::transmute_copy(&deserializer)
          };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<&[u8]>>() {
+         let deserializer: &mut CacheDeserializer<&[u8]> = unsafe {
+            mem::transmute_copy(&deserializer)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
+      {
+         // CacheSerializer::deserialize_structがserde_json::Deserializerに
+         // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
+         // CacheSerializerではなくserde_json::Deserializerが渡される。
+         // この場合deserializerのアドレスから
+         // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
+         // CacheSerializerのアドレスを逆算する。
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
 
-      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<File>, deserializer);
 
-      deserialize(deserializer)
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<&[u8]>>>>()
+      {
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
+
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<&[u8]>, deserializer);
+
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<&[u8]>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else {
+         panic!("Caches can be deserialized only with CacheDeserializer");
+      }
    }
 }
 
@@ -278,34 +299,55 @@ impl<'de, T> Deserialize<'de> for Cache<T>
       use serde_json::de::IoRead;
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
-      let deserializer: &mut CacheDeserializer<File>
-         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
-            unsafe { mem::transmute_copy(&deserializer) }
-         } else if any::type_name::<D>()
-            == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
-         {
-            // CacheSerializer::deserialize_structがserde_json::Deserializerに
-            // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
-            // CacheSerializerではなくserde_json::Deserializerが渡される。
-            // この場合deserializerのアドレスから
-            // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
-            // CacheSerializerのアドレスを逆算する。
-            unsafe {
-               let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
-
-               let cache_deserializer_ptr
-                  = json_deserializer_ptr
-                  - mem::offset_of!(CacheDeserializer<File>, deserializer);
-
-               &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
-            }
-         } else {
-            panic!("Caches can be deserialized only with CacheDeserializer");
+      if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
+         let deserializer: &mut CacheDeserializer<File> = unsafe {
+            mem::transmute_copy(&deserializer)
          };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<&[u8]>>() {
+         let deserializer: &mut CacheDeserializer<&[u8]> = unsafe {
+            mem::transmute_copy(&deserializer)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
+      {
+         // CacheSerializer::deserialize_structがserde_json::Deserializerに
+         // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
+         // CacheSerializerではなくserde_json::Deserializerが渡される。
+         // この場合deserializerのアドレスから
+         // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
+         // CacheSerializerのアドレスを逆算する。
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
 
-      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<File>, deserializer);
 
-      deserialize(deserializer)
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<&[u8]>>>>()
+      {
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
+
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<&[u8]>, deserializer);
+
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<&[u8]>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else {
+         panic!("Caches can be deserialized only with CacheDeserializer");
+      }
    }
 }
 
