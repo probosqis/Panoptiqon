@@ -30,6 +30,12 @@ impl InMemoryDb {
       }
    }
 
+   pub(crate) fn read(&self, file_path: impl AsRef<Path>) -> anyhow::Result<&Vec<u8>> {
+      use anyhow::Context;
+
+      self.files.get(file_path.as_ref()).context("File not found")
+   }
+
    pub(crate) fn write(&mut self, file_path: impl AsRef<Path>) -> &mut Vec<u8> {
       let file_path = file_path.as_ref().to_path_buf();
 
