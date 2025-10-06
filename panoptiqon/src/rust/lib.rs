@@ -21,8 +21,9 @@
 )]
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use crate::cache::CacheContent;
+use crate::db::in_memory_db::InMemoryDb;
 use crate::db::loader::Loader;
 use crate::db::scheduler::DbScheduler;
 use crate::repository::Repository;
@@ -53,6 +54,8 @@ pub mod jvm_type;
 pub mod jvm_types;
 
 pub struct Panoptiqon {
+   #[cfg(any(test, feature = "testable"))]
+   in_memory_db: Arc<Mutex<InMemoryDb>>,
    db_scheduler: Arc<DbScheduler>,
    loader: Arc<Loader>
 }
@@ -71,6 +74,7 @@ impl Panoptiqon {
          let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
          let saver = Saver::new(Arc::clone(&in_memory_db));
          Panoptiqon {
+            in_memory_db,
             db_scheduler: Arc::new(DbScheduler::new(saver)),
             loader: Arc::new(Loader::new())
          }
@@ -97,7 +101,8 @@ impl Panoptiqon {
          Repository::new(
             Arc::clone(&self.db_scheduler),
             Arc::downgrade(&self.loader),
-            dir_path
+            dir_path,
+            Arc::clone(&self.in_memory_db)
          )
       );
 
@@ -127,7 +132,8 @@ impl Panoptiqon {
             env,
             Arc::clone(&self.db_scheduler),
             Arc::downgrade(&self.loader),
-            dir_path
+            dir_path,
+            Arc::clone(&self.in_memory_db)
          )
       );
 
