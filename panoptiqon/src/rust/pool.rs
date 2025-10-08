@@ -239,13 +239,14 @@ mod test {
 
    #[test]
    fn insert_if_vacant() {
-      use std::sync::{Arc, Mutex};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{DirPath, Saver};
       use crate::db::scheduler::DbScheduler;
       use crate::pool::UniqueCachePool;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let mut pool = UniqueCachePool::new(
          Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
          &DirPath::new(PathBuf::from("test/UniqueCachePool/insert_if_vacant"))
@@ -321,12 +322,13 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex};
+      use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,
@@ -346,12 +348,13 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex};
+      use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,
@@ -375,12 +378,13 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex};
+      use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,
@@ -400,12 +404,13 @@ mod jni_tests {
       mut env: JNIEnv,
       _obj: JObject
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex};
+      use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::{self, Saver};
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let db_scheduler = Arc::new(DbScheduler::new(Saver::new(in_memory_db)));
       let pool = UniqueCachePool::new(
          &mut env,

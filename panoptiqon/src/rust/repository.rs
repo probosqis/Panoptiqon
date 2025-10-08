@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
+use std::cell::RefCell;
 use std::path::Path;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, ReentrantLock, Weak};
 use serde::{Deserialize, Serialize};
 use crate::cache::{Cache, CacheContent};
 use crate::db::loader::Loader;
@@ -42,7 +43,7 @@ pub struct Repository<T: CacheContent> {
    pool: UniqueCachePool<T>,
    loader: Weak<Loader>,
    #[cfg(any(test, feature = "testable"))]
-   in_memory_db: Arc<Mutex<InMemoryDb>>,
+   in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>,
    #[cfg(any(test, feature = "testable"))]
    drop_observer: Box<dyn FnOnce() -> () + Send + Sync>
 }
@@ -82,9 +83,9 @@ impl<T: CacheContent> Repository<T> {
 
       let loader = self.loader.upgrade().context("Loader is already dropped")?;
 
-      let db_lock = self.in_memory_db.lock()
-         .map_err(|_| anyhow::anyhow!("InMemoryDb was poisoned"))?;
-      let file = db_lock.read(file_path)?;
+      let db_lock = self.in_memory_db.lock();
+      let db = db_lock.borrow();
+      let file = db.read(file_path)?;
       let reader = BufReader::new(file as &[u8]);
       let deserializer = serde_json::Deserializer::from_reader(reader);
       let mut deserializer = CacheDeserializer::new(
@@ -113,7 +114,7 @@ impl<T: CacheContent> Repository<T> {
       loader: Weak<Loader>,
       dir_path: impl AsRef<Path>,
       #[cfg(any(test, feature = "testable"))]
-      in_memory_db: Arc<Mutex<InMemoryDb>>
+      in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>
    ) -> Self
    where
       T: CloneIntoJvmHelper
@@ -136,7 +137,7 @@ impl<T: CacheContent> Repository<T> {
       db_scheduler: Arc<DbScheduler>,
       loader: Weak<Loader>,
       dir_path: impl AsRef<Path>,
-      in_memory_db: Arc<Mutex<InMemoryDb>>,
+      in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self
    where
@@ -222,7 +223,7 @@ impl<T: CacheContent> Repository<T> {
       loader: Weak<Loader>,
       dir_path: impl AsRef<Path>,
       #[cfg(any(test, feature = "testable"))]
-      in_memory_db: Arc<Mutex<InMemoryDb>>
+      in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>
    ) -> Self {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
 
@@ -241,7 +242,7 @@ impl<T: CacheContent> Repository<T> {
       db_scheduler: Arc<DbScheduler>,
       loader: Weak<Loader>,
       dir_path: impl AsRef<Path>,
-      in_memory_db: Arc<Mutex<InMemoryDb>>,
+      in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>,
       drop_observer: impl FnOnce() -> () + Send + Sync + 'static
    ) -> Self {
       let dir_path = saver::DirPath::new(dir_path.as_ref().to_path_buf());
@@ -381,10 +382,8 @@ fn unwrap_or_throw<'local>(
 #[cfg(all(test, not(feature = "jvm")))]
 mod test {
    use std::path::{Path, PathBuf};
-   use std::sync::Mutex;
    use serde::{Deserialize, Serialize};
    use crate::cache::CacheContent;
-   use crate::db::in_memory_db::InMemoryDb;
    use super::Repository;
 
    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -405,9 +404,9 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn loadFile() {
-      use std::fs;
-      use std::sync::Arc;
-      use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
@@ -420,7 +419,7 @@ mod test {
       }
 
       let loader = Arc::new(Loader::new());
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(saver)),
@@ -443,8 +442,10 @@ mod test {
    #[test]
    fn loadFile_viaLoad() {
       use std::fs;
-      use std::sync::Arc;
       use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
@@ -457,7 +458,7 @@ mod test {
       }
 
       let loader = Arc::new(Loader::new());
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(saver)),
@@ -477,8 +478,10 @@ mod test {
    #[test]
    fn loadFile_loaderDropped() {
       use std::fs;
-      use std::sync::Arc;
       use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
@@ -491,7 +494,7 @@ mod test {
       }
 
       let loader = Arc::new(Loader::new());
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(saver)),
@@ -510,8 +513,10 @@ mod test {
    #[test]
    fn loadFile_deserializeErr() {
       use std::fs;
-      use std::sync::Arc;
       use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
@@ -523,13 +528,13 @@ mod test {
       }
 
       let loader = Arc::new(Loader::new());
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(saver)),
          Arc::downgrade(&loader),
          "test/Repository/loadFile_deserializeErr",
-         in_memory_db
+         Arc::clone(&in_memory_db)
       );
 
       fs::write("test/Repository/loadFile_deserializeErr/0", "[0,42}").unwrap();
@@ -548,13 +553,15 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn loadFile_fileNotFound() {
-      use std::sync::Arc;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
       let loader = Arc::new(Loader::new());
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(saver)),
@@ -571,8 +578,10 @@ mod test {
    #[test]
    fn loadFile_cacheAlreadyExists() {
       use std::fs;
-      use std::sync::Arc;
       use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
@@ -585,7 +594,7 @@ mod test {
       }
 
       let loader = Arc::new(Loader::new());
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new(
          Arc::new(DbScheduler::new(saver)),
@@ -608,8 +617,9 @@ mod test {
 
 #[cfg(feature = "jni-test")]
 mod jni_tests {
+   use std::cell::RefCell;
    use std::path::{Path, PathBuf};
-   use std::sync::{Arc, LazyLock, Mutex, Weak};
+   use std::sync::{Arc, LazyLock, Mutex, ReentrantLock, Weak};
    use jni::JNIEnv;
    use jni::objects::JObject;
    use serde::{Deserialize, Serialize};
@@ -720,8 +730,8 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static switchCacheClass_inMemoryDb: LazyLock<Arc<Mutex<InMemoryDb>>>
-      = LazyLock::new(|| Arc::new(Mutex::new(InMemoryDb::new())));
+   static switchCacheClass_inMemoryDb: LazyLock<Arc<ReentrantLock<RefCell<InMemoryDb>>>>
+      = LazyLock::new(|| Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new()))));
 
    #[allow(non_upper_case_globals)]
    static switchCacheClass_dbScheduler: LazyLock<Arc<DbScheduler>> = LazyLock::new(|| {
@@ -770,7 +780,7 @@ mod jni_tests {
    ) {
       use crate::db::in_memory_db::InMemoryDb;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
@@ -806,7 +816,7 @@ mod jni_tests {
    ) {
       use crate::db::in_memory_db::InMemoryDb;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
@@ -828,7 +838,7 @@ mod jni_tests {
    ) {
       use crate::db::in_memory_db::InMemoryDb;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
@@ -860,7 +870,7 @@ mod jni_tests {
    ) {
       use crate::db::in_memory_db::InMemoryDb;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
@@ -893,7 +903,7 @@ mod jni_tests {
    ) -> JObject<'local> {
       use crate::db::in_memory_db::InMemoryDb;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<OneWayConversionData>::new_testable(
          &mut env,
@@ -914,7 +924,7 @@ mod jni_tests {
    ) -> JObject<'local> {
       use crate::db::in_memory_db::InMemoryDb;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<TwoWayConversionData>::new_testable(
          &mut env,
@@ -939,7 +949,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let mut repo_lock = oneWay_valueChangeFromNative_repository.lock().unwrap();
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
@@ -973,7 +983,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let mut repo_lock = twoWay_valueChangeFromNative_repository.lock().unwrap();
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
@@ -1007,7 +1017,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let mut repo_lock = valueChangeFromJvm_repository.lock().unwrap();
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
@@ -1044,7 +1054,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let mut repo_lock = oneWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
@@ -1106,7 +1116,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let mut repo_lock = twoWay_valueChange_doesntAffectOtherKeyCaches_repository.lock().unwrap();
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
@@ -1181,7 +1191,7 @@ mod jni_tests {
       use crate::jvm_repository_creator::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repo = Arc::new(
          Repository::<TwoWayConversionData>::new_testable(
@@ -1229,7 +1239,7 @@ mod jni_tests {
       use crate::jvm_repository_creator::JvmRepositoryCreator;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repo = Arc::new(
          Repository::<TwoWayConversionData>::new_testable(
@@ -1269,7 +1279,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repo = Arc::new(Repository::new_testable(
          &mut env,
@@ -1298,7 +1308,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repo = Arc::new(Repository::new_testable(
          &mut env,
@@ -1348,7 +1358,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repo = Arc::new(Repository::new_testable(
          &mut env,
@@ -1389,7 +1399,7 @@ mod jni_tests {
       use crate::db::in_memory_db::InMemoryDb;
 
       let repository_creator = JvmRepositoryCreator::new(&mut env);
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repo = Arc::new(Repository::new_testable(
          &mut env,

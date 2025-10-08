@@ -144,7 +144,11 @@ impl WorkerThread {
       use std::sync::mpsc;
 
       #[cfg(any(test, feature = "testable"))]
-      use crate::db::in_memory_db::InMemoryDb;
+      use {
+         std::cell::RefCell,
+         std::sync::ReentrantLock,
+         crate::db::in_memory_db::InMemoryDb,
+      };
 
       let WorkerThread::NotStarted { saver } = self else { return; };
 
@@ -155,7 +159,7 @@ impl WorkerThread {
       // すぐに破棄される
       let filler_saver = Saver::new(
          #[cfg(any(test, feature = "testable"))]
-         Arc::new(Mutex::new(InMemoryDb::new()))
+         Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())))
       );
       let mut saver = mem::replace(saver, filler_saver);
 
@@ -203,14 +207,15 @@ impl WorkerThread {
 
       #[cfg(any(test, feature = "testable"))]
       use {
-         std::sync::Arc,
+         std::cell::RefCell,
+         std::sync::{Arc, ReentrantLock},
          crate::db::in_memory_db::InMemoryDb,
       };
 
       let filler = Self::NotStarted {
          saver: Saver::new(
             #[cfg(any(test, feature = "testable"))]
-            Arc::new(Mutex::new(InMemoryDb::new()))
+            Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())))
          )
       };
       let running_worker_thread = mem::replace(self, filler);
@@ -276,12 +281,13 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn push_startWorkerThread() {
-      use std::sync::{Arc, Mutex};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
       use std::sync::atomic::Ordering;
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(in_memory_db);
       let db_scheduler = DbScheduler::new(saver);
 

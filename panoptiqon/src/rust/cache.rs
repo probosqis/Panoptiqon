@@ -465,11 +465,12 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveGet() {
-      use std::sync::{Arc, Mutex, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          Arc::new(DbScheduler::new(saver)),
@@ -494,12 +495,13 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveViaRepository_saveScheduled() {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let db_scheduler = Arc::new(DbScheduler::new(saver));
 
@@ -522,12 +524,13 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveViaCache_saveScheduled() {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let db_scheduler = Arc::new(DbScheduler::new(saver));
 
@@ -554,7 +557,8 @@ mod tests {
 
    #[test]
    fn serialize() {
-      use std::sync::{Arc, Mutex, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
@@ -563,7 +567,7 @@ mod tests {
          cache: Cache<CacheContentImpl>
       }
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          Arc::new(DbScheduler::new(saver)),
@@ -586,10 +590,9 @@ mod tests {
 
    #[test]
    fn deserialize() {
-      use std::fs::{self, File};
+      use std::cell::RefCell;
       use std::io::BufReader;
-      use std::sync::{Arc, Mutex};
-      use scopeguard::defer;
+      use std::sync::{Arc, ReentrantLock};
       use serde::Deserialize;
       use serde_json::Deserializer;
       use crate::db::in_memory_db::InMemoryDb;
@@ -609,14 +612,14 @@ mod tests {
 
       let loader = Arc::new(Loader::new());
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Arc::new(
          Repository::<CacheContentImpl>::new_testable(
             Arc::new(DbScheduler::new(saver)),
             Arc::downgrade(&loader),
             "test/CacheTest/deserialize",
-            in_memory_db,
+            Arc::clone(&in_memory_db),
             /* drop_observer = */ || ()
          )
       );
@@ -624,9 +627,11 @@ mod tests {
       let dyn_repo = Arc::clone(&repository);
       loader.push_repository(dyn_repo);
 
+      let db_lock = in_memory_db.lock();
+      let db = db_lock.borrow();
       let mut deserializer = CacheDeserializer::new(
          Deserializer::from_reader(BufReader::new(
-            File::open("test/CacheTest/deserialize/container").unwrap()
+            db.read("test/CacheTest/deserialize/container").unwrap() as &[u8]
          )),
          &loader
       );
@@ -656,8 +661,9 @@ mod tests {
    #[test]
    fn deserialize_recursive() {
       use std::fs;
-      use std::sync::{Arc, Mutex};
       use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
       use serde::Deserialize;
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
@@ -691,7 +697,7 @@ mod tests {
 
       let loader = Arc::new(Loader::new());
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Arc::new(
          Repository::<RecursiveCacheContent>::new_testable(
@@ -718,12 +724,13 @@ mod tests {
 
    #[test]
    fn id() {
-      use std::sync::{Arc, Mutex, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
       use super::CacheId;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          Arc::new(DbScheduler::new(saver)),
@@ -873,12 +880,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -909,13 +917,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
       let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
@@ -953,13 +962,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let db_scheduler = Arc::new(DbScheduler::new(saver));
 
@@ -985,13 +995,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let db_scheduler = Arc::new(DbScheduler::new(saver));
 
@@ -1022,12 +1033,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -1048,12 +1060,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -1076,12 +1089,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -1104,13 +1118,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -1134,13 +1149,14 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -1166,12 +1182,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
@@ -1194,7 +1211,8 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmCache<'local, JvmCacheContainer<'local>> {
-      use std::sync::Arc;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
       use crate::db::loader::Loader;
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
@@ -1207,7 +1225,7 @@ mod jni_tests {
       in_memory_db.write("test/CacheTest/deserialize/CacheContainer/0")
          .write(br#"[0,["test/CacheTest/deserialize/CacheContentImpl","test/CacheTest/deserialize/CacheContentImpl/0"]]"#).unwrap();
 
-      let in_memory_db = Arc::new(Mutex::new(in_memory_db));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let db_scheduler = Arc::new(DbScheduler::new(saver));
       let loader = Arc::new(Loader::new());
@@ -1254,12 +1272,13 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmCache<'local, JvmCacheContentImpl<'local>> {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,

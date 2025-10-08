@@ -246,19 +246,22 @@ mod test {
 
    #[test]
    fn downcast() {
+      use std::cell::RefCell;
       use std::ptr;
-      use std::sync::{Arc, Mutex, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
       use super::DynRepository;
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentA>::new(
-         Arc::new(DbScheduler::new(Saver::new(in_memory_db))),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
-         "test/Repository/can_load"
+         "test/Repository/can_load",
+         in_memory_db
       );
 
       let dyn_repository: &dyn DynRepository = &repository;

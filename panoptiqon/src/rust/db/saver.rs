@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, ReentrantLock};
 use crate::db::save_task::SaveTask;
 
 #[cfg(any(test, feature = "testable"))]
@@ -32,7 +33,7 @@ pub(crate) struct Saver {
    #[cfg(any(test, feature = "testable"))]
    received_tasks: Vec<SaveTask>,
    #[cfg(any(test, feature = "testable"))]
-   in_memory_db: Arc<Mutex<InMemoryDb>>
+   in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>
 }
 
 impl Saver {
@@ -42,7 +43,7 @@ impl Saver {
    }
 
    #[cfg(any(test, feature = "testable"))]
-   pub(crate) const fn new(in_memory_db: Arc<Mutex<InMemoryDb>>) -> Saver {
+   pub(crate) const fn new(in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>) -> Saver {
       Saver {
          received_tasks: Vec::new(),
          in_memory_db
@@ -79,10 +80,10 @@ impl Saver {
 
    #[cfg(any(test, feature = "testable"))]
    pub(crate) fn save(&mut self, task: SaveTask) -> anyhow::Result<()> {
-      let mut db_lock = self.in_memory_db.lock()
-         .map_err(|_| anyhow::anyhow!("In memory DB was poisoned"))?;
+      let db_lock = self.in_memory_db.lock();
+      let mut db = db_lock.borrow_mut();
 
-      let file = db_lock.write(task.file_path());
+      let file = db.write(task.file_path());
       let writer = BufWriter::new(file);
       let mut serializer = serde_json::Serializer::new(writer);
       task.cache.serialize_in_memory(&mut serializer)?;
@@ -104,9 +105,10 @@ mod test {
 
    #[test]
    fn save() {
+      use std::cell::RefCell;
       use std::fs::{self, File};
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex};
+      use std::sync::{Arc, ReentrantLock};
       use scopeguard::defer;
       use serde::Serialize;
       use crate::db::in_memory_db::InMemoryDb;
@@ -156,7 +158,7 @@ mod test {
          value: "value".to_string()
       };
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let mut saver = Saver::new(in_memory_db);
       let task = SaveTask::new(Arc::new(savable));
       let result = saver._save(task);
@@ -176,9 +178,10 @@ mod test {
 
    #[test]
    fn save_mkdir() {
+      use std::cell::RefCell;
       use std::fs::{self, File};
       use std::path::PathBuf;
-      use std::sync::{Arc, Mutex};
+      use std::sync::{Arc, ReentrantLock};
       use scopeguard::defer;
       use serde::Serialize;
       use crate::db::in_memory_db::InMemoryDb;
@@ -232,7 +235,7 @@ mod test {
          value: "value".to_string()
       };
 
-      let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
       let mut saver = Saver::new(in_memory_db);
       let task = SaveTask::new(Arc::new(savable));
       saver._save(task).unwrap();

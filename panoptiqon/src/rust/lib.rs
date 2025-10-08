@@ -17,13 +17,13 @@
 #![allow(incomplete_features)]
 #![feature(
    get_mut_unchecked, mapped_lock_guards, never_type, ptr_metadata,
-   specialization
+   reentrant_lock, specialization
 )]
 
+use std::cell::RefCell;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, ReentrantLock};
 use crate::cache::CacheContent;
-use crate::db::in_memory_db::InMemoryDb;
 use crate::db::loader::Loader;
 use crate::db::scheduler::DbScheduler;
 use crate::repository::Repository;
@@ -34,6 +34,11 @@ use {
    serde::{Deserialize, Serialize},
    crate::convert_jvm::{CloneFromJvm, CloneIntoJvm, CloneIntoJvmHelper},
    crate::jvm_types::{JvmCache, JvmCacheId, JvmErased},
+};
+
+#[cfg(any(test, feature = "testable"))]
+use {
+   crate::db::in_memory_db::InMemoryDb,
 };
 
 pub mod cache;
@@ -55,7 +60,7 @@ pub mod jvm_types;
 
 pub struct Panoptiqon {
    #[cfg(any(test, feature = "testable"))]
-   in_memory_db: Arc<Mutex<InMemoryDb>>,
+   in_memory_db: Arc<ReentrantLock<RefCell<InMemoryDb>>>,
    db_scheduler: Arc<DbScheduler>,
    loader: Arc<Loader>
 }
@@ -66,12 +71,7 @@ impl Panoptiqon {
 
       #[cfg(any(test, feature = "testable"))]
       {
-         use {
-            std::sync::Mutex,
-            crate::db::in_memory_db::InMemoryDb,
-         };
-
-         let in_memory_db = Arc::new(Mutex::new(InMemoryDb::new()));
+         let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
          let saver = Saver::new(Arc::clone(&in_memory_db));
          Panoptiqon {
             in_memory_db,
@@ -102,6 +102,7 @@ impl Panoptiqon {
             Arc::clone(&self.db_scheduler),
             Arc::downgrade(&self.loader),
             dir_path,
+            #[cfg(any(test, feature = "testable"))]
             Arc::clone(&self.in_memory_db)
          )
       );
@@ -133,6 +134,7 @@ impl Panoptiqon {
             Arc::clone(&self.db_scheduler),
             Arc::downgrade(&self.loader),
             dir_path,
+            #[cfg(any(test, feature = "testable"))]
             Arc::clone(&self.in_memory_db)
          )
       );
