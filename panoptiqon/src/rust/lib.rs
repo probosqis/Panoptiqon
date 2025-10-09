@@ -201,3 +201,178 @@ mod test {
       );
    }
 }
+
+#[cfg(feature = "jni-test")]
+mod jni_tests {
+   use std::path::{Path, PathBuf};
+   use std::sync::LazyLock;
+   use jni::JNIEnv;
+   use jni::objects::JObject;
+   use serde::{Deserialize, Serialize};
+   use crate::jvm_types::{JvmCache, JvmCacheId, JvmErased, JvmInteger};
+   use crate::{jvm_type, Panoptiqon};
+   use crate::cache::CacheContent;
+   use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
+
+   jvm_type! {
+      JvmCacheContentA,
+      JvmCacheContentB,
+   }
+
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+   struct CacheContentA(i32, i32);
+
+   impl CacheContent for CacheContentA {
+      type Key = i32;
+      type JvmKey<'local> = JvmInteger<'local>;
+      type JvmType<'local> = JvmCacheContentA<'local>;
+
+      fn key(&self) -> &i32 {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
+      }
+   }
+
+   impl<'local> CloneIntoJvm<'local, JvmCacheContentA<'local>> for CacheContentA {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmCacheContentA<'local> {
+         use crate::jvm_type::JvmType;
+
+         let j_object = env.new_object(
+            "com/wcaokaze/probosqis/panoptiqon/PanoptiqonTest$CacheContentA",
+            "(II)V",
+            &[self.0.into(), self.1.into()]
+         ).unwrap();
+
+         unsafe { JvmCacheContentA::from_j_object(j_object) }
+      }
+   }
+
+   impl<'local> CloneFromJvm<'local, JvmCacheContentA<'local>> for CacheContentA {
+      fn clone_from_jvm(
+         env: &mut JNIEnv<'local>,
+         jvm_instance: &JvmCacheContentA<'local>
+      ) -> CacheContentA {
+         use crate::jvm_type::JvmType;
+
+         let key = env
+            .call_method(jvm_instance.j_object(), "getKey", "()I", &[])
+            .unwrap().i().unwrap();
+         let value = env
+            .call_method(jvm_instance.j_object(), "getValue", "()I", &[])
+            .unwrap().i().unwrap();
+
+         CacheContentA(key, value)
+      }
+   }
+
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+   struct CacheContentB(i32, String);
+
+   impl CacheContent for CacheContentB {
+      type Key = i32;
+      type JvmKey<'local> = JvmInteger<'local>;
+      type JvmType<'local> = JvmCacheContentB<'local>;
+
+      fn key(&self) -> &i32 {
+         &self.0
+      }
+
+      fn file_path_for_key(dir_path: &Path, key: &i32) -> PathBuf {
+         dir_path.join(key.to_string())
+      }
+   }
+
+   impl<'local> CloneIntoJvm<'local, JvmCacheContentB<'local>> for CacheContentB {
+      fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmCacheContentB<'local> {
+         use crate::jvm_type::JvmType;
+
+         let value = self.1.clone_into_jvm(env);
+
+         let j_object = env.new_object(
+            "com/wcaokaze/probosqis/panoptiqon/PanoptiqonTest$CacheContentB",
+            "(ILjava/lang/String;)V",
+            &[self.0.into(), value.j_object().into()]
+         ).unwrap();
+
+         unsafe { JvmCacheContentB::from_j_object(j_object) }
+      }
+   }
+
+   impl<'local> CloneFromJvm<'local, JvmCacheContentB<'local>> for CacheContentB {
+      fn clone_from_jvm(
+         env: &mut JNIEnv<'local>,
+         jvm_instance: &JvmCacheContentB<'local>
+      ) -> CacheContentB {
+         use crate::jvm_type::JvmType;
+         use crate::jvm_types::JvmString;
+
+         let key = env
+            .call_method(jvm_instance.j_object(), "getKey", "()I", &[])
+            .unwrap().i().unwrap();
+         let value = env
+            .call_method(jvm_instance.j_object(), "getValue", "()Ljava/lang/String;", &[])
+            .unwrap().l().unwrap();
+
+         CacheContentB(
+            key,
+            String::clone_from_jvm(env, unsafe { &JvmString::from_j_object(value) })
+         )
+      }
+   }
+
+   #[allow(non_upper_case_globals)]
+   static load_jvm_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_00024prepareRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::thread;
+      use std::time::Duration;
+
+      let cache_content_a_repo = load_jvm_panoptiqon.new_repository::<CacheContentA>(
+         &mut env,
+         "test/PanoptiqonTest/loadJvm_a"
+      );
+      let cache_content_b_repo = load_jvm_panoptiqon.new_repository::<CacheContentB>(
+         &mut env,
+         "test/PanoptiqonTest/loadJvm_b"
+      );
+
+      cache_content_a_repo.save(CacheContentA(0, 42));
+      cache_content_b_repo.save(CacheContentB(0, "Lorem ipsum".to_string()));
+
+      // Wait for flashing
+      thread::sleep(Duration::from_millis(10));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_00024load<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      id: JvmCacheId<'local>
+   ) -> JvmCache<'local, JvmErased<'local>> {
+      use jni::objects::JThrowable;
+      use crate::convert_jvm::CloneIntoJvm;
+      use crate::jvm_type::JvmType;
+
+      match load_jvm_panoptiqon.load_jvm(&mut env, &id) {
+         Ok(cache) => cache,
+         Err(e) => {
+            let message = e.to_string().clone_into_jvm(&mut env);
+            let exception = JThrowable::from(
+               env.new_object(
+                  "java/io/IOException", "(Ljava/lang/String;)V",
+                  &[message.j_string().into()]
+               ).unwrap()
+            );
+            env.throw(exception).unwrap();
+            unsafe { JvmCache::from_j_object(JObject::null()) }
+         }
+      }
+   }
+}
