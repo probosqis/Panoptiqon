@@ -591,7 +591,7 @@ mod tests {
    #[test]
    fn deserialize() {
       use std::cell::RefCell;
-      use std::io::BufReader;
+      use std::io::{BufReader, Write};
       use std::sync::{Arc, ReentrantLock};
       use serde::Deserialize;
       use serde_json::Deserializer;
@@ -599,16 +599,11 @@ mod tests {
       use crate::db::loader::{CacheDeserializer, Loader};
       use crate::repository::Repository;
 
-      fs::create_dir_all("test/CacheTest/deserialize").unwrap();
-      fs::write("test/CacheTest/deserialize/0", "[0,42]").unwrap();
-      fs::write(
-         "test/CacheTest/deserialize/container",
-         r#"["test/CacheTest/deserialize","test/CacheTest/deserialize/0"]"#
-      ).unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/CacheTest/deserialize").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/CacheTest/deserialize/0")
+         .write(b"[0,42]").unwrap();
+      in_memory_db.write("test/CacheTest/deserialize/container")
+         .write(br#"["test/CacheTest/deserialize","test/CacheTest/deserialize/0"]"#).unwrap();
 
       let loader = Arc::new(Loader::new());
 
@@ -660,9 +655,8 @@ mod tests {
 
    #[test]
    fn deserialize_recursive() {
-      use std::fs;
-      use scopeguard::defer;
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use serde::Deserialize;
       use crate::db::in_memory_db::InMemoryDb;
@@ -684,16 +678,11 @@ mod tests {
          }
       }
 
-      fs::create_dir_all("test/CacheTest/deserialize_recursive").unwrap();
-      fs::write("test/CacheTest/deserialize_recursive/0", "[0,null]").unwrap();
-      fs::write(
-         "test/CacheTest/deserialize_recursive/1",
-         r#"[1,["test/CacheTest/deserialize_recursive","test/CacheTest/deserialize_recursive/0"]]"#
-      ).unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/CacheTest/deserialize_recursive").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/CacheTest/deserialize_recursive/0")
+         .write(b"[0,null]").unwrap();
+      in_memory_db.write("test/CacheTest/deserialize_recursive/1")
+         .write(br#"[1,["test/CacheTest/deserialize_recursive","test/CacheTest/deserialize_recursive/0"]]"#).unwrap();
 
       let loader = Arc::new(Loader::new());
 
@@ -1212,6 +1201,7 @@ mod jni_tests {
       _obj: JObject<'local>
    ) -> JvmCache<'local, JvmCacheContainer<'local>> {
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use crate::db::loader::Loader;
       use crate::db::in_memory_db::InMemoryDb;

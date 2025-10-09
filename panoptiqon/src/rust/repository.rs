@@ -405,18 +405,16 @@ mod test {
    #[test]
    fn loadFile() {
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
-      fs::create_dir_all("test/Repository/loadFile").unwrap();
-      fs::write("test/Repository/loadFile/0", "[0,42]").unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/Repository/loadFile").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/Repository/loadFile/0")
+         .write(b"[0,42]").unwrap();
 
       let loader = Arc::new(Loader::new());
       let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
@@ -441,21 +439,17 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn loadFile_viaLoad() {
-      use std::fs;
-      use scopeguard::defer;
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
-      fs::create_dir_all("test/Repository/loadFile_viaLoad").unwrap();
-      fs::write("test/Repository/loadFile_viaLoad/0", "[0,42]").unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/Repository/loadFile_viaLoad").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/Repository/loadFile_viaLoad/0")
+         .write(b"[0,42]").unwrap();
 
       let loader = Arc::new(Loader::new());
       let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
@@ -477,21 +471,17 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn loadFile_loaderDropped() {
-      use std::fs;
-      use scopeguard::defer;
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
-      fs::create_dir_all("test/Repository/loadFile_loaderDropped").unwrap();
-      fs::write("test/Repository/loadFile_loaderDropped/0", "[0,42]").unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/Repository/loadFile_loaderDropped").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/Repository/loadFile_loaderDropped/0")
+         .write(b"[0,42]").unwrap();
 
       let loader = Arc::new(Loader::new());
       let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
@@ -512,20 +502,13 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn loadFile_deserializeErr() {
-      use std::fs;
-      use scopeguard::defer;
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
-
-      fs::create_dir_all("test/Repository/loadFile_deserializeErr").unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/Repository/loadFile_deserializeErr").unwrap()
-      }
 
       let loader = Arc::new(Loader::new());
       let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
@@ -537,15 +520,30 @@ mod test {
          Arc::clone(&in_memory_db)
       );
 
-      fs::write("test/Repository/loadFile_deserializeErr/0", "[0,42}").unwrap();
+      {
+         let db_lock = in_memory_db.lock();
+         let mut db = db_lock.borrow_mut();
+         db.write("test/Repository/loadFile_deserializeErr/0")
+            .write(b"[0,42}").unwrap();
+      }
       let result = repository.load_file("test/Repository/loadFile_deserializeErr/0");
       assert!(result.is_err());
 
-      fs::write("test/Repository/loadFile_deserializeErr/1", r#"{"key":1,"value":42}"#).unwrap();
+      {
+         let db_lock = in_memory_db.lock();
+         let mut db = db_lock.borrow_mut();
+         db.write("test/Repository/loadFile_deserializeErr/1")
+            .write(br#"{"key":1,"value":42}"#).unwrap();
+      }
       let result = repository.load_file("test/Repository/loadFile_deserializeErr/1");
       assert!(result.is_err());
 
-      fs::write("test/Repository/loadFile_deserializeErr/2", r#"[2]"#).unwrap();
+      {
+         let db_lock = in_memory_db.lock();
+         let mut db = db_lock.borrow_mut();
+         db.write("test/Repository/loadFile_deserializeErr/2")
+            .write(br#"[2]"#).unwrap();
+      }
       let result = repository.load_file("test/Repository/loadFile_deserializeErr/2");
       assert!(result.is_err());
    }
@@ -577,21 +575,17 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn loadFile_cacheAlreadyExists() {
-      use std::fs;
-      use scopeguard::defer;
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
 
-      fs::create_dir_all("test/Repository/loadFile_cacheAlreadyExists").unwrap();
-      fs::write("test/Repository/loadFile_cacheAlreadyExists/0", "[0,42]").unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/Repository/loadFile_cacheAlreadyExists").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/Repository/loadFile_cacheAlreadyExists/0")
+         .write(b"[0,42]").unwrap();
 
       let loader = Arc::new(Loader::new());
       let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));

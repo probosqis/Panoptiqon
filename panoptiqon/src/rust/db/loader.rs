@@ -378,21 +378,17 @@ mod test {
 
    #[test]
    fn load() {
-      use std::fs;
-      use scopeguard::defer;
       use std::cell::RefCell;
+      use std::io::Write;
       use std::sync::{Arc, ReentrantLock};
       use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
 
-      fs::create_dir_all("test/Loader/load").unwrap();
-      fs::write("test/Loader/load/0", "[0,42]").unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/Loader/load").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/Loader/load/0")
+         .write(b"[0,42]").unwrap();
 
       let loader = Arc::new(Loader::new());
 
