@@ -16,9 +16,11 @@
 
 package com.wcaokaze.probosqis.panoptiqon
 
+import java.io.IOException
 import java.nio.charset.Charset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class PanoptiqonTest {
    data class CacheContentA(val key: Int, val value: Int)
@@ -63,4 +65,58 @@ class PanoptiqonTest {
 
    private external fun `loadJvm$prepareRepository`()
    private external fun `loadJvm$load`(id: Cache.Id): Cache<*>
+
+   @Test
+   fun loadJvm_unmatchedType() {
+      `loadJvm_unmatchedType$prepareRepository`()
+
+      @Suppress("UNCHECKED_CAST")
+      val cacheB = `loadJvm_unmatchedType$load`(
+         CacheId(
+            "test/PanoptiqonTest/loadJvm_unmatchedType_a",
+            "test/PanoptiqonTest/loadJvm_unmatchedType_a/0",
+         )
+      ) as Cache<CacheContentB>
+
+      assertFailsWith<ClassCastException> {
+         cacheB.value.value
+      }
+   }
+
+   private external fun `loadJvm_unmatchedType$prepareRepository`()
+   private external fun `loadJvm_unmatchedType$load`(id: Cache.Id): Cache<*>
+
+   @Test
+   fun loadJvm_fileNotFound() {
+      `loadJvm_fileNotFound$prepareRepository`()
+
+      assertFailsWith<IOException> {
+         `loadJvm_fileNotFound$load`(
+            CacheId(
+               "test/PanoptiqonTest/loadJvm_a",
+               "test/PanoptiqonTest/loadJvm_a/0",
+            )
+         )
+      }
+   }
+
+   private external fun `loadJvm_fileNotFound$prepareRepository`()
+   private external fun `loadJvm_fileNotFound$load`(id: Cache.Id): Cache<*>
+
+   @Test
+   fun loadJvm_repositoryNotFound() {
+      `loadJvm_repositoryNotFound$prepareRepository`()
+
+      assertFailsWith<IOException> {
+         `loadJvm_repositoryNotFound$load`(
+            CacheId(
+               "test/PanoptiqonTest/loadJvm_a",
+               "test/PanoptiqonTest/loadJvm_a/0",
+            )
+         )
+      }
+   }
+
+   private external fun `loadJvm_repositoryNotFound$prepareRepository`()
+   private external fun `loadJvm_repositoryNotFound$load`(id: Cache.Id): Cache<*>
 }

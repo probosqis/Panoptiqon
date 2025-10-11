@@ -324,7 +324,7 @@ mod jni_tests {
    }
 
    #[allow(non_upper_case_globals)]
-   static load_jvm_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
+   static loadJvm_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
 
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_00024prepareRepository<'local>(
@@ -334,11 +334,11 @@ mod jni_tests {
       use std::thread;
       use std::time::Duration;
 
-      let cache_content_a_repo = load_jvm_panoptiqon.new_repository::<CacheContentA>(
+      let cache_content_a_repo = loadJvm_panoptiqon.new_repository::<CacheContentA>(
          &mut env,
          "test/PanoptiqonTest/loadJvm_a"
       );
-      let cache_content_b_repo = load_jvm_panoptiqon.new_repository::<CacheContentB>(
+      let cache_content_b_repo = loadJvm_panoptiqon.new_repository::<CacheContentB>(
          &mut env,
          "test/PanoptiqonTest/loadJvm_b"
       );
@@ -356,14 +356,95 @@ mod jni_tests {
       _obj: JObject<'local>,
       id: JvmCacheId<'local>
    ) -> JvmCache<'local, JvmErased<'local>> {
+      load_or_throw(&mut env, &loadJvm_panoptiqon, id)
+   }
+
+   #[allow(non_upper_case_globals)]
+   static loadJvm_unmatchedType_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_1unmatchedType_00024prepareRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      use std::thread;
+      use std::time::Duration;
+
+      let cache_content_a_repo = loadJvm_unmatchedType_panoptiqon.new_repository::<CacheContentA>(
+         &mut env,
+         "test/PanoptiqonTest/loadJvm_unmatchedType_a"
+      );
+
+      cache_content_a_repo.save(CacheContentA(0, 42));
+
+      // Wait for flashing
+      thread::sleep(Duration::from_millis(10));
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_1unmatchedType_00024load<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      id: JvmCacheId<'local>
+   ) -> JvmCache<'local, JvmErased<'local>> {
+      load_or_throw(&mut env, &loadJvm_unmatchedType_panoptiqon, id)
+   }
+
+   #[allow(non_upper_case_globals)]
+   static loadJvm_fileNotFound_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_1fileNotFound_00024prepareRepository<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      loadJvm_fileNotFound_panoptiqon.new_repository::<CacheContentA>(
+         &mut env,
+         "test/PanoptiqonTest/loadJvm_fileNotFound_a"
+      );
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_1fileNotFound_00024load<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      id: JvmCacheId<'local>
+   ) -> JvmCache<'local, JvmErased<'local>> {
+      load_or_throw(&mut env, &loadJvm_fileNotFound_panoptiqon, id)
+   }
+
+   #[allow(non_upper_case_globals)]
+   static loadJvm_repositoryNotFound_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_1repositoryNotFound_00024prepareRepository<'local>(
+      _env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_PanoptiqonTest_loadJvm_1repositoryNotFound_00024load<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      id: JvmCacheId<'local>
+   ) -> JvmCache<'local, JvmErased<'local>> {
+      load_or_throw(&mut env, &loadJvm_repositoryNotFound_panoptiqon, id)
+   }
+
+   fn load_or_throw<'local>(
+      env: &mut JNIEnv<'local>,
+      panoptiqon: &Panoptiqon,
+      id: JvmCacheId<'local>
+   ) -> JvmCache<'local, JvmErased<'local>> {
       use jni::objects::JThrowable;
       use crate::convert_jvm::CloneIntoJvm;
       use crate::jvm_type::JvmType;
 
-      match load_jvm_panoptiqon.load_jvm(&mut env, &id) {
+      match panoptiqon.load_jvm(env, &id) {
          Ok(cache) => cache,
          Err(e) => {
-            let message = e.to_string().clone_into_jvm(&mut env);
+            let message = e.to_string().clone_into_jvm(env);
             let exception = JThrowable::from(
                env.new_object(
                   "java/io/IOException", "(Ljava/lang/String;)V",
