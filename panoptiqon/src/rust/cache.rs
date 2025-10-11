@@ -16,9 +16,11 @@
 
 use std::fmt::{self, Debug, Formatter};
 use std::hash::Hash;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use crate::db::loader::CacheDeserializer;
 use crate::unique_cache::UniqueCache;
 
 #[cfg(feature = "jvm")]
@@ -159,87 +161,124 @@ where for<'content_de>
       use std::{any, mem};
       use std::fs::File;
       use std::io::BufReader;
-      use std::marker::PhantomData;
-      use serde::de::{SeqAccess, Visitor};
       use serde_json::de::IoRead;
-      use crate::db::loader::{CacheDeserializer, Loader};
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
-      let deserializer: &mut CacheDeserializer
-         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer>() {
-            unsafe { mem::transmute_copy(&deserializer) }
-         } else if any::type_name::<D>()
-            == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
-         {
-            // CacheSerializer::deserialize_structがserde_json::Deserializerに
-            // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
-            // CacheSerializerではなくserde_json::Deserializerが渡される。
-            // この場合deserializerのアドレスから
-            // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
-            // CacheSerializerのアドレスを逆算する。
-            unsafe {
-               let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
-
-               let cache_deserializer_ptr
-                  = json_deserializer_ptr
-                  - mem::offset_of!(CacheDeserializer, deserializer);
-
-               &mut *(cache_deserializer_ptr as *mut CacheDeserializer)
-            }
-         } else {
-            panic!("Caches can be deserialized only with CacheDeserializer");
+      if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
+         let deserializer: &mut CacheDeserializer<File> = unsafe {
+            mem::transmute_copy(&deserializer)
          };
-
-      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
-
-      struct CacheVisitor<'a, T: CacheContent> {
-         loader: &'a Loader,
-         _cache_content_type: PhantomData<T>
-      }
-
-      impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
-      where for<'content_de>
-         T: CacheContent + Deserialize<'content_de>
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<&[u8]>>() {
+         let deserializer: &mut CacheDeserializer<&[u8]> = unsafe {
+            mem::transmute_copy(&deserializer)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
       {
-         type Value = Cache<T>;
+         // CacheSerializer::deserialize_structがserde_json::Deserializerに
+         // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
+         // CacheSerializerではなくserde_json::Deserializerが渡される。
+         // この場合deserializerのアドレスから
+         // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
+         // CacheSerializerのアドレスを逆算する。
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
 
-         fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-            formatter.write_str("cache file path")
-         }
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<File>, deserializer);
 
-         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-         where
-            A: SeqAccess<'de>
-         {
-            let repository_dir_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-            let file_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<&[u8]>>>>()
+      {
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
 
-            let cache = self.loader.load(&repository_dir_path, file_path)
-               .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<&[u8]>, deserializer);
 
-            Ok(cache)
-         }
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<&[u8]>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else {
+         panic!("Caches can be deserialized only with CacheDeserializer");
+      }
+   }
+}
+
+#[cfg(not(feature = "jvm"))]
+fn deserialize<T, R, E>(
+   deserializer: &mut CacheDeserializer<R>
+) -> Result<Cache<T>, E>
+where for<'content_de, 'local>
+   T: CacheContent
+      + Deserialize<'content_de>,
+   R: Read
+{
+   use std::fs::File;
+   use std::marker::PhantomData;
+   use std::mem;
+   use serde::de::{SeqAccess, Visitor};
+   use crate::db::loader::Loader;
+
+   struct CacheVisitor<'a, T: CacheContent> {
+      loader: &'a Loader,
+      _cache_content_type: PhantomData<T>
+   }
+
+   impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
+   where for<'content_de>
+      T: CacheContent
+         + Deserialize<'content_de>
+   {
+      type Value = Cache<T>;
+
+      fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+         formatter.write_str("cache file path")
       }
 
-      let CacheDeserializer { deserializer, loader } = deserializer;
+      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+      where
+         A: SeqAccess<'de>
+      {
+         let repository_dir_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+         let file_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
 
-      let visitor = CacheVisitor::<T> {
-         loader: *loader,
-         _cache_content_type: PhantomData
-      };
+         let cache = self.loader.load(&repository_dir_path, file_path)
+            .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
 
-      debug_assert!(
-         size_of::<D::Error>()
-            == size_of::<<&mut CacheDeserializer as Deserializer>::Error>()
-      );
-
-      let result = deserializer.deserialize_seq(visitor);
-      let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
-      mem::forget(result);
-      force_transmuted_result
+         Ok(cache)
+      }
    }
+
+   let CacheDeserializer { deserializer, loader } = deserializer;
+
+   let visitor = CacheVisitor::<T> {
+      loader: *loader,
+      _cache_content_type: PhantomData
+   };
+
+   debug_assert!(
+      size_of::<E>()
+         == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
+   );
+
+   let result = deserializer.deserialize_seq(visitor);
+   let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
+   mem::forget(result);
+   force_transmuted_result
 }
 
 #[cfg(feature = "jvm")]
@@ -257,90 +296,128 @@ impl<'de, T> Deserialize<'de> for Cache<T>
       use std::{any, mem};
       use std::fs::File;
       use std::io::BufReader;
-      use std::marker::PhantomData;
-      use serde::de::{SeqAccess, Visitor};
       use serde_json::de::IoRead;
-      use crate::db::loader::{CacheDeserializer, Loader};
 
       // TODO: TypeId::ofがT: Sizedを要求しなくなり次第そちらへ移行する
-      let deserializer: &mut CacheDeserializer
-         = if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer>() {
-            unsafe { mem::transmute_copy(&deserializer) }
-         } else if any::type_name::<D>()
-            == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
-         {
-            // CacheSerializer::deserialize_structがserde_json::Deserializerに
-            // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
-            // CacheSerializerではなくserde_json::Deserializerが渡される。
-            // この場合deserializerのアドレスから
-            // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
-            // CacheSerializerのアドレスを逆算する。
-            unsafe {
-               let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
-
-               let cache_deserializer_ptr
-                  = json_deserializer_ptr
-                  - mem::offset_of!(CacheDeserializer, deserializer);
-
-               &mut *(cache_deserializer_ptr as *mut CacheDeserializer)
-            }
-         } else {
-            panic!("Caches can be deserialized only with CacheDeserializer");
+      if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<File>>() {
+         let deserializer: &mut CacheDeserializer<File> = unsafe {
+            mem::transmute_copy(&deserializer)
          };
-
-      debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer>());
-
-      struct CacheVisitor<'a, T: CacheContent> {
-         loader: &'a Loader,
-         _cache_content_type: PhantomData<T>
-      }
-
-      impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
-      where for<'content_de, 'local>
-         T: CacheContent
-            + Deserialize<'content_de>
-            + CloneIntoJvm<'local, T::JvmType<'local>>
-            + CloneIntoJvmHelper
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>() == any::type_name::<&mut CacheDeserializer<&[u8]>>() {
+         let deserializer: &mut CacheDeserializer<&[u8]> = unsafe {
+            mem::transmute_copy(&deserializer)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<File>>>>()
       {
-         type Value = Cache<T>;
+         // CacheSerializer::deserialize_structがserde_json::Deserializerに
+         // 処理を委譲するため、Cacheを含む構造体のデシリアライズ時は
+         // CacheSerializerではなくserde_json::Deserializerが渡される。
+         // この場合deserializerのアドレスから
+         // mem::offset_of!(CacheDeserializer, deserializer)を引くことで
+         // CacheSerializerのアドレスを逆算する。
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
 
-         fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
-            formatter.write_str("cache file path")
-         }
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<File>, deserializer);
 
-         fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-         where
-            A: SeqAccess<'de>
-         {
-            let repository_dir_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
-            let file_path = seq.next_element::<PathBuf>()?
-               .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<File>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<File>>());
+         return deserialize(deserializer);
+      } else if any::type_name::<D>()
+         == any::type_name::<&mut serde_json::Deserializer<IoRead<BufReader<&[u8]>>>>()
+      {
+         let deserializer = unsafe {
+            let json_deserializer_ptr: usize = mem::transmute_copy(&deserializer);
 
-            let cache = self.loader.load(&repository_dir_path, file_path)
-               .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
+            let cache_deserializer_ptr
+               = json_deserializer_ptr
+               - mem::offset_of!(CacheDeserializer<&[u8]>, deserializer);
 
-            Ok(cache)
-         }
+            &mut *(cache_deserializer_ptr as *mut CacheDeserializer<&[u8]>)
+         };
+         debug_assert!(size_of::<D>() == size_of::<&mut CacheDeserializer<&[u8]>>());
+         return deserialize(deserializer);
+      } else {
+         panic!("Caches can be deserialized only with CacheDeserializer");
+      }
+   }
+}
+
+#[cfg(feature = "jvm")]
+fn deserialize<T, R, E>(
+   deserializer: &mut CacheDeserializer<R>
+) -> Result<Cache<T>, E>
+where for<'content_de, 'local>
+   T: CacheContent
+      + Deserialize<'content_de>
+      + CloneIntoJvm<'local, T::JvmType<'local>>
+      + CloneIntoJvmHelper,
+   R: Read
+{
+   use std::fs::File;
+   use std::marker::PhantomData;
+   use std::mem;
+   use serde::de::{SeqAccess, Visitor};
+   use crate::db::loader::Loader;
+
+   struct CacheVisitor<'a, T: CacheContent> {
+      loader: &'a Loader,
+      _cache_content_type: PhantomData<T>
+   }
+
+   impl<'de, 'vi, T> Visitor<'de> for CacheVisitor<'vi, T>
+   where for<'content_de, 'local>
+      T: CacheContent
+         + Deserialize<'content_de>
+         + CloneIntoJvm<'local, T::JvmType<'local>>
+         + CloneIntoJvmHelper
+   {
+      type Value = Cache<T>;
+
+      fn expecting(&self, formatter: &mut Formatter) -> fmt::Result {
+         formatter.write_str("cache file path")
       }
 
-      let CacheDeserializer { deserializer, loader } = deserializer;
+      fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+      where
+         A: SeqAccess<'de>
+      {
+         let repository_dir_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+         let file_path = seq.next_element::<PathBuf>()?
+            .ok_or_else(|| serde::de::Error::invalid_length(1, &self))?;
 
-      let visitor = CacheVisitor::<T> {
-         loader: *loader,
-         _cache_content_type: PhantomData
-      };
+         let cache = self.loader.load(&repository_dir_path, file_path)
+            .map_err(|_| serde::de::Error::custom("could not load cache file"))?;
 
-      debug_assert!(
-         size_of::<D::Error>()
-            == size_of::<<&mut CacheDeserializer as Deserializer>::Error>()
-      );
-
-      let result = deserializer.deserialize_seq(visitor);
-      let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
-      mem::forget(result);
-      force_transmuted_result
+         Ok(cache)
+      }
    }
+
+   let CacheDeserializer { deserializer, loader } = deserializer;
+
+   let visitor = CacheVisitor::<T> {
+      loader: *loader,
+      _cache_content_type: PhantomData
+   };
+
+   debug_assert!(
+      size_of::<E>()
+         == size_of::<<&mut CacheDeserializer<File> as Deserializer>::Error>()
+   );
+
+   let result = deserializer.deserialize_seq(visitor);
+   let force_transmuted_result = unsafe { mem::transmute_copy(&result) };
+   mem::forget(result);
+   force_transmuted_result
 }
 
 pub trait CacheContent: Send + Sync + 'static {
@@ -388,13 +465,18 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveGet() {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
+      let repository = Repository::<CacheContentImpl>::new_testable(
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/saveGet",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -413,16 +495,21 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveViaRepository_saveScheduled() {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
+      let db_scheduler = Arc::new(DbScheduler::new(saver));
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          Arc::clone(&db_scheduler),
          /* loader = */ Weak::new(),
          "test/CacheTest/saveViaRepository_saveScheduled",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
 
@@ -437,16 +524,21 @@ mod tests {
    #[allow(non_snake_case)]
    #[test]
    fn saveViaCache_saveScheduled() {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
+      let db_scheduler = Arc::new(DbScheduler::new(saver));
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
+      let repository = Repository::<CacheContentImpl>::new_testable(
          Arc::clone(&db_scheduler),
          /* loader = */ Weak::new(),
          "test/CacheTest/saveViaCache_saveScheduled",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
 
@@ -465,7 +557,9 @@ mod tests {
 
    #[test]
    fn serialize() {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
 
       #[derive(Serialize)]
@@ -473,10 +567,13 @@ mod tests {
          cache: Cache<CacheContentImpl>
       }
 
-      let mut repository = Repository::<CacheContentImpl>::new_testable(
-         Arc::new(DbScheduler::new(Saver::new())),
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
+      let repository = Repository::<CacheContentImpl>::new_testable(
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/serialize",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -493,33 +590,31 @@ mod tests {
 
    #[test]
    fn deserialize() {
-      use std::fs::{self, File};
-      use std::io::BufReader;
-      use std::sync::Arc;
-      use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::io::{BufReader, Write};
+      use std::sync::{Arc, ReentrantLock};
       use serde::Deserialize;
       use serde_json::Deserializer;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::{CacheDeserializer, Loader};
       use crate::repository::Repository;
 
-      fs::create_dir_all("test/CacheTest/deserialize").unwrap();
-      fs::write("test/CacheTest/deserialize/0", "[0,42]").unwrap();
-      fs::write(
-         "test/CacheTest/deserialize/container",
-         r#"["test/CacheTest/deserialize","test/CacheTest/deserialize/0"]"#
-      ).unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/CacheTest/deserialize").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/CacheTest/deserialize/0")
+         .write(b"[0,42]").unwrap();
+      in_memory_db.write("test/CacheTest/deserialize/container")
+         .write(br#"["test/CacheTest/deserialize","test/CacheTest/deserialize/0"]"#).unwrap();
 
       let loader = Arc::new(Loader::new());
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Arc::new(
          Repository::<CacheContentImpl>::new_testable(
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(saver)),
             Arc::downgrade(&loader),
             "test/CacheTest/deserialize",
+            Arc::clone(&in_memory_db),
             /* drop_observer = */ || ()
          )
       );
@@ -527,9 +622,11 @@ mod tests {
       let dyn_repo = Arc::clone(&repository);
       loader.push_repository(dyn_repo);
 
+      let db_lock = in_memory_db.lock();
+      let db = db_lock.borrow();
       let mut deserializer = CacheDeserializer::new(
          Deserializer::from_reader(BufReader::new(
-            File::open("test/CacheTest/deserialize/container").unwrap()
+            db.read("test/CacheTest/deserialize/container").unwrap() as &[u8]
          )),
          &loader
       );
@@ -558,10 +655,11 @@ mod tests {
 
    #[test]
    fn deserialize_recursive() {
-      use std::fs;
-      use std::sync::Arc;
-      use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::io::Write;
+      use std::sync::{Arc, ReentrantLock};
       use serde::Deserialize;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::loader::Loader;
       use crate::repository::Repository;
 
@@ -580,24 +678,22 @@ mod tests {
          }
       }
 
-      fs::create_dir_all("test/CacheTest/deserialize_recursive").unwrap();
-      fs::write("test/CacheTest/deserialize_recursive/0", "[0,null]").unwrap();
-      fs::write(
-         "test/CacheTest/deserialize_recursive/1",
-         r#"[1,["test/CacheTest/deserialize_recursive","test/CacheTest/deserialize_recursive/0"]]"#
-      ).unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/CacheTest/deserialize_recursive").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/CacheTest/deserialize_recursive/0")
+         .write(b"[0,null]").unwrap();
+      in_memory_db.write("test/CacheTest/deserialize_recursive/1")
+         .write(br#"[1,["test/CacheTest/deserialize_recursive","test/CacheTest/deserialize_recursive/0"]]"#).unwrap();
 
       let loader = Arc::new(Loader::new());
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Arc::new(
          Repository::<RecursiveCacheContent>::new_testable(
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(saver)),
             Arc::downgrade(&loader),
             "test/CacheTest/deserialize_recursive",
+            in_memory_db,
             /* drop_observer = */ || ()
          )
       );
@@ -617,14 +713,19 @@ mod tests {
 
    #[test]
    fn id() {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::repository::Repository;
       use super::CacheId;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/id",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -768,15 +869,20 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/saveGet",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -800,16 +906,21 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
       let mut repo_lock = saveGet_viaJni_repository.lock().unwrap();
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       *repo_lock = Some(Repository::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/saveGet_viaJni_createRepo",
+         in_memory_db,
          /* drop_observer = */ || ()
       ));
    }
@@ -840,18 +951,23 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
+      let db_scheduler = Arc::new(DbScheduler::new(saver));
 
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::clone(&db_scheduler),
          /* loader = */ Weak::new(),
          "test/CacheTest/saveViaRepository_saveScheduled",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
 
@@ -868,18 +984,23 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
+      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, Weak};
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
+      let db_scheduler = Arc::new(DbScheduler::new(saver));
 
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
          Arc::clone(&db_scheduler),
          /* loader = */ Weak::new(),
          "test/CacheTest/saveViaCache_saveScheduled",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
 
@@ -901,15 +1022,20 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_withoutJvmCache",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -923,15 +1049,20 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_withJvmCache",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -947,15 +1078,20 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_clone",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -971,16 +1107,21 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_cloneIntoJvm",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -997,16 +1138,21 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_cloneIntoJvm_cloneFromJvm",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -1025,15 +1171,20 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_save",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       let cache = repository.save(CacheContentImpl(0, 42));
@@ -1049,26 +1200,24 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmCache<'local, JvmCacheContainer<'local>> {
-      use std::fs;
-      use std::sync::Arc;
-      use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::io::Write;
+      use std::sync::{Arc, ReentrantLock};
       use crate::db::loader::Loader;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::jvm_repository_creator::JvmRepositoryCreator;
 
-      fs::create_dir_all("test/CacheTest/deserialize/CacheContentImpl").unwrap();
-      fs::write("test/CacheTest/deserialize/CacheContentImpl/0", "[0,42]").unwrap();
-      fs::create_dir_all("test/CacheTest/deserialize/CacheContainer").unwrap();
-      fs::write(
-         "test/CacheTest/deserialize/CacheContainer/0",
-         r#"[0,["test/CacheTest/deserialize/CacheContentImpl","test/CacheTest/deserialize/CacheContentImpl/0"]]"#
-      ).unwrap();
+      let mut in_memory_db = InMemoryDb::new();
 
-      defer! {
-         fs::remove_dir_all("test/CacheTest/deserialize").unwrap()
-      }
+      in_memory_db.write("test/CacheTest/deserialize/CacheContentImpl/0")
+         .write(b"[0,42]").unwrap();
+      in_memory_db.write("test/CacheTest/deserialize/CacheContainer/0")
+         .write(br#"[0,["test/CacheTest/deserialize/CacheContentImpl","test/CacheTest/deserialize/CacheContentImpl/0"]]"#).unwrap();
 
-      let db_scheduler = Arc::new(DbScheduler::new(Saver::new()));
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
+      let db_scheduler = Arc::new(DbScheduler::new(saver));
       let loader = Arc::new(Loader::new());
 
       let cache_content_repo = Arc::new(
@@ -1077,6 +1226,7 @@ mod jni_tests {
             Arc::clone(&db_scheduler),
             Arc::downgrade(&loader),
             "test/CacheTest/deserialize/CacheContentImpl",
+            Arc::clone(&in_memory_db),
             /* drop_observer = */ || ()
          )
       );
@@ -1087,6 +1237,7 @@ mod jni_tests {
             Arc::clone(&db_scheduler),
             Arc::downgrade(&loader),
             "test/CacheTest/deserialize/CacheContainer",
+            in_memory_db,
             /* drop_observer = */ || ()
          )
       );
@@ -1111,15 +1262,20 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmCache<'local, JvmCacheContentImpl<'local>> {
-      use std::sync::{Arc, Weak};
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock, Weak};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Repository::<CacheContentImpl>::new_testable(
          &mut env,
-         Arc::new(DbScheduler::new(Saver::new())),
+         Arc::new(DbScheduler::new(saver)),
          /* loader = */ Weak::new(),
          "test/CacheTest/referenceCount_clone",
+         in_memory_db,
          /* drop_observer = */ || ()
       );
       repository.save(CacheContentImpl(0, 42)).clone_into_jvm(&mut env)

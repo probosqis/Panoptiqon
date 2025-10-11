@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Read};
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 use serde::de::Visitor;
@@ -27,17 +26,19 @@ use crate::Repository;
 
 #[cfg(feature = "jvm")]
 use {
+   jni::JNIEnv,
    crate::convert_jvm::{CloneIntoJvm, CloneIntoJvmHelper},
+   crate::jvm_types::{JvmCache, JvmCacheId, JvmErased},
 };
 
-pub struct CacheDeserializer<'a> {
-   pub(crate) deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+pub struct CacheDeserializer<'a, R: Read> {
+   pub(crate) deserializer: serde_json::Deserializer<IoRead<BufReader<R>>>,
    pub(crate) loader: &'a Loader
 }
 
-impl<'a> CacheDeserializer<'a> {
+impl<'a, R: Read> CacheDeserializer<'a, R> {
    pub(crate) fn new(
-      json_deserializer: serde_json::Deserializer<IoRead<BufReader<File>>>,
+      json_deserializer: serde_json::Deserializer<IoRead<BufReader<R>>>,
       loader: &'a Loader
    ) -> Self {
       Self {
@@ -47,7 +48,7 @@ impl<'a> CacheDeserializer<'a> {
    }
 }
 
-impl<'de, 'a> Deserializer<'de> for &mut CacheDeserializer<'a> {
+impl<'de, 'a, R: Read> Deserializer<'de> for &mut CacheDeserializer<'a, R> {
    type Error = serde_json::Error;
 
    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
@@ -324,6 +325,29 @@ impl Loader {
       repository_lock.load_file(file_path)
    }
 
+   #[cfg(feature = "jvm")]
+   pub(crate) fn load_jvm<'local>(
+      &self,
+      env: &mut JNIEnv<'local>,
+      cache_id: &JvmCacheId<'local>
+   ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>> {
+      use anyhow::Context;
+      use crate::cache::CacheId;
+      use crate::convert_jvm::CloneFromJvm;
+
+      let cache_id = CacheId::clone_from_jvm(env, cache_id);
+
+      let lock = self.repositories.read()
+         .map_err(|_| anyhow::anyhow!("Loader is poisoned"))?;
+      let repository = lock.iter()
+         .find(|repo| repo.dir_path() == cache_id.repository_dir_path)
+         .context(format!(
+            "Repository not found (repo dir: {})",
+            cache_id.repository_dir_path.display()
+         ))?;
+      repository.load_file_jvm(env, &cache_id.file_path)
+   }
+
    #[cfg(any(test, feature = "testable"))]
    pub(crate) fn repositories(&self) -> Vec<Arc<dyn DynRepository>> {
       self.repositories.read().unwrap().clone()
@@ -354,27 +378,28 @@ mod test {
 
    #[test]
    fn load() {
-      use std::fs;
-      use std::sync::Arc;
-      use scopeguard::defer;
+      use std::cell::RefCell;
+      use std::io::Write;
+      use std::sync::{Arc, ReentrantLock};
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
 
-      fs::create_dir_all("test/Loader/load").unwrap();
-      fs::write("test/Loader/load/0", "[0,42]").unwrap();
-
-      defer! {
-         fs::remove_dir_all("test/Loader/load").unwrap()
-      }
+      let mut in_memory_db = InMemoryDb::new();
+      in_memory_db.write("test/Loader/load/0")
+         .write(b"[0,42]").unwrap();
 
       let loader = Arc::new(Loader::new());
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(in_memory_db)));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Arc::new(
          Repository::<CacheContentImpl>::new(
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(saver)),
             Arc::downgrade(&loader),
-            "test/Loader/load"
+            "test/Loader/load",
+            in_memory_db
          )
       );
 
@@ -392,10 +417,12 @@ mod test {
    #[allow(non_snake_case)]
    #[test]
    fn load_repositoryNotFound() {
+      use std::cell::RefCell;
       use std::fs;
-      use std::sync::Arc;
+      use std::sync::{Arc, ReentrantLock};
       use scopeguard::defer;
       use crate::cache::Cache;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::db::scheduler::DbScheduler;
       use crate::repository::Repository;
@@ -409,11 +436,14 @@ mod test {
 
       let loader = Arc::new(Loader::new());
 
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(Arc::clone(&in_memory_db));
       let repository = Arc::new(
          Repository::<CacheContentImpl>::new(
-            Arc::new(DbScheduler::new(Saver::new())),
+            Arc::new(DbScheduler::new(saver)),
             Arc::downgrade(&loader),
-            "test/Loader/load_repositoryNotFound_dummy"
+            "test/Loader/load_repositoryNotFound_dummy",
+            in_memory_db
          )
       );
 

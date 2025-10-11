@@ -19,3 +19,6 @@ pub(crate) mod save_task;
 pub(crate) mod savable;
 pub(crate) mod saver;
 pub(crate) mod scheduler;
+
+#[cfg(any(test, feature = "testable"))]
+pub(crate) mod in_memory_db;

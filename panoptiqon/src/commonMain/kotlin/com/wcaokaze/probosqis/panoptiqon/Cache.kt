@@ -29,8 +29,8 @@ annotation class InternalCacheApi
 interface Cache<out T> {
    class Id
       internal constructor (
-         private val repositoryDirPath: ByteArray,
-         private val filePath: ByteArray
+         val repositoryDirPath: ByteArray,
+         val filePath: ByteArray
       )
    {
       override fun hashCode(): Int {

@@ -140,13 +140,28 @@ enum WorkerThreadMessage {
 impl WorkerThread {
    fn start(&mut self) {
       use std::{mem, thread};
+      use std::sync::Arc;
       use std::sync::mpsc;
+
+      #[cfg(any(test, feature = "testable"))]
+      use {
+         std::cell::RefCell,
+         std::sync::ReentrantLock,
+         crate::db::in_memory_db::InMemoryDb,
+      };
 
       let WorkerThread::NotStarted { saver } = self else { return; };
 
       let (tx, rx) = mpsc::channel();
 
-      let mut saver = mem::replace(saver, Saver::new());
+      // NotStartedからSaverをムーブする際に一時的に代わりに埋めるためのSaver。
+      // このメソッド内で *self = Running が実行されるため、実際にはこのSaverは
+      // すぐに破棄される
+      let filler_saver = Saver::new(
+         #[cfg(any(test, feature = "testable"))]
+         Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())))
+      );
+      let mut saver = mem::replace(saver, filler_saver);
 
       let handle = thread::spawn(move || {
          let mut errs = Vec::new();
@@ -190,8 +205,20 @@ impl WorkerThread {
    fn _stop(&mut self) -> (anyhow::Result<()>, &mut Saver) {
       use std::mem;
 
-      let running_worker_thread
-         = mem::replace(self, Self::NotStarted { saver: Saver::new() });
+      #[cfg(any(test, feature = "testable"))]
+      use {
+         std::cell::RefCell,
+         std::sync::{Arc, ReentrantLock},
+         crate::db::in_memory_db::InMemoryDb,
+      };
+
+      let filler = Self::NotStarted {
+         saver: Saver::new(
+            #[cfg(any(test, feature = "testable"))]
+            Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())))
+         )
+      };
+      let running_worker_thread = mem::replace(self, filler);
       let result = match running_worker_thread {
          Self::Running { handle, message } => {
             message.send(WorkerThreadMessage::Stop).unwrap();
@@ -213,6 +240,7 @@ impl WorkerThread {
 
 #[cfg(all(test, not(feature = "jvm")))]
 mod test {
+   use std::fs::File;
    use std::path::{Path, PathBuf};
    use crate::db::savable::Savable;
    use crate::db::save_task::SaveTask;
@@ -231,23 +259,36 @@ mod test {
 
       fn serialize(
          &self,
-         _serializer: saver::Serializer
+         _serializer: saver::Serializer<File>
       ) -> anyhow::Result<
-         <saver::Serializer as serde::Serializer>::Ok,
-         <saver::Serializer as serde::Serializer>::Error
+         <saver::Serializer<File> as serde::Serializer>::Ok,
+         <saver::Serializer<File> as serde::Serializer>::Error
       > {
-         unimplemented!();
+         Ok(())
+      }
+
+      fn serialize_in_memory(
+         &self,
+         serializer: saver::Serializer<&mut Vec<u8>>
+      ) -> anyhow::Result<
+         <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Ok,
+         <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Error
+      > {
+         Ok(())
       }
    }
 
    #[allow(non_snake_case)]
    #[test]
    fn push_startWorkerThread() {
-      use std::sync::Arc;
+      use std::cell::RefCell;
+      use std::sync::{Arc, ReentrantLock};
       use std::sync::atomic::Ordering;
+      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
 
-      let saver = Saver::new();
+      let in_memory_db = Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())));
+      let saver = Saver::new(in_memory_db);
       let db_scheduler = DbScheduler::new(saver);
 
       assert!(

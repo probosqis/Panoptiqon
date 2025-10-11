@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 use serde::Serialize;
@@ -226,10 +227,21 @@ impl<T> Savable for UniqueCache<T>
 
    fn serialize(
       &self,
-      serializer: saver::Serializer
+      serializer: saver::Serializer<File>
    ) -> anyhow::Result<
-      <saver::Serializer as serde::Serializer>::Ok,
-      <saver::Serializer as serde::Serializer>::Error
+      <saver::Serializer<File> as serde::Serializer>::Ok,
+      <saver::Serializer<File> as serde::Serializer>::Error
+   > {
+      self.get().serialize(serializer)
+   }
+
+   #[cfg(any(test, feature = "testable"))]
+   fn serialize_in_memory(
+      &self,
+      serializer: saver::Serializer<&mut Vec<u8>>
+   ) -> anyhow::Result<
+      <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Ok,
+      <saver::Serializer<&mut Vec<u8>> as serde::Serializer>::Error
    > {
       self.get().serialize(serializer)
    }
