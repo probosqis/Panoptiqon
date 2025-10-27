@@ -68,6 +68,7 @@ fun <T> Cache(initialValue: T): Cache<T>
       = CacheImpl(initialValue)
 
 interface WritableCache<T> {
+   val id: Cache.Id
    var value: T
 
    fun asCache(): Cache<T>
