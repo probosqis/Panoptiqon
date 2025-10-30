@@ -42,6 +42,12 @@ class CacheSerializerTest {
       val cache: Cache<CacheContentImpl>
    )
 
+   @Serializable
+   data class WritableCacheContainer(
+      @Contextual
+      val cache: WritableCache<CacheContentImpl>
+   )
+
    private fun createJsonSerialization(loadCache: (Cache.Id) -> Cache<*>) = Json {
       class CacheSerializer<T>(
          @Suppress("UNUSED_PARAMETER")
@@ -55,6 +61,23 @@ class CacheSerializerTest {
 
       serializersModule = SerializersModule {
          contextual(Cache::class) { args -> CacheSerializer(args[0]) }
+      }
+   }
+
+   @JvmName("createWritableCacheJsonSerialization")
+   private fun createJsonSerialization(loadCache: (Cache.Id) -> WritableCache<*>) = Json {
+      class WritableCacheSerializer<T>(
+         @Suppress("UNUSED_PARAMETER")
+         contentSerializer: KSerializer<T>
+      ) : AbstractWritableCacheSerializer<T>() {
+         override fun loadCache(cacheId: Cache.Id): WritableCache<T> {
+            @Suppress("UNCHECKED_CAST")
+            return loadCache(cacheId) as WritableCache<T>
+         }
+      }
+
+      serializersModule = SerializersModule {
+         contextual(WritableCache::class) { args -> WritableCacheSerializer(args[0]) }
       }
    }
 
@@ -99,6 +122,26 @@ class CacheSerializerTest {
    private external fun `serialize$loadCache`(cacheId: Cache.Id): Cache<*>
 
    @Test
+   fun serialize_writable() {
+      val json = createJsonSerialization(::`serialize_writable$loadCache`)
+
+      val cache = `serialize_writable$saveCache`()
+      val cacheContainer = WritableCacheContainer(cache)
+
+      val jsonStr = json.encodeToString(cacheContainer)
+      assertEquals(
+         cacheContainerJsonStr(
+            "CacheSerializerTest/serialize_writable",
+            "CacheSerializerTest/serialize_writable/0"
+         ),
+         jsonStr
+      )
+   }
+
+   private external fun `serialize_writable$saveCache`(): WritableCache<CacheContentImpl>
+   private external fun `serialize_writable$loadCache`(cacheId: Cache.Id): WritableCache<*>
+
+   @Test
    fun deserialize() {
       `deserialize$preparePanoptiqon`()
 
@@ -118,4 +161,25 @@ class CacheSerializerTest {
 
    private external fun `deserialize$preparePanoptiqon`()
    private external fun `deserialize$loadCache`(cacheId: Cache.Id): Cache<*>
+
+   @Test
+   fun deserialize_writable() {
+      `deserialize_writable$preparePanoptiqon`()
+
+      val json = createJsonSerialization(::`deserialize_writable$loadCache`)
+
+      val cacheContainerJson = cacheContainerJsonStr(
+         "CacheSerializerTest/deserialize_writable",
+         "CacheSerializerTest/deserialize_writable/0"
+      )
+      val cache = json.decodeFromString<WritableCacheContainer>(cacheContainerJson)
+
+      assertEquals(
+         CacheContentImpl(0L, "A"),
+         cache.cache.value
+      )
+   }
+
+   private external fun `deserialize_writable$preparePanoptiqon`()
+   private external fun `deserialize_writable$loadCache`(cacheId: Cache.Id): WritableCache<*>
 }
