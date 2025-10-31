@@ -200,6 +200,62 @@ mod jni_tests {
       load_or_throw(&mut env, &deserialize_writable_panoptiqon, cache_id)
    }
 
+   #[allow(non_upper_case_globals)]
+   static deserialize_cacheNotFound_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheSerializerTest_deserialize_1cacheNotFound_00024preparePanoptiqon<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      let repository = deserialize_cacheNotFound_panoptiqon
+         .new_repository(&mut env, "CacheSerializerTest/deserialize_cacheNotFound");
+
+      let cache_content = CacheContentImpl {
+         id: 0,
+         content: "A".to_string()
+      };
+
+      repository.save(cache_content);
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheSerializerTest_deserialize_1cacheNotFound_00024loadCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      cache_id: JvmCacheId<'local>
+   ) -> JvmCache<'local, JvmErased<'local>> {
+      load_or_throw(&mut env, &deserialize_cacheNotFound_panoptiqon, cache_id)
+   }
+
+   #[allow(non_upper_case_globals)]
+   static deserialize_writable_cacheNotFound_panoptiqon: LazyLock<Panoptiqon> = LazyLock::new(|| Panoptiqon::new());
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheSerializerTest_deserialize_1writable_1cacheNotFound_00024preparePanoptiqon<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      let repository = deserialize_writable_cacheNotFound_panoptiqon
+         .new_repository(&mut env, "CacheSerializerTest/deserialize_writable_cacheNotFound");
+
+      let cache_content = CacheContentImpl {
+         id: 0,
+         content: "A".to_string()
+      };
+
+      repository.save(cache_content);
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheSerializerTest_deserialize_1writable_1cacheNotFound_00024loadCache<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>,
+      cache_id: JvmCacheId<'local>
+   ) -> JvmCache<'local, JvmErased<'local>> {
+      load_or_throw(&mut env, &deserialize_writable_cacheNotFound_panoptiqon, cache_id)
+   }
+
    fn load_or_throw<'local>(
       env: &mut JNIEnv<'local>,
       panoptiqon: &Panoptiqon,

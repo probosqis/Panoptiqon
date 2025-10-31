@@ -21,9 +21,11 @@ import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.modules.SerializersModule
+import java.io.IOException
 import java.nio.charset.Charset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class CacheSerializerTest {
    init {
@@ -182,4 +184,42 @@ class CacheSerializerTest {
 
    private external fun `deserialize_writable$preparePanoptiqon`()
    private external fun `deserialize_writable$loadCache`(cacheId: Cache.Id): WritableCache<*>
+
+   @Test
+   fun deserialize_cacheNotFound() {
+      `deserialize_cacheNotFound$preparePanoptiqon`()
+
+      val json = createJsonSerialization(::`deserialize_cacheNotFound$loadCache`)
+
+      val cacheContainerJson = cacheContainerJsonStr(
+         "CacheSerializerTest/deserialize_cacheNotFound",
+         "CacheSerializerTest/deserialize_cacheNotFound/1"
+      )
+
+      assertFailsWith<IOException> {
+         json.decodeFromString<CacheContainer>(cacheContainerJson)
+      }
+   }
+
+   private external fun `deserialize_cacheNotFound$preparePanoptiqon`()
+   private external fun `deserialize_cacheNotFound$loadCache`(cacheId: Cache.Id): Cache<*>
+
+   @Test
+   fun deserialize_writable_cacheNotFound() {
+      `deserialize_writable_cacheNotFound$preparePanoptiqon`()
+
+      val json = createJsonSerialization(::`deserialize_writable_cacheNotFound$loadCache`)
+
+      val cacheContainerJson = cacheContainerJsonStr(
+         "CacheSerializerTest/deserialize_writable_cacheNotFound",
+         "CacheSerializerTest/deserialize_writable_cacheNotFound/1"
+      )
+
+      assertFailsWith<IOException> {
+         json.decodeFromString<WritableCacheContainer>(cacheContainerJson)
+      }
+   }
+
+   private external fun `deserialize_writable_cacheNotFound$preparePanoptiqon`()
+   private external fun `deserialize_writable_cacheNotFound$loadCache`(cacheId: Cache.Id): WritableCache<*>
 }
