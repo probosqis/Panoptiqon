@@ -46,6 +46,7 @@ pub mod repository;
 
 pub(crate) mod db;
 pub(crate) mod dyn_repository;
+pub(crate) mod kotlinx_serialization;
 mod pool;
 mod unique_cache;
 
