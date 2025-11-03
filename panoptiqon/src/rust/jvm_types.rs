@@ -246,7 +246,7 @@ impl<'local, T: JvmType<'local>> JvmType<'local> for JvmRepository<'local, T> {
 /// Kotlinファイル上でなんらかの仮型引数が当てられていて、JNI呼び出し時には
 /// 型情報が消去されているもの
 #[repr(transparent)]
-pub(crate) struct JvmErased<'local>(
+pub struct JvmErased<'local>(
    JObject<'local>
 );
 
