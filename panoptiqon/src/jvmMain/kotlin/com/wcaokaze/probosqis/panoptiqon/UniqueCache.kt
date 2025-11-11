@@ -29,7 +29,7 @@ internal class UniqueCache<T>(
    val value: T
       get() = state.value
    
-   val id: Cache.Id
+   val id: CacheId
       get() = getCacheId(nativeStateAddress, nativeStateVTableAddress)
 
    // XXX: ネイティブ側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
@@ -46,7 +46,7 @@ internal class UniqueCache<T>(
    private external fun getCacheId(
       rustStateAddress: Long,
       rustStateVTableAddress: Long
-   ): Cache.Id
+   ): CacheId
 
    @Deprecated("")
    override fun finalize() {
@@ -69,7 +69,7 @@ internal class WritableUniqueCache<T>(
          updateNativeState(nativeStateAddress, nativeStateVTableAddress, value)
       }
 
-   val id: Cache.Id
+   val id: CacheId
       get() = getCacheId(nativeStateAddress, nativeStateVTableAddress)
 
    // XXX: ネイティブ側のMutexとJVM側のStateはそれぞれスレッドセーフであるが
@@ -92,7 +92,7 @@ internal class WritableUniqueCache<T>(
    private external fun getCacheId(
       rustStateAddress: Long,
       rustStateVTableAddress: Long
-   ): Cache.Id
+   ): CacheId
 
    @Deprecated("")
    override fun finalize() {

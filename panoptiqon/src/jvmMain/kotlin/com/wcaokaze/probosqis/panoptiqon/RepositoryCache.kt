@@ -39,7 +39,7 @@ actual class RepositoryCache<T>
    @InternalCacheApi
    override val state: State<T> get() = uniqueCache.state
 
-   override val id: Cache.Id
+   override val id: CacheId
       get() = uniqueCache.id
 
    override val value: T by uniqueCache::value
@@ -65,7 +65,7 @@ actual class WritableRepositoryCache<T>
    @InternalCacheApi
    override val mutableState get() = uniqueCache.state
 
-   override val id: Cache.Id
+   override val id: CacheId
       get() = uniqueCache.id
 
    override var value: T by uniqueCache::value

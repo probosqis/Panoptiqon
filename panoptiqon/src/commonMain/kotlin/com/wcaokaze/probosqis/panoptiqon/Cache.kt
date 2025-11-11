@@ -26,38 +26,38 @@ import java.nio.charset.Charset
 @RequiresOptIn
 annotation class InternalCacheApi
 
-interface Cache<out T> {
-   class Id
-      internal constructor (
-         val repositoryDirPath: ByteArray,
-         val filePath: ByteArray
-      )
-   {
-      override fun hashCode(): Int {
-         var h = 1
-         h = h * 31 + repositoryDirPath.contentHashCode()
-         h = h * 31 + filePath         .contentHashCode()
-         return h
-      }
-
-      override fun equals(other: Any?): Boolean {
-         return other is Id
-             && repositoryDirPath.contentEquals(other.repositoryDirPath)
-             && filePath         .contentEquals(other.filePath)
-      }
-
-      override fun toString() = buildString {
-         append("CacheId(")
-         append("repo=")
-         append(String(repositoryDirPath, Charset.defaultCharset()))
-         append(",")
-         append("file=")
-         append(String(filePath, Charset.defaultCharset()))
-         append(")")
-      }
+class CacheId
+   internal constructor(
+      val repositoryDirPath: ByteArray,
+      val filePath: ByteArray
+   )
+{
+   override fun hashCode(): Int {
+      var h = 1
+      h = h * 31 + repositoryDirPath.contentHashCode()
+      h = h * 31 + filePath         .contentHashCode()
+      return h
    }
 
-   val id: Id
+   override fun equals(other: Any?): Boolean {
+      return other is CacheId
+          && repositoryDirPath.contentEquals(other.repositoryDirPath)
+          && filePath         .contentEquals(other.filePath)
+   }
+
+   override fun toString() = buildString {
+      append("CacheId(")
+      append("repo=")
+      append(String(repositoryDirPath, Charset.defaultCharset()))
+      append(",")
+      append("file=")
+      append(String(filePath, Charset.defaultCharset()))
+      append(")")
+   }
+}
+
+interface Cache<out T> {
+   val id: CacheId
    val value: T
 
    @InternalCacheApi
@@ -68,7 +68,7 @@ fun <T> Cache(initialValue: T): Cache<T>
       = CacheImpl(initialValue)
 
 interface WritableCache<T> {
-   val id: Cache.Id
+   val id: CacheId
    var value: T
 
    fun asCache(): Cache<T>
@@ -87,7 +87,7 @@ inline fun <T> WritableCache<T>.update(update: (T) -> T) {
 private class CacheImpl<T>(initialValue: T) : Cache<T>, WritableCache<T> {
    private val _state = mutableStateOf(initialValue)
 
-   override val id: Cache.Id
+   override val id: CacheId
       get() = throw UnsupportedOperationException("This Cache isn't saved into any file.")
 
    @InternalCacheApi

@@ -102,7 +102,7 @@ private class FileCache<T>(
    @InternalCacheApi
    override val mutableState get() = _state
 
-   override val id: Cache.Id
+   override val id: CacheId
       get() = throw UnsupportedOperationException("This Cache isn't managed by Panoptiqon.")
 
    override var value: T
