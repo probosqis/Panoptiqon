@@ -21,40 +21,11 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import java.nio.charset.Charset
 
 @RequiresOptIn
 annotation class InternalCacheApi
 
-class CacheId
-   internal constructor(
-      val repositoryDirPath: ByteArray,
-      val filePath: ByteArray
-   )
-{
-   override fun hashCode(): Int {
-      var h = 1
-      h = h * 31 + repositoryDirPath.contentHashCode()
-      h = h * 31 + filePath         .contentHashCode()
-      return h
-   }
-
-   override fun equals(other: Any?): Boolean {
-      return other is CacheId
-          && repositoryDirPath.contentEquals(other.repositoryDirPath)
-          && filePath         .contentEquals(other.filePath)
-   }
-
-   override fun toString() = buildString {
-      append("CacheId(")
-      append("repo=")
-      append(String(repositoryDirPath, Charset.defaultCharset()))
-      append(",")
-      append("file=")
-      append(String(filePath, Charset.defaultCharset()))
-      append(")")
-   }
-}
+expect class CacheId
 
 interface Cache<out T> {
    val id: CacheId
