@@ -71,39 +71,39 @@ private class Impl(serialName: String) {
    }
 }
 
-abstract class AbstractCacheSerializer<T> : KSerializer<Cache<T>> {
+actual abstract class AbstractCacheSerializer<T> : KSerializer<Cache<T>> {
    private val impl = Impl("com.wcaokaze.probosqis.panoptiqon.Cache")
 
-   protected abstract fun loadCache(cacheId: CacheId): Cache<T>
+   protected actual abstract fun loadCache(cacheId: CacheId): Cache<T>
 
-   final override val descriptor: SerialDescriptor
+   actual final override val descriptor: SerialDescriptor
       get() = impl.descriptor
 
-   final override fun serialize(encoder: Encoder, value: Cache<T>) {
+   actual final override fun serialize(encoder: Encoder, value: Cache<T>) {
       val cacheId = value.id
       impl.serializeCacheId(encoder, cacheId)
    }
 
-   final override fun deserialize(decoder: Decoder): Cache<T> {
+   actual final override fun deserialize(decoder: Decoder): Cache<T> {
       val cacheId = impl.deserializeCacheId(decoder)
       return loadCache(cacheId)
    }
 }
 
-abstract class AbstractWritableCacheSerializer<T> : KSerializer<WritableCache<T>> {
+actual abstract class AbstractWritableCacheSerializer<T> : KSerializer<WritableCache<T>> {
    private val impl = Impl("com.wcaokaze.probosqis.panoptiqon.WritableCache")
 
-   protected abstract fun loadCache(cacheId: CacheId): WritableCache<T>
+   protected actual abstract fun loadCache(cacheId: CacheId): WritableCache<T>
 
-   final override val descriptor: SerialDescriptor
+   actual final override val descriptor: SerialDescriptor
       get() = impl.descriptor
 
-   final override fun serialize(encoder: Encoder, value: WritableCache<T>) {
+   actual final override fun serialize(encoder: Encoder, value: WritableCache<T>) {
       val cacheId = value.id
       impl.serializeCacheId(encoder, cacheId)
    }
 
-   final override fun deserialize(decoder: Decoder): WritableCache<T> {
+   actual final override fun deserialize(decoder: Decoder): WritableCache<T> {
       val cacheId = impl.deserializeCacheId(decoder)
       return loadCache(cacheId)
    }
