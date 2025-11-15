@@ -21,7 +21,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 
-expect abstract class AbstractCacheSerializer<T>
+expect abstract class AbstractCacheSerializer<T>()
    : KSerializer<Cache<T>>
 {
    protected abstract fun loadCache(cacheId: CacheId): Cache<T>
@@ -31,7 +31,7 @@ expect abstract class AbstractCacheSerializer<T>
    final override fun deserialize(decoder: Decoder): Cache<T>
 }
 
-expect abstract class AbstractWritableCacheSerializer<T>
+expect abstract class AbstractWritableCacheSerializer<T>()
    : KSerializer<WritableCache<T>>
 {
    protected abstract fun loadCache(cacheId: CacheId): WritableCache<T>
