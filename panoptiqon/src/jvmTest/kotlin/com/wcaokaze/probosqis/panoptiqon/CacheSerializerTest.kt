@@ -50,12 +50,12 @@ class CacheSerializerTest {
       val cache: WritableCache<CacheContentImpl>
    )
 
-   private fun createJsonSerialization(loadCache: (Cache.Id) -> Cache<*>) = Json {
+   private fun createJsonSerialization(loadCache: (CacheId) -> Cache<*>) = Json {
       class CacheSerializer<T>(
          @Suppress("UNUSED_PARAMETER")
          contentSerializer: KSerializer<T>
       ) : AbstractCacheSerializer<T>() {
-         override fun loadCache(cacheId: Cache.Id): Cache<T> {
+         override fun loadCache(cacheId: CacheId): Cache<T> {
             @Suppress("UNCHECKED_CAST")
             return loadCache(cacheId) as Cache<T>
          }
@@ -67,12 +67,12 @@ class CacheSerializerTest {
    }
 
    @JvmName("createWritableCacheJsonSerialization")
-   private fun createJsonSerialization(loadCache: (Cache.Id) -> WritableCache<*>) = Json {
+   private fun createJsonSerialization(loadCache: (CacheId) -> WritableCache<*>) = Json {
       class WritableCacheSerializer<T>(
          @Suppress("UNUSED_PARAMETER")
          contentSerializer: KSerializer<T>
       ) : AbstractWritableCacheSerializer<T>() {
-         override fun loadCache(cacheId: Cache.Id): WritableCache<T> {
+         override fun loadCache(cacheId: CacheId): WritableCache<T> {
             @Suppress("UNCHECKED_CAST")
             return loadCache(cacheId) as WritableCache<T>
          }
@@ -121,7 +121,7 @@ class CacheSerializerTest {
    }
 
    private external fun `serialize$saveCache`(): Cache<CacheContentImpl>
-   private external fun `serialize$loadCache`(cacheId: Cache.Id): Cache<*>
+   private external fun `serialize$loadCache`(cacheId: CacheId): Cache<*>
 
    @Test
    fun serialize_writable() {
@@ -141,7 +141,7 @@ class CacheSerializerTest {
    }
 
    private external fun `serialize_writable$saveCache`(): WritableCache<CacheContentImpl>
-   private external fun `serialize_writable$loadCache`(cacheId: Cache.Id): WritableCache<*>
+   private external fun `serialize_writable$loadCache`(cacheId: CacheId): WritableCache<*>
 
    @Test
    fun deserialize() {
@@ -162,7 +162,7 @@ class CacheSerializerTest {
    }
 
    private external fun `deserialize$preparePanoptiqon`()
-   private external fun `deserialize$loadCache`(cacheId: Cache.Id): Cache<*>
+   private external fun `deserialize$loadCache`(cacheId: CacheId): Cache<*>
 
    @Test
    fun deserialize_writable() {
@@ -183,7 +183,7 @@ class CacheSerializerTest {
    }
 
    private external fun `deserialize_writable$preparePanoptiqon`()
-   private external fun `deserialize_writable$loadCache`(cacheId: Cache.Id): WritableCache<*>
+   private external fun `deserialize_writable$loadCache`(cacheId: CacheId): WritableCache<*>
 
    @Test
    fun deserialize_cacheNotFound() {
@@ -202,7 +202,7 @@ class CacheSerializerTest {
    }
 
    private external fun `deserialize_cacheNotFound$preparePanoptiqon`()
-   private external fun `deserialize_cacheNotFound$loadCache`(cacheId: Cache.Id): Cache<*>
+   private external fun `deserialize_cacheNotFound$loadCache`(cacheId: CacheId): Cache<*>
 
    @Test
    fun deserialize_writable_cacheNotFound() {
@@ -221,5 +221,5 @@ class CacheSerializerTest {
    }
 
    private external fun `deserialize_writable_cacheNotFound$preparePanoptiqon`()
-   private external fun `deserialize_writable_cacheNotFound$loadCache`(cacheId: Cache.Id): WritableCache<*>
+   private external fun `deserialize_writable_cacheNotFound$loadCache`(cacheId: CacheId): WritableCache<*>
 }

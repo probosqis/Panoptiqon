@@ -127,7 +127,7 @@ class CacheTest {
 
       val systemCharset = Charset.defaultCharset()
       assertEquals(
-         Cache.Id(
+         CacheId(
             "test/CacheTest/referenceCount_clone"  .toByteArray(systemCharset),
             "test/CacheTest/referenceCount_clone/0".toByteArray(systemCharset)
          ),

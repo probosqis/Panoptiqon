@@ -31,7 +31,7 @@ class PanoptiqonTest {
    }
 
    @Suppress("TestFunctionName")
-   private fun CacheId(repositoryDirPath: String, filePath: String) = Cache.Id(
+   private fun CacheId(repositoryDirPath: String, filePath: String) = CacheId(
       repositoryDirPath.toByteArray(Charset.defaultCharset()),
       filePath         .toByteArray(Charset.defaultCharset()),
    )
@@ -64,7 +64,7 @@ class PanoptiqonTest {
    }
 
    private external fun `loadJvm$prepareRepository`()
-   private external fun `loadJvm$load`(id: Cache.Id): Cache<*>
+   private external fun `loadJvm$load`(id: CacheId): Cache<*>
 
    @Test
    fun loadJvm_unmatchedType() {
@@ -84,7 +84,7 @@ class PanoptiqonTest {
    }
 
    private external fun `loadJvm_unmatchedType$prepareRepository`()
-   private external fun `loadJvm_unmatchedType$load`(id: Cache.Id): Cache<*>
+   private external fun `loadJvm_unmatchedType$load`(id: CacheId): Cache<*>
 
    @Test
    fun loadJvm_fileNotFound() {
@@ -101,7 +101,7 @@ class PanoptiqonTest {
    }
 
    private external fun `loadJvm_fileNotFound$prepareRepository`()
-   private external fun `loadJvm_fileNotFound$load`(id: Cache.Id): Cache<*>
+   private external fun `loadJvm_fileNotFound$load`(id: CacheId): Cache<*>
 
    @Test
    fun loadJvm_repositoryNotFound() {
@@ -118,5 +118,5 @@ class PanoptiqonTest {
    }
 
    private external fun `loadJvm_repositoryNotFound$prepareRepository`()
-   private external fun `loadJvm_repositoryNotFound$load`(id: Cache.Id): Cache<*>
+   private external fun `loadJvm_repositoryNotFound$load`(id: CacheId): Cache<*>
 }

@@ -35,20 +35,20 @@ private class Impl(serialName: String) {
       element("filePath",          byteArraySerializer.descriptor)
    }
 
-   fun serializeCacheId(encoder: Encoder, cacheId: Cache.Id) {
+   fun serializeCacheId(encoder: Encoder, cacheId: CacheId) {
       val structureEncoder = encoder.beginStructure(descriptor)
       structureEncoder.encodeSerializableElement(descriptor, 0, byteArraySerializer, cacheId.repositoryDirPath)
       structureEncoder.encodeSerializableElement(descriptor, 1, byteArraySerializer, cacheId.filePath)
       structureEncoder.endStructure(descriptor)
    }
 
-   fun deserializeCacheId(decoder: Decoder): Cache.Id {
+   fun deserializeCacheId(decoder: Decoder): CacheId {
       return decoder.decodeStructure(descriptor) {
          @OptIn(ExperimentalSerializationApi::class)
          if (decodeSequentially()) {
             val repositoryDirPath = decodeSerializableElement(descriptor, 0, byteArraySerializer)
             val filePath          = decodeSerializableElement(descriptor, 1, byteArraySerializer)
-            Cache.Id(repositoryDirPath, filePath)
+            CacheId(repositoryDirPath, filePath)
          } else {
             var repositoryDirPath: ByteArray? = null
             var filePath:          ByteArray? = null
@@ -65,45 +65,45 @@ private class Impl(serialName: String) {
             if (repositoryDirPath == null) { throw SerializationException("repositoryDirPath is missing") }
             if (filePath          == null) { throw SerializationException("repositoryDirPath is missing") }
 
-            Cache.Id(repositoryDirPath, filePath)
+            CacheId(repositoryDirPath, filePath)
          }
       }
    }
 }
 
-abstract class AbstractCacheSerializer<T> : KSerializer<Cache<T>> {
+actual abstract class AbstractCacheSerializer<T> : KSerializer<Cache<T>> {
    private val impl = Impl("com.wcaokaze.probosqis.panoptiqon.Cache")
 
-   protected abstract fun loadCache(cacheId: Cache.Id): Cache<T>
+   protected actual abstract fun loadCache(cacheId: CacheId): Cache<T>
 
-   final override val descriptor: SerialDescriptor
+   actual final override val descriptor: SerialDescriptor
       get() = impl.descriptor
 
-   final override fun serialize(encoder: Encoder, value: Cache<T>) {
+   actual final override fun serialize(encoder: Encoder, value: Cache<T>) {
       val cacheId = value.id
       impl.serializeCacheId(encoder, cacheId)
    }
 
-   final override fun deserialize(decoder: Decoder): Cache<T> {
+   actual final override fun deserialize(decoder: Decoder): Cache<T> {
       val cacheId = impl.deserializeCacheId(decoder)
       return loadCache(cacheId)
    }
 }
 
-abstract class AbstractWritableCacheSerializer<T> : KSerializer<WritableCache<T>> {
+actual abstract class AbstractWritableCacheSerializer<T> : KSerializer<WritableCache<T>> {
    private val impl = Impl("com.wcaokaze.probosqis.panoptiqon.WritableCache")
 
-   protected abstract fun loadCache(cacheId: Cache.Id): WritableCache<T>
+   protected actual abstract fun loadCache(cacheId: CacheId): WritableCache<T>
 
-   final override val descriptor: SerialDescriptor
+   actual final override val descriptor: SerialDescriptor
       get() = impl.descriptor
 
-   final override fun serialize(encoder: Encoder, value: WritableCache<T>) {
+   actual final override fun serialize(encoder: Encoder, value: WritableCache<T>) {
       val cacheId = value.id
       impl.serializeCacheId(encoder, cacheId)
    }
 
-   final override fun deserialize(decoder: Decoder): WritableCache<T> {
+   actual final override fun deserialize(decoder: Decoder): WritableCache<T> {
       val cacheId = impl.deserializeCacheId(decoder)
       return loadCache(cacheId)
    }

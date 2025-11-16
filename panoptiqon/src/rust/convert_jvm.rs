@@ -153,7 +153,7 @@ pub trait CloneFromJvm<'local, J: JvmType<'local>>
    }
 }
 
-/// Cache.Id
+/// CacheId
 impl<'local> CloneIntoJvm<'local, JvmCacheId<'local>> for CacheId {
    fn clone_into_jvm(&self, env: &mut JNIEnv<'local>) -> JvmCacheId<'local> {
       let repository_dir_path = env.byte_array_from_slice(
@@ -164,7 +164,7 @@ impl<'local> CloneIntoJvm<'local, JvmCacheId<'local>> for CacheId {
       ).unwrap();
 
       let j_object = env.new_object(
-         "com/wcaokaze/probosqis/panoptiqon/Cache$Id", "([B[B)V",
+         "com/wcaokaze/probosqis/panoptiqon/CacheId", "([B[B)V",
          &[(&*repository_dir_path).into(), (&*file_path).into()]
       ).unwrap();
 
