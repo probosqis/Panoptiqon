@@ -742,16 +742,18 @@ mod tests {
 
 #[cfg(feature = "jni-test")]
 mod jni_tests {
+   use std::cell::RefCell;
    use std::path::{Path, PathBuf};
-   use std::sync::Mutex;
+   use std::sync::{Arc, LazyLock, Mutex, ReentrantLock};
    use jni::JNIEnv;
    use jni::objects::JObject;
    use serde::{Deserialize, Serialize};
    use crate::cache::CacheContent;
    use crate::convert_jvm::{CloneFromJvm, CloneIntoJvm};
+   use crate::db::in_memory_db::InMemoryDb;
    use crate::db::scheduler::DbScheduler;
    use crate::jvm_type;
-   use crate::jvm_types::{JvmCache, JvmInteger};
+   use crate::jvm_types::{JvmCache, JvmInteger, JvmRepository};
    use crate::repository::Repository;
    use super::Cache;
 
@@ -869,9 +871,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -906,9 +906,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -951,10 +949,8 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -979,15 +975,70 @@ mod jni_tests {
       );
    }
 
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmRepository_saveScheduled_inMemoryDb: LazyLock<Arc<ReentrantLock<RefCell<InMemoryDb>>>>
+      = LazyLock::new(||
+         Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())))
+      );
+
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmRepository_saveScheduled_dbScheduler: LazyLock<Arc<DbScheduler>>
+      = LazyLock::new(|| {
+         use crate::db::saver::Saver;
+
+         let saver = Saver::new(Arc::clone(&saveViaJvmRepository_saveScheduled_inMemoryDb));
+         Arc::new(DbScheduler::new(saver))
+      });
+
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmRepository_saveScheduled_repository: Mutex<Option<Arc<Repository<CacheContentImpl>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaJvmRepository_1saveScheduled_00024createRepo<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmCacheContentImpl<'local>> {
+      use std::sync::Weak;
+      use crate::jvm_repository_creator::JvmRepositoryCreator;
+      use crate::repository::Repository;
+
+      let repo = Arc::new(
+         Repository::<CacheContentImpl>::new_testable(
+            &mut env,
+            Arc::clone(&saveViaJvmRepository_saveScheduled_dbScheduler),
+            /* loader = */ Weak::new(),
+            "test/CacheTest/saveViaRepository_saveScheduled",
+            Arc::clone(&saveViaJvmRepository_saveScheduled_inMemoryDb),
+            /* drop_observer = */ || ()
+         )
+      );
+
+      let mut repo_lock = saveViaJvmRepository_saveScheduled_repository.lock().unwrap();
+      *repo_lock = Some(Arc::clone(&repo));
+
+      JvmRepositoryCreator::new(&mut env)
+         .create_jvm_wrapper(&mut env, repo)
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaJvmRepository_1saveScheduled_00024assertScheduled<'local>(
+      _env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      assert_eq!(
+         vec![PathBuf::from("test/CacheTest/saveViaRepository_saveScheduled/0")],
+         saveViaJvmRepository_saveScheduled_dbScheduler.stop()
+            .iter().map(|t| t.file_path()).collect::<Vec<_>>()
+      );
+   }
+
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaCache_1saveScheduled<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
       use std::path::PathBuf;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -1017,14 +1068,72 @@ mod jni_tests {
       );
    }
 
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmCache_saveScheduled_inMemoryDb: LazyLock<Arc<ReentrantLock<RefCell<InMemoryDb>>>>
+      = LazyLock::new(||
+         Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())))
+      );
+
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmCache_saveScheduled_dbScheduler: LazyLock<Arc<DbScheduler>>
+      = LazyLock::new(|| {
+         use crate::db::saver::Saver;
+
+         let saver = Saver::new(Arc::clone(&saveViaJvmCache_saveScheduled_inMemoryDb));
+         Arc::new(DbScheduler::new(saver))
+      });
+
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmCache_saveScheduled_repository: Mutex<Option<Arc<Repository<CacheContentImpl>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaJvmCache_1saveScheduled_00024createRepo<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmCacheContentImpl<'local>> {
+      use std::sync::Weak;
+      use crate::jvm_repository_creator::JvmRepositoryCreator;
+      use crate::repository::Repository;
+
+      let repo = Arc::new(
+         Repository::<CacheContentImpl>::new_testable(
+            &mut env,
+            Arc::clone(&saveViaJvmCache_saveScheduled_dbScheduler),
+            /* loader = */ Weak::new(),
+            "test/CacheTest/saveViaCache_saveScheduled",
+            Arc::clone(&saveViaJvmCache_saveScheduled_inMemoryDb),
+            /* drop_observer = */ || ()
+         )
+      );
+
+      let mut repo_lock = saveViaJvmCache_saveScheduled_repository.lock().unwrap();
+      *repo_lock = Some(Arc::clone(&repo));
+
+      JvmRepositoryCreator::new(&mut env)
+         .create_jvm_wrapper(&mut env, repo)
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaJvmCache_1saveScheduled_00024assertScheduled<'local>(
+      _env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      assert_eq!(
+         vec![
+            PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
+            PathBuf::from("test/CacheTest/saveViaCache_saveScheduled/0"),
+         ],
+         saveViaJvmCache_saveScheduled_dbScheduler.stop()
+            .iter().map(|t| t.file_path()).collect::<Vec<_>>()
+      );
+   }
+
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_referenceCount_1withoutJvmCache<'local>(
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -1049,9 +1158,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -1078,9 +1185,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -1107,9 +1212,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
@@ -1138,9 +1241,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::jvm_types::JvmCache;
       use crate::repository::Repository;
@@ -1171,9 +1272,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 
@@ -1200,11 +1299,8 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmCache<'local, JvmCacheContainer<'local>> {
-      use std::cell::RefCell;
       use std::io::Write;
-      use std::sync::{Arc, ReentrantLock};
       use crate::db::loader::Loader;
-      use crate::db::in_memory_db::InMemoryDb;
       use crate::db::saver::Saver;
       use crate::jvm_repository_creator::JvmRepositoryCreator;
 
@@ -1262,9 +1358,7 @@ mod jni_tests {
       mut env: JNIEnv<'local>,
       _obj: JObject<'local>
    ) -> JvmCache<'local, JvmCacheContentImpl<'local>> {
-      use std::cell::RefCell;
-      use std::sync::{Arc, ReentrantLock, Weak};
-      use crate::db::in_memory_db::InMemoryDb;
+      use std::sync::Weak;
       use crate::db::saver::Saver;
       use crate::repository::Repository;
 

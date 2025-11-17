@@ -92,7 +92,32 @@ class CacheTest {
    external fun saveViaRepository_saveScheduled()
 
    @Test
+   fun saveViaJvmRepository_saveScheduled() {
+      val repository = `saveViaJvmRepository_saveScheduled$createRepo`()
+      repository.save(CacheContentImpl(0, 42))
+      `saveViaJvmRepository_saveScheduled$assertScheduled`()
+   }
+
+   private external fun `saveViaJvmRepository_saveScheduled$createRepo`(
+   ): Repository<Int, CacheContentImpl>
+
+   private external fun `saveViaJvmRepository_saveScheduled$assertScheduled`()
+
+   @Test
    external fun saveViaCache_saveScheduled()
+
+   @Test
+   fun saveViaJvmCache_saveScheduled() {
+      val repository = `saveViaJvmCache_saveScheduled$createRepo`()
+      val cache = repository.save(CacheContentImpl(0, 42))
+      cache.value = CacheContentImpl(0, 0)
+      `saveViaJvmCache_saveScheduled$assertScheduled`()
+   }
+
+   private external fun `saveViaJvmCache_saveScheduled$createRepo`(
+   ): Repository<Int, CacheContentImpl>
+
+   private external fun `saveViaJvmCache_saveScheduled$assertScheduled`()
 
    @Test
    external fun referenceCount_withoutJvmCache()
