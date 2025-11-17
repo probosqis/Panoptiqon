@@ -975,6 +975,63 @@ mod jni_tests {
       );
    }
 
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmRepository_saveScheduled_inMemoryDb: LazyLock<Arc<ReentrantLock<RefCell<InMemoryDb>>>>
+      = LazyLock::new(||
+         Arc::new(ReentrantLock::new(RefCell::new(InMemoryDb::new())))
+      );
+
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmRepository_saveScheduled_dbScheduler: LazyLock<Arc<DbScheduler>>
+      = LazyLock::new(|| {
+         use crate::db::saver::Saver;
+
+         let saver = Saver::new(Arc::clone(&saveViaJvmRepository_saveScheduled_inMemoryDb));
+         Arc::new(DbScheduler::new(saver))
+      });
+
+   #[allow(non_upper_case_globals)]
+   static saveViaJvmRepository_saveScheduled_repository: Mutex<Option<Arc<Repository<CacheContentImpl>>>> = Mutex::new(None);
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaJvmRepository_1saveScheduled_00024createRepo<'local>(
+      mut env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) -> JvmRepository<'local, JvmCacheContentImpl<'local>> {
+      use std::sync::Weak;
+      use crate::jvm_repository_creator::JvmRepositoryCreator;
+      use crate::repository::Repository;
+
+      let repo = Arc::new(
+         Repository::<CacheContentImpl>::new_testable(
+            &mut env,
+            Arc::clone(&saveViaJvmRepository_saveScheduled_dbScheduler),
+            /* loader = */ Weak::new(),
+            "test/CacheTest/saveViaRepository_saveScheduled",
+            Arc::clone(&saveViaJvmRepository_saveScheduled_inMemoryDb),
+            /* drop_observer = */ || ()
+         )
+      );
+
+      let mut repo_lock = saveViaJvmRepository_saveScheduled_repository.lock().unwrap();
+      *repo_lock = Some(Arc::clone(&repo));
+
+      JvmRepositoryCreator::new(&mut env)
+         .create_jvm_wrapper(&mut env, repo)
+   }
+
+   #[no_mangle]
+   extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaJvmRepository_1saveScheduled_00024assertScheduled<'local>(
+      _env: JNIEnv<'local>,
+      _obj: JObject<'local>
+   ) {
+      assert_eq!(
+         vec![PathBuf::from("test/CacheTest/saveViaRepository_saveScheduled/0")],
+         saveViaJvmRepository_saveScheduled_dbScheduler.stop()
+            .iter().map(|t| t.file_path()).collect::<Vec<_>>()
+      );
+   }
+
    #[no_mangle]
    extern "C" fn Java_com_wcaokaze_probosqis_panoptiqon_CacheTest_saveViaCache_1saveScheduled<'local>(
       mut env: JNIEnv<'local>,
