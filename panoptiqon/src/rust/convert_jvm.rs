@@ -19,6 +19,7 @@ use std::sync::Arc;
 use jni::JNIEnv;
 use jni::objects::JObject;
 use jni::sys::jvalue;
+use serde::Serialize;
 use crate::cache::{Cache, CacheContent, CacheId};
 use crate::jvm_type::JvmType;
 use crate::jvm_types::{
@@ -90,6 +91,7 @@ impl<T> CloneIntoJvmHelper for T
 impl<T> CloneIntoJvmHelper for T
 where for<'local>
       T: CacheContent
+         + Serialize
          + CloneIntoJvm<'local, T::JvmType<'local>>
          + CloneFromJvm<'local, T::JvmType<'local>>
 {

@@ -461,13 +461,18 @@ impl<T> DynOneWayUniqueCache for UniqueCache<T>
 
 #[cfg(feature = "jvm")]
 impl<'local, T> DynTwoWayUniqueCache<'local> for UniqueCache<T>
-   where T: CacheContent + CloneFromJvm<'local, T::JvmType<'local>> + 'local
+where
+   T: CacheContent
+      + Serialize
+      + CloneFromJvm<'local, T::JvmType<'local>>
+      + 'local
 {
    fn update_unique_cache(
       &self,
       env: &mut JNIEnv<'local>,
       value: JObject<'local>
    ) {
+      use crate::db::save_task::SaveTask;
       use crate::jvm_type::JvmType;
 
       let value = unsafe { T::JvmType::from_j_object(value) };
@@ -475,6 +480,12 @@ impl<'local, T> DynTwoWayUniqueCache<'local> for UniqueCache<T>
 
       let mut cache_content_lock = self.value.write().unwrap();
       *cache_content_lock = Arc::new(value);
+
+      unsafe {
+         Arc::increment_strong_count(self as *const _);
+         let task_cache = Arc::from_raw(self as *const _);
+         self.db_scheduler.push(SaveTask::new(task_cache));
+      }
    }
 
    unsafe fn decrement_arc(&self) {
