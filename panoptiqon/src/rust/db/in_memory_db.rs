@@ -45,4 +45,8 @@ impl InMemoryDb {
 
       self.files.get_mut(&file_path).unwrap()
    }
+
+   pub(crate) fn clear(&mut self) {
+      self.files.clear();
+   }
 }
