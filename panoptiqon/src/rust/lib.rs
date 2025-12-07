@@ -154,16 +154,22 @@ impl Panoptiqon {
    ) -> anyhow::Result<JvmCache<'local, JvmErased<'local>>> {
       self.loader.load_jvm(env, cache_id)
    }
+
+   #[cfg(any(test, feature = "testable"))]
+   pub fn clear_in_memory_db(&self) {
+      self.in_memory_db.lock().borrow_mut().clear();
+   }
 }
 
 #[cfg(all(test, not(feature = "jvm")))]
 mod test {
    use std::path::{Path, PathBuf};
-   use serde::Serialize;
+   use std::time::Duration;
+   use serde::{Deserialize, Serialize};
    use crate::cache::CacheContent;
    use super::Panoptiqon;
 
-   #[derive(Debug, PartialEq, Eq, Serialize)]
+   #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
    struct CacheContentImpl(i32, i32);
 
    impl CacheContent for CacheContentImpl {
@@ -200,6 +206,36 @@ mod test {
          Arc::as_ptr(&repositories[0]) as *const Repository<CacheContentImpl>,
          Arc::as_ptr(&repository)
       );
+   }
+
+   #[test]
+   fn clear_in_memory_db() {
+      use std::thread;
+
+      let mut panoptiqon = Panoptiqon::new();
+      let repository = panoptiqon.new_repository::<CacheContentImpl>(
+         "test/Panoptiqon/clear_in_memory_db"
+      );
+
+      repository.save(CacheContentImpl(0, 0));
+      thread::sleep(Duration::from_millis(10));
+
+      // clear_in_memory_db実行前はロードが可能なことを念の為確認しておく
+      let repository = panoptiqon.new_repository::<CacheContentImpl>(
+         "test/Panoptiqon/clear_in_memory_db"
+      );
+      assert!(repository.load(&0).is_ok());
+
+      panoptiqon.clear_in_memory_db();
+
+      // ロードできなくなることを確認。
+      // InMemoryDbはあくまでファイルシステムの動作を模倣するものであり、
+      // ロード後のキャッシュはRepository内にも保持されているため
+      // Repository自体を再生成しないと正しく検証できない。
+      let repository = panoptiqon.new_repository::<CacheContentImpl>(
+         "test/Panoptiqon/clear_in_memory_db"
+      );
+      assert!(repository.load(&0).is_err());
    }
 }
 
