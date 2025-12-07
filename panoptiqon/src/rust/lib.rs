@@ -156,7 +156,7 @@ impl Panoptiqon {
    }
 
    #[cfg(any(test, feature = "testable"))]
-   pub fn clear_in_memory_db(&mut self) {
+   pub fn clear_in_memory_db(&self) {
       self.in_memory_db.lock().borrow_mut().clear();
    }
 }
